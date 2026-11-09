@@ -1,0 +1,301 @@
+@import "tailwindcss";
+
+/* Sweetie-16 inspired palette: warm, saturated, easy to read at low resolution. */
+:root {
+  --ink: #1a1c2c;
+  --night: #29366f;
+  --panel: #333c57;
+  --mist: #566c86;
+  --steel: #94b0c2;
+  --paper: #f4f4f4;
+  --gold: #ffcd75;
+  --ember: #ef7d57;
+  --blood: #b13e53;
+  --leaf: #38b764;
+  --lime: #a7f070;
+  --sky: #41a6f6;
+  --ice: #73eff7;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-night: var(--night);
+  --color-panel: var(--panel);
+  --color-mist: var(--mist);
+  --color-steel: var(--steel);
+  --color-paper: var(--paper);
+  --color-gold: var(--gold);
+  --color-ember: var(--ember);
+  --color-blood: var(--blood);
+  --color-leaf: var(--leaf);
+  --color-lime: var(--lime);
+  --color-sky: var(--sky);
+  --color-ice: var(--ice);
+  --font-sans: var(--font-pixel);
+  --font-mono: var(--font-pixel);
+}
+
+html,
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-pixel), monospace;
+}
+
+/* Sprites and canvases must stay crisp when scaled up. */
+img,
+canvas,
+.pixelated {
+  image-rendering: pixelated;
+}
+
+/* NES-style stepped border: no radius, hard offset shadow. */
+.pixel-box {
+  position: relative;
+  border: 4px solid var(--paper);
+  box-shadow:
+    inset -4px -4px 0 0 rgb(0 0 0 / 0.35),
+    6px 6px 0 0 rgb(0 0 0 / 0.5);
+}
+
+.pixel-btn {
+  border: 4px solid var(--paper);
+  box-shadow: inset -4px -4px 0 0 rgb(0 0 0 / 0.35);
+  transition: transform 60ms steps(2);
+}
+.pixel-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.pixel-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.pixel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-btn {
+    transition: none;
+  }
+}
+
+/* ---- Starter pack ---- */
+
+/* Idle float uses the `translate` property so it never fights the JS-driven `transform` shake. */
+.pack-bob {
+  animation: pack-bob 2s steps(6) infinite;
+}
+@keyframes pack-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -10px;
+  }
+}
+
+/* Pack swells, jitters, then vanishes while the server rolls the fighters. */
+@keyframes pack-burst {
+  0% {
+    transform: scale(1.14) rotate(0deg);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1.5) rotate(8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.2) rotate(-6deg);
+    opacity: 0;
+  }
+}
+
+.pack-flash {
+  animation: pack-flash 900ms steps(9) forwards;
+}
+@keyframes pack-flash {
+  0%,
+  40% {
+    opacity: 0;
+  }
+  60% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.card-reveal {
+  opacity: 0;
+  animation: card-reveal 500ms steps(8) forwards;
+}
+@keyframes card-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(48px) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack-bob,
+  .pack-flash {
+    animation: none;
+  }
+  .card-reveal {
+    animation-duration: 1ms;
+  }
+}
+
+/* ---- Fighters and the match demo ---- */
+
+.sprite-idle {
+  animation: sprite-idle 1.1s steps(2) infinite;
+}
+@keyframes sprite-idle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3%);
+  }
+}
+
+.pixel-bar {
+  border: 2px solid var(--paper);
+}
+
+.fx-lunge-r {
+  animation: lunge-r 520ms steps(8) both;
+}
+.fx-lunge-l {
+  animation: lunge-l 520ms steps(8) both;
+}
+@keyframes lunge-r {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  40% {
+    transform: translateX(45%) scale(1.08);
+  }
+}
+@keyframes lunge-l {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  40% {
+    transform: translateX(-45%) scale(1.08);
+  }
+}
+
+.fx-hurt {
+  animation: hurt 420ms steps(6) both;
+}
+@keyframes hurt {
+  0%,
+  100% {
+    transform: translateX(0);
+    filter: none;
+  }
+  20% {
+    transform: translateX(-8%);
+    filter: brightness(3);
+  }
+  40% {
+    transform: translateX(8%);
+    filter: brightness(2);
+  }
+  60% {
+    transform: translateX(-5%);
+  }
+  80% {
+    transform: translateX(4%);
+  }
+}
+
+.fx-heal {
+  animation: heal 700ms steps(7) both;
+}
+@keyframes heal {
+  0%,
+  100% {
+    filter: none;
+  }
+  30%,
+  70% {
+    filter: brightness(1.5) drop-shadow(0 0 6px var(--lime));
+  }
+}
+
+.fx-shield {
+  animation: shield 700ms steps(7) both;
+}
+@keyframes shield {
+  0%,
+  100% {
+    filter: none;
+  }
+  30%,
+  70% {
+    filter: brightness(1.4) drop-shadow(0 0 6px var(--ice));
+  }
+}
+
+.fx-dead {
+  transform: rotate(90deg) translateX(-10%);
+  transform-origin: bottom center;
+  filter: grayscale(1) brightness(0.6);
+  opacity: 0.55;
+  transition: all 300ms steps(3);
+}
+
+.float-text {
+  animation: float-up 1100ms steps(11) forwards;
+}
+@keyframes float-up {
+  0% {
+    opacity: 1;
+    margin-top: 0;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    margin-top: -32px;
+  }
+}
+
+.victory {
+  animation: victory 700ms steps(4) infinite alternate;
+}
+@keyframes victory {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sprite-idle,
+  .victory,
+  .fx-lunge-r,
+  .fx-lunge-l,
+  .fx-hurt,
+  .fx-heal,
+  .fx-shield {
+    animation: none;
+  }
+}
