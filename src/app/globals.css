@@ -75,7 +75,172 @@ canvas,
   cursor: not-allowed;
 }
 
+/* ---- Arena: movement, wind-ups, danger zones, effects ---- */
+
+.sprite-walk {
+  animation: sprite-walk 360ms steps(2) infinite;
+}
+@keyframes sprite-walk {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-9%) rotate(3deg);
+  }
+}
+
+.sprite-charge {
+  animation: sprite-charge 220ms steps(2) infinite;
+  filter: drop-shadow(0 0 8px var(--ember)) brightness(1.25);
+}
+@keyframes sprite-charge {
+  0%,
+  100% {
+    transform: translateY(-6%) scale(1.06, 1.12);
+  }
+  50% {
+    transform: translateY(-10%) scale(1.1, 1.16) translateX(2%);
+  }
+}
+
+.sprite-stunned {
+  animation: sprite-stunned 300ms steps(3) infinite;
+  filter: saturate(0.4) brightness(1.1);
+}
+@keyframes sprite-stunned {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+.stun-stars {
+  animation: stun-stars 600ms steps(4) infinite;
+}
+@keyframes stun-stars {
+  from {
+    transform: translateX(-50%) rotate(-8deg);
+  }
+  to {
+    transform: translateX(-50%) rotate(8deg);
+  }
+}
+
+.fx-cast {
+  animation: cast 360ms steps(6) both;
+}
+@keyframes cast {
+  0%,
+  100% {
+    filter: none;
+    transform: translateY(0);
+  }
+  35% {
+    filter: brightness(1.7) drop-shadow(0 0 6px var(--gold));
+    transform: translateY(-8%) scale(1.06);
+  }
+}
+
+.danger-zone {
+  animation: zone-pulse 500ms steps(2) infinite;
+}
+@keyframes zone-pulse {
+  0%,
+  100% {
+    border-color: var(--ember);
+  }
+  50% {
+    border-color: var(--paper);
+  }
+}
+.danger-zone-fill {
+  animation-name: zone-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  transform-origin: center;
+}
+@keyframes zone-fill {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.burst {
+  animation: burst 500ms steps(6) forwards;
+}
+@keyframes burst {
+  from {
+    transform: translate(-50%, -50%) scale(0.35);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 0;
+  }
+}
+
+.shot {
+  animation-name: shot;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+@keyframes shot {
+  from {
+    left: var(--x1);
+    top: var(--y1);
+  }
+  to {
+    left: var(--x2);
+    top: var(--y2);
+  }
+}
+
+.move-marker {
+  animation: move-marker 650ms steps(6) forwards;
+}
+@keyframes move-marker {
+  from {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+}
+
+.sudden-pulse {
+  animation: sudden-pulse 700ms steps(2) infinite;
+}
+@keyframes sudden-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* A knockout freezes the picture for a beat. */
+.arena-hitstop *,
+.arena-hitstop {
+  animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .sprite-walk,
+  .sprite-charge,
+  .sprite-stunned,
+  .stun-stars,
+  .fx-cast,
+  .danger-zone,
+  .sudden-pulse {
+    animation: none;
+  }
   .pixel-btn {
     transition: none;
   }

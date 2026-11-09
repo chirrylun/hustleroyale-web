@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { getGameSocket } from "@/lib/socket";
+import { playSfx, unlockAudio, type Sfx } from "@/lib/sfx";
 
 /*
  * The browser's side of the battle protocol. These shapes mirror `modules/battle/protocol.ts` in
@@ -25,7 +26,36 @@ export interface UnitMeta {
   level: number;
   spd: number;
   controlled: boolean;
-  skills: { index: number; name: string; kind: SkillKind; cooldownMs: number; staminaCost: number; range: number }[];
+  skills: {
+    index: number;
+    name: string;
+    kind: SkillKind;
+    damageType: "physical" | "magical" | "none";
+    cooldownMs: number;
+    staminaCost: number;
+    range: number;
+    /** Big attacks show a danger zone first. */
+    telegraphMs?: number;
+    radius?: number;
+    stunMs?: number;
+    knockback?: number;
+    pull?: number;
+  }[];
+}
+
+export interface Obstacle {
+  id: string;
+  x: number;
+  y: number;
+  r: number;
+  kind: "pillar" | "stall";
+}
+
+export interface MatchClock {
+  regularMs: number;
+  shrinkMs: number;
+  minRadius: number;
+  capMs: number;
 }
 
 interface SnapshotUnit {
@@ -38,6 +68,9 @@ interface SnapshotUnit {
   maxEnergy: number;
   shield: number;
   alive: boolean;
+  stunMs: number;
+  manual: boolean;
+  windup: { id: number; x: number; y: number; radius: number; remainingMs: number; totalMs: number } | null;
   cooldowns: number[];
 }
 
@@ -45,6 +78,11 @@ export interface BattleSnapshot {
   timeMs: number;
   arena: { w: number; h: number };
   stances: Record<Side, Stance>;
+  finished: boolean;
+  winnerSide: Side | null;
+  layout: string;
+  obstacles: Obstacle[];
+  clock: MatchClock;
   units: SnapshotUnit[];
 }
 
@@ -52,10 +90,16 @@ export type BattleEvent =
   | { t: number; type: "move"; units: { id: string; x: number; y: number }[] }
   | { t: number; type: "stance"; side: Side; stance: Stance }
   | { t: number; type: "cast"; actorId: string; skill: string; skillIndex: number; targetIds: string[] }
-  | { t: number; type: "damage"; sourceId: string; targetId: string; amount: number; absorbed: number; hp: number }
+  | { t: number; type: "damage"; sourceId: string; targetId: string; amount: number; absorbed: number; hp: number; mult?: number; ring?: boolean }
   | { t: number; type: "heal"; sourceId: string; targetId: string; amount: number; hp: number }
   | { t: number; type: "shield"; sourceId: string; targetId: string; amount: number }
   | { t: number; type: "mod"; sourceId: string; targetId: string; stat: string; pct: number; durationMs: number }
+  | { t: number; type: "telegraph"; id: number; actorId: string; skill: string; skillIndex: number; x: number; y: number; radius: number; durationMs: number }
+  | { t: number; type: "burst"; id: number; actorId: string; x: number; y: number; radius: number }
+  | { t: number; type: "stun"; sourceId: string; targetId: string; durationMs: number }
+  | { t: number; type: "interrupt"; unitId: string; id: number }
+  | { t: number; type: "displace"; unitId: string; x: number; y: number; fromX: number; fromY: number }
+  | { t: number; type: "phase"; phase: "warning" | "sudden_death" }
   | { t: number; type: "death"; unitId: string }
   | { t: number; type: "end"; winnerSide: Side | null };
 
@@ -94,7 +138,7 @@ type StartAck = { ok: true; matchId: string } | { ok: false; error: StartError }
 
 /* ---------------------------------------------------------------- live view state */
 
-export type FxKind = "lunge" | "hurt" | "heal" | "shield" | "dead" | null;
+export type FxKind = "lunge" | "hurt" | "heal" | "shield" | "dead" | "cast" | null;
 
 export interface LiveUnit {
   id: string;
@@ -108,6 +152,10 @@ export interface LiveUnit {
   alive: boolean;
   /** Battle-clock time (ms) at which each skill is ready again. */
   cooldownEnds: number[];
+  /** Battle-clock times: stunned until, charging a big attack until, walking until. */
+  stunUntil: number;
+  windupUntil: number;
+  walkUntil: number;
   /** `n` changes on every effect so the CSS animation restarts. */
   fx: { kind: FxKind; n: number };
 }
@@ -117,8 +165,30 @@ export interface FloatText {
   x: number;
   y: number;
   text: string;
-  kind: "dmg" | "heal" | "shield" | "ko" | "block" | "mod";
+  kind: "dmg" | "heal" | "shield" | "ko" | "block" | "mod" | "crit" | "weak" | "stun";
+  /** Wall-clock time this text can be dropped. */
+  expires: number;
 }
+
+/** Short-lived visuals: danger zones, explosions and shots. */
+export interface Effect {
+  id: number;
+  kind: "zone" | "burst" | "shot";
+  x: number;
+  y: number;
+  radius: number;
+  /** Shots travel from (x, y) to (x2, y2). */
+  x2: number;
+  y2: number;
+  durationMs: number;
+  /** Id of the server-side wind-up, so a burst or interrupt removes its own zone. */
+  zoneId: number;
+  tone: "physical" | "magical" | "heal";
+  side: Side;
+  expires: number;
+}
+
+export type MatchPhase = "normal" | "warning" | "sudden";
 
 export interface BattleView {
   matchId: string;
@@ -126,11 +196,23 @@ export interface BattleView {
   metas: UnitMeta[];
   controlledUnitId: string | null;
   arena: { w: number; h: number };
+  obstacles: Obstacle[];
+  layout: string;
+  clock: MatchClock;
+  phase: MatchPhase;
+  /** Battle time (ms) when sudden death began, or null. */
+  suddenAt: number | null;
   units: Record<string, LiveUnit>;
   stances: Record<Side, Stance>;
   /** Battle clock in ms, advanced by every event and sync from the server. */
   timeMs: number;
   texts: FloatText[];
+  effects: Effect[];
+  /** Counters that restart screen effects: `power` is 1 (small) to 3 (big). */
+  shake: { n: number; power: number };
+  hitStop: number;
+  /** The fighter whose fall decided the match, for the slow-motion finish. */
+  finalBlowId: string | null;
   log: string;
   focusId: string | null;
   nextId: number;
@@ -138,16 +220,21 @@ export interface BattleView {
 }
 
 type Action =
-  | { type: "start"; payload: BattleStartPayload }
-  | { type: "events"; matchId: string; events: BattleEvent[] }
+  | { type: "start"; payload: BattleStartPayload; now: number }
+  | { type: "events"; matchId: string; events: BattleEvent[]; now: number }
   | { type: "sync"; matchId: string; snapshot: BattleSnapshot }
   | { type: "end"; payload: BattleEndPayload }
   | { type: "focus"; id: string }
-  | { type: "clearText"; id: number }
+  | { type: "prune"; now: number }
   | { type: "reset" };
 
 const SPEED_SCALE = 50; // same curve the server uses: cooldown = base * 50 / (50 + spd)
 const estimateCooldown = (baseMs: number, spd: number) => Math.round((baseMs * SPEED_SCALE) / (SPEED_SCALE + Math.max(0, spd)));
+
+const TEXT_LIFETIME_MS = 1100;
+const WALK_GRACE_MS = 260;
+/** Ranged skills show a flying shot; anything shorter than this is a melee swing. */
+const MELEE_RANGE = 3;
 
 function applySnapshot(units: Record<string, LiveUnit>, snap: BattleSnapshot): Record<string, LiveUnit> {
   const next = { ...units };
@@ -164,16 +251,20 @@ function applySnapshot(units: Record<string, LiveUnit>, snap: BattleSnapshot): R
       shield: s.shield,
       alive: s.alive,
       cooldownEnds: s.cooldowns.map((c) => snap.timeMs + c),
+      stunUntil: snap.timeMs + s.stunMs,
+      windupUntil: s.windup ? snap.timeMs + s.windup.remainingMs : 0,
+      walkUntil: prev?.walkUntil ?? 0,
       fx: prev?.fx ?? { kind: s.alive ? null : "dead", n: 0 },
     };
   }
   return next;
 }
 
-function applyEvents(view: BattleView, events: BattleEvent[]): BattleView {
+function applyEvents(view: BattleView, events: BattleEvent[], now: number): BattleView {
   const units = { ...view.units };
-  const texts = [...view.texts];
-  let { timeMs, log, nextId } = view;
+  let texts = [...view.texts];
+  let effects = [...view.effects];
+  let { timeMs, log, nextId, phase, suddenAt, shake, hitStop, finalBlowId } = view;
   const stances = { ...view.stances };
   const meta = (id: string) => view.metas.find((m) => m.id === id);
 
@@ -186,14 +277,20 @@ function applyEvents(view: BattleView, events: BattleEvent[]): BattleView {
   };
   const say = (id: string, text: string, kind: FloatText["kind"]) => {
     const u = units[id];
-    if (u) texts.push({ id: nextId++, x: u.x, y: u.y, text, kind });
+    if (u) texts.push({ id: nextId++, x: u.x, y: u.y, text, kind, expires: now + TEXT_LIFETIME_MS });
+  };
+  const addEffect = (e: Omit<Effect, "id" | "expires" | "x2" | "y2" | "zoneId" | "radius" | "durationMs"> & Partial<Effect>) => {
+    effects.push({ id: nextId++, radius: 0, x2: e.x, y2: e.y, durationMs: 400, zoneId: -1, ...e, expires: now + (e.durationMs ?? 400) + 300 });
+  };
+  const bigShake = (power: number) => {
+    shake = { n: shake.n + 1, power: Math.max(power, shake.power > 0 && shake.n === view.shake.n ? shake.power : 0) };
   };
 
   for (const e of events) {
     timeMs = Math.max(timeMs, e.t);
     switch (e.type) {
       case "move":
-        for (const m of e.units) touch(m.id, { x: m.x, y: m.y });
+        for (const m of e.units) touch(m.id, { x: m.x, y: m.y, walkUntil: e.t + WALK_GRACE_MS });
         break;
       case "stance":
         stances[e.side] = e.stance;
@@ -205,16 +302,87 @@ function applyEvents(view: BattleView, events: BattleEvent[]): BattleView {
         if (!actor || !skill || !u) break;
         const cooldownEnds = [...u.cooldownEnds];
         cooldownEnds[e.skillIndex] = e.t + estimateCooldown(skill.cooldownMs, actor.spd);
-        // Only close-range attacks lunge; ranged and support skills show their effect on the target.
-        touch(e.actorId, { cooldownEnds, energy: Math.max(0, u.energy - skill.staminaCost) }, skill.kind === "damage" && skill.range <= 3 ? "lunge" : undefined);
+        const melee = skill.range <= MELEE_RANGE;
+        touch(
+          e.actorId,
+          { cooldownEnds, energy: Math.max(0, u.energy - skill.staminaCost), windupUntil: 0 },
+          skill.kind === "damage" && melee ? "lunge" : skill.kind === "damage" || skill.kind === "heal" ? "cast" : undefined,
+        );
+        // Ranged hits and heals fly across the arena. Telegraphed attacks get their own zone effect instead.
+        const target = units[e.targetIds[0] ?? ""];
+        if (!melee && !skill.telegraphMs && target && (skill.kind === "damage" || skill.kind === "heal")) {
+          addEffect({
+            kind: "shot",
+            x: u.x,
+            y: u.y,
+            x2: target.x,
+            y2: target.y,
+            durationMs: 260,
+            tone: skill.kind === "heal" ? "heal" : skill.damageType === "magical" ? "magical" : "physical",
+            side: actor.side,
+          });
+        }
         log = e.skillIndex === 0 ? `${actor.name} attacks` : `${actor.name} uses ${skill.name}`;
         break;
       }
+      case "telegraph": {
+        const actor = meta(e.actorId);
+        const skill = actor?.skills[e.skillIndex];
+        touch(e.actorId, { windupUntil: e.t + e.durationMs }, "cast");
+        addEffect({
+          kind: "zone",
+          x: e.x,
+          y: e.y,
+          radius: e.radius,
+          durationMs: e.durationMs,
+          zoneId: e.id,
+          tone: skill?.damageType === "magical" ? "magical" : "physical",
+          side: actor?.side ?? 2,
+        });
+        if (actor) log = `${actor.name} is charging ${skill?.name ?? "a big attack"}! Step out of the circle`;
+        break;
+      }
+      case "burst":
+        effects = effects.filter((f) => !(f.kind === "zone" && f.zoneId === e.id));
+        addEffect({ kind: "burst", x: e.x, y: e.y, radius: e.radius, durationMs: 500, zoneId: e.id, tone: "physical", side: meta(e.actorId)?.side ?? 2 });
+        touch(e.actorId, { windupUntil: 0 });
+        bigShake(2);
+        break;
+      case "interrupt":
+        effects = effects.filter((f) => !(f.kind === "zone" && f.zoneId === e.id));
+        touch(e.unitId, { windupUntil: 0 });
+        say(e.unitId, "INTERRUPTED!", "stun");
+        break;
+      case "stun":
+        touch(e.targetId, { stunUntil: e.t + e.durationMs });
+        say(e.targetId, "STUNNED", "stun");
+        break;
+      case "displace":
+        // The browser glides the sprite from where it was to where it landed, so a shove reads as a shove.
+        touch(e.unitId, { x: e.x, y: e.y });
+        break;
+      case "phase":
+        if (e.phase === "warning") {
+          phase = "warning";
+          log = "Sudden death is coming! The ring closes soon";
+        } else {
+          phase = "sudden";
+          suddenAt = e.t;
+          log = "SUDDEN DEATH! Stay inside the ring";
+          bigShake(2);
+        }
+        break;
       case "damage": {
+        const target = units[e.targetId];
         touch(e.targetId, { hp: e.hp }, "hurt");
         const dealt = e.amount - e.absorbed;
-        if (dealt <= 0) say(e.targetId, "BLOCKED", "block");
+        if (e.ring) say(e.targetId, `-${dealt}`, "dmg");
+        else if (dealt <= 0) say(e.targetId, "BLOCKED", "block");
+        else if (e.mult && e.mult > 1.05) say(e.targetId, `-${dealt}!`, "crit");
+        else if (e.mult && e.mult < 0.95) say(e.targetId, `-${dealt}`, "weak");
         else say(e.targetId, `-${dealt}`, "dmg");
+        const heavy = target && dealt >= target.maxHp * 0.12;
+        if (heavy) bigShake(1);
         break;
       }
       case "heal":
@@ -229,31 +397,46 @@ function applyEvents(view: BattleView, events: BattleEvent[]): BattleView {
         say(e.targetId, `${e.pct > 0 ? "+" : ""}${e.pct}% ${e.stat.toUpperCase()}`, "mod");
         break;
       case "death":
-        touch(e.unitId, { hp: 0, alive: false }, "dead");
+        touch(e.unitId, { hp: 0, alive: false, windupUntil: 0 }, "dead");
         say(e.unitId, "KO!", "ko");
         log = `${meta(e.unitId)?.name ?? "A fighter"} is down`;
+        finalBlowId = e.unitId;
+        hitStop += 1;
+        bigShake(3);
         break;
       case "end":
         break;
     }
   }
-  return { ...view, units, texts, stances, timeMs, log, nextId };
+  texts = texts.slice(-24);
+  effects = effects.slice(-24);
+  return { ...view, units, texts, effects, stances, timeMs, log, nextId, phase, suddenAt, shake, hitStop, finalBlowId };
 }
 
 function reducer(view: BattleView | null, action: Action): BattleView | null {
   switch (action.type) {
     case "start": {
       const p = action.payload;
+      const t = p.snapshot.timeMs;
       return {
         matchId: p.matchId,
         difficulty: p.difficulty,
         metas: p.units,
         controlledUnitId: p.controlledUnitId,
         arena: p.snapshot.arena,
+        obstacles: p.snapshot.obstacles ?? [],
+        layout: p.snapshot.layout ?? "",
+        clock: p.snapshot.clock,
+        phase: t >= p.snapshot.clock.regularMs ? "sudden" : t >= p.snapshot.clock.regularMs - 10_000 ? "warning" : "normal",
+        suddenAt: t >= p.snapshot.clock.regularMs ? p.snapshot.clock.regularMs : null,
         units: applySnapshot({}, p.snapshot),
         stances: p.snapshot.stances,
-        timeMs: p.snapshot.timeMs,
+        timeMs: t,
         texts: [],
+        effects: [],
+        shake: { n: 0, power: 0 },
+        hitStop: 0,
+        finalBlowId: null,
         log: "Fight!",
         focusId: null,
         nextId: 1,
@@ -261,17 +444,29 @@ function reducer(view: BattleView | null, action: Action): BattleView | null {
       };
     }
     case "events":
-      return view && view.matchId === action.matchId ? applyEvents(view, action.events) : view;
-    case "sync":
-      return view && view.matchId === action.matchId
-        ? { ...view, units: applySnapshot(view.units, action.snapshot), stances: action.snapshot.stances, timeMs: Math.max(view.timeMs, action.snapshot.timeMs) }
-        : view;
+      return view && view.matchId === action.matchId ? applyEvents(view, action.events, action.now) : view;
+    case "sync": {
+      if (!view || view.matchId !== action.matchId) return view;
+      const zonesNow = new Set(action.snapshot.units.flatMap((u) => (u.windup ? [u.windup.id] : [])));
+      return {
+        ...view,
+        units: applySnapshot(view.units, action.snapshot),
+        stances: action.snapshot.stances,
+        timeMs: Math.max(view.timeMs, action.snapshot.timeMs),
+        // A zone the server no longer reports (cancelled while we missed the event) must not linger.
+        effects: view.effects.filter((f) => f.kind !== "zone" || zonesNow.has(f.zoneId)),
+      };
+    }
     case "end":
       return view && view.matchId === action.payload.matchId ? { ...view, end: action.payload } : view;
     case "focus":
       return view ? { ...view, focusId: action.id } : view;
-    case "clearText":
-      return view ? { ...view, texts: view.texts.filter((t) => t.id !== action.id) } : view;
+    case "prune": {
+      if (!view) return view;
+      const texts = view.texts.filter((t) => t.expires > action.now);
+      const effects = view.effects.filter((f) => f.expires > action.now);
+      return texts.length === view.texts.length && effects.length === view.effects.length ? view : { ...view, texts, effects };
+    }
     case "reset":
       return null;
   }
@@ -289,7 +484,8 @@ const START_ERRORS: Record<StartError, string> = {
   server_error: "The arena had a problem. Try again in a moment.",
 };
 
-const TEXT_LIFETIME_MS = 1100;
+/** How long the slow-motion finish plays before the result panel appears. */
+export const FINALE_MS = 1800;
 
 /** Runs one practice match against the game server and exposes what the arena needs to draw it. */
 export function useSoloBattle() {
@@ -298,21 +494,35 @@ export function useSoloBattle() {
   const [error, setError] = useState<string | null>(null);
   /** The most recent payout from the server. Outlives a single match so the lobby shows fresh numbers. */
   const [lastReward, setLastReward] = useState<RewardSummary | null>(null);
+  const finaleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMove = useRef(0);
 
   useEffect(() => {
     const socket = getGameSocket();
 
     const onStart = (payload: BattleStartPayload) => {
-      dispatch({ type: "start", payload });
+      if (finaleTimer.current) clearTimeout(finaleTimer.current);
+      dispatch({ type: "start", payload, now: Date.now() });
       setError(null);
       setPhase("fighting");
     };
-    const onEvents = (p: { matchId: string; events: BattleEvent[] }) => dispatch({ type: "events", ...p });
+    const onEvents = (p: { matchId: string; events: BattleEvent[] }) => {
+      dispatch({ type: "events", ...p, now: Date.now() });
+      // Sounds are a side effect of the stream, played once per event, outside the reducer.
+      for (const e of p.events) {
+        const name = soundFor(e);
+        if (name) playSfx(name);
+      }
+    };
     const onSync = (p: { matchId: string; snapshot: BattleSnapshot }) => dispatch({ type: "sync", ...p });
     const onEnd = (payload: BattleEndPayload) => {
       dispatch({ type: "end", payload });
       if (payload.reward) setLastReward(payload.reward);
-      setPhase("ended");
+      // Let the last blow play out in slow motion before the result takes over the screen.
+      finaleTimer.current = setTimeout(() => {
+        setPhase("ended");
+        playSfx(payload.result === "win" ? "win" : payload.result === "loss" ? "lose" : "ko");
+      }, FINALE_MS);
     };
     // Back on this screen mid-match (refresh, or came back from another page): ask for it again.
     const rejoin = () => socket.emit("battle:rejoin");
@@ -331,6 +541,7 @@ export function useSoloBattle() {
     else socket.connect();
 
     return () => {
+      if (finaleTimer.current) clearTimeout(finaleTimer.current);
       socket.off("battle:start", onStart);
       socket.off("battle:events", onEvents);
       socket.off("battle:sync", onSync);
@@ -340,16 +551,17 @@ export function useSoloBattle() {
     };
   }, []);
 
-  // Floating numbers clean themselves up once their animation is over.
-  const texts = view?.texts;
+  // Floating numbers and one-off effects clear themselves after their animation is over.
+  const hasTransient = !!view && (view.texts.length > 0 || view.effects.length > 0);
   useEffect(() => {
-    if (!texts?.length) return;
-    const timers = texts.map((t) => setTimeout(() => dispatch({ type: "clearText", id: t.id }), TEXT_LIFETIME_MS));
-    return () => timers.forEach(clearTimeout);
-  }, [texts]);
+    if (!hasTransient) return;
+    const timer = setInterval(() => dispatch({ type: "prune", now: Date.now() }), 150);
+    return () => clearInterval(timer);
+  }, [hasTransient]);
 
   const start = useCallback((difficulty: Difficulty, controlledFighterId: string | null) => {
     const socket = getGameSocket();
+    unlockAudio(); // browsers only allow sound after a tap, and this is that tap
     setError(null);
     setPhase("starting");
 
@@ -379,6 +591,15 @@ export function useSoloBattle() {
     getGameSocket().emit("battle:intent", { type: "focus", targetId: id });
     dispatch({ type: "focus", id });
   }, []);
+  /** Walk the fighter you control to a spot (arena units). Streamed from held keys, so it is throttled. */
+  const move = useCallback((x: number, y: number) => {
+    const now = performance.now();
+    if (now - lastMove.current < 70) return;
+    lastMove.current = now;
+    getGameSocket().emit("battle:intent", { type: "move", x, y });
+  }, []);
+  /** Hand the fighter back to its own AI. */
+  const auto = useCallback(() => getGameSocket().emit("battle:intent", { type: "auto" }), []);
   const setStance = useCallback((stance: Stance) => getGameSocket().emit("battle:stance", stance), []);
   const reset = useCallback(() => {
     dispatch({ type: "reset" });
@@ -386,5 +607,30 @@ export function useSoloBattle() {
     setPhase("lobby");
   }, []);
 
-  return { phase, view, error, lastReward, start, cast, focus, setStance, reset };
+  return { phase, view, error, lastReward, start, cast, focus, move, auto, setStance, reset };
+}
+
+function soundFor(e: BattleEvent): Sfx | null {
+  switch (e.type) {
+    case "cast":
+      return e.skillIndex === 0 ? "swing" : null;
+    case "damage":
+      return (e.mult ?? 1) > 1.05 ? "crit" : "hit";
+    case "heal":
+      return "heal";
+    case "shield":
+      return "shield";
+    case "stun":
+      return "stun";
+    case "telegraph":
+      return "warn";
+    case "burst":
+      return "boom";
+    case "phase":
+      return "horn";
+    case "death":
+      return "ko";
+    default:
+      return null;
+  }
 }
