@@ -219,7 +219,7 @@ export interface BattleView {
   end: BattleEndPayload | null;
 }
 
-type Action =
+export type BattleAction =
   | { type: "start"; payload: BattleStartPayload; now: number }
   | { type: "events"; matchId: string; events: BattleEvent[]; now: number }
   | { type: "sync"; matchId: string; snapshot: BattleSnapshot }
@@ -413,7 +413,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
   return { ...view, units, texts, effects, stances, timeMs, log, nextId, phase, suddenAt, shake, hitStop, finalBlowId };
 }
 
-function reducer(view: BattleView | null, action: Action): BattleView | null {
+export function battleReducer(view: BattleView | null, action: BattleAction): BattleView | null {
   switch (action.type) {
     case "start": {
       const p = action.payload;
@@ -489,7 +489,7 @@ export const FINALE_MS = 1800;
 
 /** Runs one practice match against the game server and exposes what the arena needs to draw it. */
 export function useSoloBattle() {
-  const [view, dispatch] = useReducer(reducer, null);
+  const [view, dispatch] = useReducer(battleReducer, null);
   const [phase, setPhase] = useState<Phase>("lobby");
   const [error, setError] = useState<string | null>(null);
   /** The most recent payout from the server. Outlives a single match so the lobby shows fresh numbers. */
