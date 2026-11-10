@@ -175,7 +175,7 @@ export interface Effect {
   id: number;
   kind: "zone" | "burst" | "shot" | "vfx";
   /** Skill-effect animation (sheet + row) for "vfx" impacts and for shot projectiles. */
-  fx?: { sheet: "tank" | "healer" | "dps" | "shared"; row: number; loop?: boolean };
+  fx?: { sheet: "tank" | "healer" | "dps" | "shared"; row: number };
   x: number;
   y: number;
   radius: number;
@@ -314,7 +314,6 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
           { cooldownEnds, energy: Math.max(0, u.energy - skill.staminaCost), windupUntil: 0 },
           skill.kind === "damage" && melee ? "lunge" : skill.kind === "damage" || skill.kind === "heal" ? "cast" : undefined,
         );
-        if (actor.role === "tank" && (skill.kind === "buff" || skill.kind === "debuff")) vfx(e.actorId, { sheet: "tank", row: 3 });
         // Ranged hits and heals fly across the arena. Telegraphed attacks get their own zone effect instead.
         const target = units[e.targetIds[0] ?? ""];
         if (!melee && !skill.telegraphMs && target && (skill.kind === "damage" || skill.kind === "heal")) {
@@ -364,12 +363,10 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
       case "stun":
         touch(e.targetId, { stunUntil: e.t + e.durationMs });
         say(e.targetId, "STUNNED", "stun");
-        vfx(e.targetId, { sheet: "shared", row: 1, loop: true }, e.durationMs);
         break;
       case "displace":
         // The browser glides the sprite from where it was to where it landed, so a shove reads as a shove.
         touch(e.unitId, { x: e.x, y: e.y });
-        addEffect({ kind: "vfx", x: e.fromX, y: e.fromY, tone: "physical", side: meta(e.unitId)?.side ?? 1, fx: { sheet: "dps", row: 5 }, durationMs: 520 });
         break;
       case "phase":
         if (e.phase === "warning") {
@@ -384,9 +381,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         break;
       case "damage": {
         const target = units[e.targetId];
-        const shieldLeft = Math.max(0, (target?.shield ?? 0) - e.absorbed);
-        touch(e.targetId, { hp: e.hp, shield: shieldLeft }, "hurt");
-        if (target && target.shield > 0 && shieldLeft === 0) vfx(e.targetId, { sheet: "shared", row: 4 }, 600);
+        touch(e.targetId, { hp: e.hp }, "hurt");
         const dealt = e.amount - e.absorbed;
         if (e.ring) say(e.targetId, `-${dealt}`, "dmg");
         else if (dealt <= 0) say(e.targetId, "BLOCKED", "block");
@@ -416,11 +411,11 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
       case "shield":
         touch(e.targetId, { shield: e.amount }, "shield");
         say(e.targetId, "SHIELD", "shield");
-        vfx(e.targetId, meta(e.sourceId)?.role === "healer" ? { sheet: "healer", row: 5 } : { sheet: "tank", row: 2 }, 700);
+        vfx(e.targetId, { sheet: "tank", row: 2 }, 700);
         break;
       case "mod":
         say(e.targetId, `${e.pct > 0 ? "+" : ""}${e.pct}% ${e.stat.toUpperCase()}`, "mod");
-        vfx(e.targetId, e.pct < 0 ? { sheet: "dps", row: 4 } : meta(e.sourceId)?.role === "healer" ? { sheet: "healer", row: 4 } : e.stat === "def" ? { sheet: "tank", row: 4 } : { sheet: "shared", row: 5 });
+        vfx(e.targetId, e.pct < 0 ? { sheet: "dps", row: 4 } : e.stat === "def" ? { sheet: "tank", row: 4 } : { sheet: "shared", row: 5 });
         break;
       case "death":
         touch(e.unitId, { hp: 0, alive: false, windupUntil: 0 }, "dead");
