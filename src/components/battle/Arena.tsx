@@ -33,6 +33,8 @@ const textColor: Record<FloatText["kind"], string> = {
   stun: "text-ice",
 };
 
+const ACTION: Record<string, "attack" | "cast" | "hurt"> = { lunge: "attack", cast: "cast", hurt: "hurt" };
+
 function fxClass(u: LiveUnit, side: Side) {
   switch (u.fx.kind) {
     case "lunge":
@@ -155,7 +157,7 @@ export function Arena({
       onPointerDown={ground}
     >
       <div
-        className={clsx("absolute inset-0 transition-transform ease-out", finale ? "duration-[1400ms]" : "duration-300")}
+        className={clsx("absolute inset-0 [container-type:size] transition-transform ease-out", finale ? "duration-[1400ms]" : "duration-300")}
         style={
           finale && finalUnit
             ? { transform: "scale(1.45)", transformOrigin: `${toLeft(finalUnit.x, arena.w)}% ${toTop(finalUnit.y, arena.h) - 8}%` }
@@ -214,9 +216,18 @@ export function Arena({
                   ★ ★
                 </span>
               )}
-              <div key={live.fx.n} className={clsx("origin-bottom", fxClass(live, meta.side))}>
-                <div className={clsx(!live.alive ? "" : stunned ? "sprite-stunned" : charging ? "sprite-charge" : walking ? "sprite-walk" : "sprite-idle")}>
-                  <FighterSprite spriteKey={meta.spriteKey} role={meta.role} flip={meta.side === 2} />
+              <div className={clsx("origin-bottom", fxClass(live, meta.side))} key={live.fx.n}>
+                <div className={clsx(live.alive && charging && !stunned && "sprite-charge", stunned && "sprite-stunned")}>
+                  <FighterSprite
+                    spriteKey={meta.spriteKey}
+                    role={meta.role}
+                    flip={meta.side === 2}
+                    rest={stunned ? "stun" : charging ? "windup" : walking ? "walk" : "idle"}
+                    action={live.alive ? ACTION[live.fx.kind ?? ""] ?? null : null}
+                    actionKey={live.fx.n}
+                    tempo={0.8 + Math.min(meta.spd, 100) / 200}
+                    className="-mb-[6%]"
+                  />
                 </div>
               </div>
               <div className={clsx("mx-auto mt-0.5 h-1.5 w-3/4 rounded-full", meta.controlled ? "bg-gold/70" : "bg-black/40")} />
@@ -224,11 +235,16 @@ export function Arena({
           );
           const common = {
             className: clsx(
-              "absolute -translate-x-1/2 -translate-y-full ease-linear",
-              finale ? "transition-[left,top] duration-500" : "transition-[left,top] duration-100",
+              "absolute left-0 top-0 will-change-transform ease-linear",
+              finale ? "transition-transform duration-500" : "transition-transform duration-[110ms]",
               clickable && "cursor-crosshair",
             ),
-            style: { left: `${toLeft(live.x, arena.w)}%`, top: `${toTop(live.y, arena.h)}%`, width: `${((2 * UNIT_RADIUS) / arena.w) * 100}%`, minWidth: "2.5rem", zIndex: 10 + Math.round(live.y) },
+            style: {
+              transform: `translate3d(calc(${toLeft(live.x, arena.w)}cqw - 50%), calc(${toTop(live.y, arena.h)}cqh - 94%), 0)`,
+              width: `${((2 * UNIT_RADIUS * 2.6) / arena.w) * 100}%`,
+              minWidth: "5rem",
+              zIndex: 10 + Math.round(live.y),
+            },
           };
           return clickable ? (
             <div
