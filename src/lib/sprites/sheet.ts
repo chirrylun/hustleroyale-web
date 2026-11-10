@@ -1,4 +1,4 @@
-import { Buf, SIZE } from "./pixel";
+import { Buf, K, SIZE } from "./pixel";
 import { ANIMS, COLS, drawFighter, pose } from "./draw";
 import { designFor, type Role } from "./designs";
 
@@ -20,11 +20,11 @@ export function sheetUrl(key: string, role: Role): string {
     for (let i = 0; i < a.n; i++) {
       const ox = i * SIZE, oy = row * SIZE;
       // crisp ground shadow (+ glowing ring for rare+)
-      for (let y = 56; y < 64; y++)
-        for (let x = 12; x < 52; x++) {
-          const e = ((x + 0.5 - 32) / 15) ** 2 + ((y + 0.5 - 60) / 3.4) ** 2;
-          if (e <= 1) { ctx.fillStyle = "rgba(0,0,0,.38)"; ctx.fillRect(ox + x, oy + y, 1, 1); }
-          else if (d.tier >= 2 && e <= 1.5) { ctx.fillStyle = `#${d.glow.toString(16).padStart(6, "0")}99`; ctx.fillRect(ox + x, oy + y, 1, 1); }
+      for (let y = 78 * K / 1.5 | 0; y < SIZE; y++)
+        for (let x = 0; x < SIZE; x++) {
+          const e = ((x + 0.5 - 48) / (16 * K)) ** 2 + ((y + 0.5 - 60 * K) / (3.6 * K)) ** 2;
+          if (e <= 1) { ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(ox + x, oy + y, 1, 1); }
+          else if (d.tier >= 2 && e <= 1.45) { ctx.fillStyle = `#${d.glow.toString(16).padStart(6, "0")}99`; ctx.fillRect(ox + x, oy + y, 1, 1); }
         }
       const b = new Buf();
       const p = pose(a.name, i, a.n);

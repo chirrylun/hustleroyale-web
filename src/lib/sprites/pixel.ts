@@ -1,4 +1,5 @@
-export const SIZE = 64;
+export const K = 1.5; // art is authored on a 64-grid and rendered at 1.5x for finer detail
+export const SIZE = 96;
 type N = number;
 const ch = (c: N, s: N) => (c >> s) & 255;
 export const mix = (a: N, b: N, t: N) => {
@@ -33,16 +34,19 @@ export class Buf {
     if (y > p.y1) p.y1 = y;
   }
   ell(cx: N, cy: N, rx: N, ry: N) {
+    cx *= K; cy *= K; rx *= K; ry *= K;
     for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
       for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++)
         if (((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1) this.put(x, y);
     return this;
   }
   rect(x: N, y: N, w: N, h: N) {
+    x = Math.round(x * K); y = Math.round(y * K); w = Math.max(1, Math.round(w * K)); h = Math.max(1, Math.round(h * K));
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.put(Math.round(x) + i, Math.round(y) + j);
     return this;
   }
   cap(x1: N, y1: N, x2: N, y2: N, r: N) {
+    x1 *= K; y1 *= K; x2 *= K; y2 *= K; r *= K;
     const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy || 1;
     for (let y = Math.floor(Math.min(y1, y2) - r); y <= Math.ceil(Math.max(y1, y2) + r); y++)
       for (let x = Math.floor(Math.min(x1, x2) - r); x <= Math.ceil(Math.max(x1, x2) + r); x++) {
@@ -51,7 +55,8 @@ export class Buf {
       }
     return this;
   }
-  poly(pts: [N, N][]) {
+  poly(p64: [N, N][]) {
+    const pts = p64.map((p) => [p[0] * K, p[1] * K] as [N, N]);
     const ys = pts.map((p) => p[1]), xs = pts.map((p) => p[0]);
     for (let y = Math.floor(Math.min(...ys)); y <= Math.ceil(Math.max(...ys)); y++)
       for (let x = Math.floor(Math.min(...xs)); x <= Math.ceil(Math.max(...xs)); x++) {
@@ -65,12 +70,12 @@ export class Buf {
     return this;
   }
   px(x: N, y: N, c: N) {
-    x = Math.round(x); y = Math.round(y);
-    if (x >= 0 && y >= 0 && x < SIZE && y < SIZE) this.raw[y * SIZE + x] = c;
+    x = Math.round(x * K); y = Math.round(y * K);
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) if (x + i >= 0 && y + j >= 0 && x + i < SIZE && y + j < SIZE) this.raw[(y + j) * SIZE + x + i] = c;
   }
   fxp(x: N, y: N, c: N) {
-    x = Math.round(x); y = Math.round(y);
-    if (x >= 0 && y >= 0 && x < SIZE && y < SIZE) this.fx[y * SIZE + x] = c;
+    x = Math.round(x * K); y = Math.round(y * K);
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) if (x + i >= 0 && y + j >= 0 && x + i < SIZE && y + j < SIZE) this.fx[(y + j) * SIZE + x + i] = c;
   }
   /** Shaded, outlined RGBA pixels. `flash` washes the body white (hit frame). */
   toRGBA(flash = false) {
@@ -84,9 +89,9 @@ export class Buf {
         if (pi < 0) continue;
         const p = this.parts[pi];
         let c = p.back ? dark(p.c, 0.32) : p.c;
-        if (!same(i, x, y - 1)) c = light(c, 0.34);
+        if (!same(i, x, y - 1)) c = light(c, 0.42);
         else if (!same(i, x - 1, y)) c = light(c, 0.14);
-        if (!same(i, x, y + 1) || !same(i, x + 1, y)) c = dark(c, 0.3);
+        if (!same(i, x, y + 1) || !same(i, x + 1, y)) c = dark(c, 0.38);
         else if (y > p.y0 + (p.y1 - p.y0) * 0.64) c = dark(c, 0.14);
         out[i] = c;
       }

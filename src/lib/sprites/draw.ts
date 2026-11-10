@@ -48,9 +48,9 @@ export function pose(anim: AnimName, i: number, n: number): Pose {
 
 interface Build { leg: number; legR: number; torso: number; tw: number; bw: number; head: number; arm: number; sh: number }
 const BUILD: Record<Role, Build> = {
-  tank: { leg: 12, legR: 3.4, torso: 16, tw: 20, bw: 15, head: 6.2, arm: 3.2, sh: 4 },
-  healer: { leg: 12, legR: 2.4, torso: 14, tw: 11, bw: 13, head: 5.4, arm: 2.4, sh: 3 },
-  dps: { leg: 16, legR: 2.6, torso: 13, tw: 12, bw: 10, head: 5.2, arm: 2.4, sh: 3 },
+  tank: { leg: 11, legR: 3.6, torso: 15, tw: 20, bw: 15, head: 7.6, arm: 3.4, sh: 4 },
+  healer: { leg: 11, legR: 2.6, torso: 13, tw: 11, bw: 13, head: 7, arm: 2.6, sh: 3 },
+  dps: { leg: 14, legR: 2.8, torso: 12, tw: 12, bw: 10, head: 6.8, arm: 2.7, sh: 3 },
 };
 const GY = 60;
 const WOOD = 0x8b5a2b;
@@ -87,7 +87,14 @@ export function drawFighter(b: Buf, d: Design, p: Pose, t: number) {
   // ---- back layer
   leg(false);
   if (d.off === "dagger") dagger(b, d, arm(false), p.wA - 70);
-  else if (d.off !== "shield") arm(false);
+  else if (d.off === "shield") {
+    const cx = sx + 8 + p.hB[0] * 0.25, cy = sy + 9 + (p.hB[1] - 9) * 0.4;
+    arm(false);
+    b.part(d.metal).ell(cx, cy, 5.8, 8);
+    b.part(d.main).ell(cx, cy, 4, 6.2);
+    b.part(d.trim).rect(cx - 0.5, cy - 5, 1, 10).rect(cx - 3, cy - 1, 6, 1);
+    b.part(d.tier >= 2 ? d.glow : d.trim).ell(cx, cy, 1.6, 1.8);
+  } else arm(false);
   if (d.tier >= 2 && d.cls !== "healer" || d.tier >= 3) {
     const long = d.tier >= 3 ? 12 : 8, w = p.sway * 2;
     b.part(d.sub, true).poly([[sx - 2, sy], [sx + 1, sy + 1], [hx - 3 - long - w - p.lean, hipY + long], [hx - 6 - w, hipY + long + 2], [sx - 6, sy + 6]]);
@@ -123,7 +130,7 @@ export function drawFighter(b: Buf, d: Design, p: Pose, t: number) {
   }
 
   // ---- head
-  const hcx = sx + 1 + p.lean * 0.3, hcy = sy - B.head + 1.5, r = B.head;
+  const hcx = sx + 1 + p.lean * 0.3, hcy = sy - B.head + 2.8, r = B.head;
   drawHead(b, d, hcx, hcy, r, p, t);
 
   // ---- tank pauldrons
@@ -140,14 +147,6 @@ export function drawFighter(b: Buf, d: Design, p: Pose, t: number) {
   // ---- front arm + weapon, offhand
   const hand = arm(true);
   const tip = weapon(b, d, hand, p.wA, p.glow);
-  if (d.off === "shield") {
-    const s = shoulder(false), cx = s[0] + 9 + p.hB[0] * 0.3, cy = s[1] + 7 + (p.hB[1] - 9) * 0.5;
-    arm(false);
-    b.part(d.metal).ell(cx, cy, 6.5, 8.5);
-    b.part(d.main).ell(cx, cy, 4.6, 6.6);
-    b.part(d.trim).ell(cx, cy, 2.2, 2.6);
-    if (d.tier >= 2) b.px(cx, cy, d.glow);
-  }
 
   // ---- halo, effects
   if (d.halo) for (let a = 0; a < 24; a++) { const q = (a / 24) * 6.283; b.fxp(hcx + Math.cos(q) * 6.5, hcy - r - 3 + Math.sin(q) * 1.8, a % 6 < 5 ? 0xffe9a8 : 0xffffff); }
@@ -157,19 +156,20 @@ export function drawFighter(b: Buf, d: Design, p: Pose, t: number) {
 function drawHead(b: Buf, d: Design, x: number, y: number, r: number, p: Pose, t: number) {
   const ry = r * 1.05, eye = d.head === "hood" && d.tier >= 3 ? d.glow : 0x1a1c2c;
   const face = () => { b.part(d.skin).ell(x, y, r, ry); };
-  const eyes = (c = eye) => { b.px(x + r * 0.55, y - 0.5, c); b.px(x + r * 0.55, y + 0.5, c); };
+  const eyes = (c = eye) => { b.px(x + r * 0.35, y - 0.2, 0xf4f4f4); b.px(x + r * 0.35 + 1.3, y - 0.2, c); b.px(x + r * 0.35 + 1.3, y + 1.1, c); };
   const w = p.sway * 1.5;
   switch (d.head) {
     case "helm":
-      b.part(dark(d.metal, 0.35), true).ell(x - 1, y + 1, r + 1, ry + 0.5);
-      b.part(d.metal).ell(x, y - 0.5, r + 0.8, ry + 0.4);
-      b.part(d.skin).rect(x + 1, y + 1, r - 1, 3);
-      b.px(x + 2, y + 2, 0x1a1c2c); b.px(x + 4, y + 2, 0x1a1c2c);
-      b.part(d.trim).rect(x - 5, y - 1, 11, 1);
-      if (d.tier >= 2) b.part(d.main).poly([[x - 2, y - ry], [x - 9 - w, y - ry + 3 - d.tier], [x - 11 - w, y + 2], [x - 6, y - 1]]);
+      b.part(dark(d.metal, 0.4), true).ell(x - 2, y + 1.5, r + 0.8, ry);
+      face(); eyes();
+      b.part(d.metal).ell(x - 0.5, y - 2.8, r + 1.2, ry * 0.62);
+      b.part(d.metal).rect(x - r - 0.5, y - 3, 3, ry + 3);
+      b.part(d.trim).rect(x - r - 1, y - 4.2, 2 * r + 2, 1.4);
+      b.part(light(d.metal, 0.15)).rect(x + 1.5, y - 3, 1.4, 4.5);
+      if (d.tier >= 1) b.part(d.main).poly([[x - 2, y - ry + 0.5], [x - 8 - w, y - ry - 1 + 1.5 - d.tier], [x - 11 - w, y + 2.5], [x - 6, y - 1]]);
       break;
     case "crown":
-      face(); b.part(d.hair).ell(x - 1.5, y - 2, r, ry * 0.75); eyes();
+      face(); b.part(d.hair).ell(x - 2, y - 3.4, r, ry * 0.5); eyes();
       b.part(0xffcd75).rect(x - 5, y - ry, 11, 3).poly([[x - 5, y - ry], [x - 4, y - ry - 5], [x - 2, y - ry], [x, y - ry - 6], [x + 2, y - ry], [x + 4, y - ry - 5], [x + 6, y - ry]]);
       b.px(x, y - ry - 1, 0xb13e53); b.px(x - 4, y - ry + 1, 0x73eff7); b.px(x + 4, y - ry + 1, 0x73eff7);
       break;
@@ -182,16 +182,16 @@ function drawHead(b: Buf, d: Design, x: number, y: number, r: number, p: Pose, t
       break;
     case "gele": {
       face(); eyes();
-      b.part(d.main).ell(x - 0.5, y - 3, r + 1.8, ry * 0.65);
-      b.part(d.trim).rect(x - 6, y - 4, 13, 1);
+      b.part(d.main).ell(x - 0.5, y - 3.6, r + 1.8, ry * 0.6);
+      b.part(d.trim).rect(x - 6, y - 5.5, 13, 1);
       b.part(d.sub).poly([[x - 3, y - 5], [x - 1, y - ry - 6 - d.tier], [x + 3, y - ry - 2], [x + 5, y - 5]]);
       b.part(d.trim).rect(x - 1, y - ry - 3, 3, 1);
       b.part(d.main).poly([[x - 6, y - 3], [x - 10 - w, y - 8], [x - 8 - w, y - 2]]);
       break; }
     case "bandana":
-      face(); b.part(d.hair).ell(x - 1, y - 2.5, r, ry * 0.65); eyes();
-      b.part(d.trim === 0xf4f4f4 ? 0xf4f4f4 : d.trim).rect(x - 6, y - 3, 12, 2);
-      b.part(d.trim, true).poly([[x - 6, y - 3], [x - 12 - w, y - 1 + w * 0.5], [x - 11 - w, y + 2], [x - 6, y - 1]]);
+      face(); b.part(d.hair).ell(x - 1, y - 3.2, r, ry * 0.45); eyes();
+      b.part(d.trim === 0xf4f4f4 ? 0xf4f4f4 : d.trim).rect(x - 6, y - 5, 12, 1.6);
+      b.part(d.trim, true).poly([[x - 6, y - 5], [x - 12 - w, y - 3 + w * 0.5], [x - 11 - w, y], [x - 6, y - 3]]);
       break;
     case "cap":
       face(); eyes();
@@ -205,13 +205,13 @@ function drawHead(b: Buf, d: Design, x: number, y: number, r: number, p: Pose, t
       b.part(d.main, true).ell(x - 2, y + 2, r + 2, ry + 4);
       face(); eyes();
       b.part(d.main).ell(x - 0.5, y - 2.5, r + 1.4, ry * 0.7);
-      b.part(d.sub).rect(x - 6, y - 3, 12, 1);
+      b.part(d.sub).rect(x - 6, y - 4.6, 12, 1);
       b.part(d.trim).rect(x - 1, y - ry - 1, 2, 1);
       break;
     default:
       b.part(d.hair, true).ell(x - 2, y, r + 0.5, ry);
       face(); eyes();
-      b.part(d.hair).ell(x - 1, y - 2.8, r, ry * 0.6);
+      b.part(d.hair).ell(x - 1.5, y - 3.4, r, ry * 0.5);
       if (d.weapon === "cane") { b.px(x - 3, y - ry - 1, 0xf4f4f4); b.px(x, y - ry - 1, 0xf4f4f4); b.px(x + 3, y - ry - 1, 0xf4f4f4); }
   }
   void t;
