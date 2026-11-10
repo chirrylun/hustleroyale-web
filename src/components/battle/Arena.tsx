@@ -212,11 +212,6 @@ export function Arena({
                 {live.shield > 0 && <div className="mt-0.5 h-1 bg-ice" style={{ width: `${Math.min(100, (live.shield / live.maxHp) * 300)}%` }} />}
               </div>
               {focused && <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-gold sm:-top-4">▼</span>}
-              {stunned && (
-                <span className="stun-stars pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 text-sm text-gold sm:-top-7 sm:text-xl" aria-hidden="true">
-                  ★ ★
-                </span>
-              )}
               <div className={clsx("origin-bottom", fxClass(live, meta.side))} key={live.fx.n}>
                 <div className={clsx(live.alive && charging && !stunned && "sprite-charge", stunned && "sprite-stunned")}>
                   <FighterSprite
@@ -344,13 +339,20 @@ function Obstacle({ o, arena }: { o: BattleView["obstacles"][number]; arena: { w
 function EffectView({ f, arena }: { f: Effect; arena: { w: number; h: number } }) {
   const color = f.tone === "magical" ? "rgba(65,166,246,0.9)" : f.tone === "heal" ? "rgba(167,240,112,0.95)" : "rgba(244,244,244,0.95)";
   if (f.kind === "vfx" && f.fx) {
+    const stars = f.fx.sheet === "shared" && f.fx.row === 1; // stun stars circle the head, not the body
     return (
       <FxSprite
         sheet={f.fx.sheet}
         row={f.fx.row}
-        ms={f.durationMs}
+        ms={stars ? 700 : f.durationMs}
+        loop={f.fx.loop}
         className="pointer-events-none absolute z-[41] -translate-x-1/2 -translate-y-1/2"
-        style={{ left: `${toLeft(f.x, arena.w)}%`, top: `${toTop(f.y, arena.h) - (2.4 / arena.h) * 100}%`, width: `${(7 / arena.w) * 100}%` }}
+        style={{
+          left: `${toLeft(f.x, arena.w)}%`,
+          top: `${toTop(f.y, arena.h) - ((stars ? 4.6 : 2.4) / arena.h) * 100}%`,
+          width: `${((stars ? 3.6 : 7) / arena.w) * 100}%`,
+          minWidth: stars ? "2.5rem" : "4rem",
+        }}
       />
     );
   }
@@ -362,6 +364,7 @@ function EffectView({ f, arena }: { f: Effect; arena: { w: number; h: number } }
         aria-hidden="true"
       >
         <div className="danger-zone-fill h-full w-full rounded-[50%] bg-ember/60" style={{ animationDuration: `${f.durationMs}ms` }} />
+        <FxSprite sheet="shared" row={3} ms={700} loop className="absolute inset-0" style={{ aspectRatio: "auto", width: "100%", height: "100%", backgroundSize: "600% 600%" }} />
       </div>
     );
   }
