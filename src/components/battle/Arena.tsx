@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { ArenaBackdrop } from "@/components/home/ArenaBackdrop";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
+import { FxSprite } from "@/components/sprites/FxSprite";
 import type { BattleView, Effect, FloatText, LiveUnit, Phase, Side, UnitMeta } from "@/lib/battle";
 
 /** The street in the backdrop starts ~58% of the way down; fighters stand on that band. */
@@ -226,7 +227,7 @@ export function Arena({
                     action={live.alive ? ACTION[live.fx.kind ?? ""] ?? null : null}
                     actionKey={live.fx.n}
                     tempo={0.8 + Math.min(meta.spd, 100) / 200}
-                    className="-mb-[6%]"
+                    className="-mb-[10%]"
                   />
                 </div>
               </div>
@@ -240,8 +241,8 @@ export function Arena({
               clickable && "cursor-crosshair",
             ),
             style: {
-              transform: `translate3d(calc(${toLeft(live.x, arena.w)}cqw - 50%), calc(${toTop(live.y, arena.h)}cqh - 94%), 0)`,
-              width: `${((2 * UNIT_RADIUS * 2.6) / arena.w) * 100}%`,
+              transform: `translate3d(calc(${toLeft(live.x, arena.w)}cqw - 50%), calc(${toTop(live.y, arena.h)}cqh - 100%), 0)`,
+              width: `${((2 * UNIT_RADIUS * 2.9) / arena.w) * 100}%`,
               minWidth: "5rem",
               zIndex: 10 + Math.round(live.y),
             },
@@ -342,6 +343,17 @@ function Obstacle({ o, arena }: { o: BattleView["obstacles"][number]; arena: { w
 
 function EffectView({ f, arena }: { f: Effect; arena: { w: number; h: number } }) {
   const color = f.tone === "magical" ? "rgba(65,166,246,0.9)" : f.tone === "heal" ? "rgba(167,240,112,0.95)" : "rgba(244,244,244,0.95)";
+  if (f.kind === "vfx" && f.fx) {
+    return (
+      <FxSprite
+        sheet={f.fx.sheet}
+        row={f.fx.row}
+        ms={f.durationMs}
+        className="pointer-events-none absolute z-[41] -translate-x-1/2 -translate-y-1/2"
+        style={{ left: `${toLeft(f.x, arena.w)}%`, top: `${toTop(f.y, arena.h) - (2.4 / arena.h) * 100}%`, width: `${(7 / arena.w) * 100}%` }}
+      />
+    );
+  }
   if (f.kind === "zone") {
     return (
       <div
@@ -362,20 +374,24 @@ function EffectView({ f, arena }: { f: Effect; arena: { w: number; h: number } }
       />
     );
   }
+  const shotStyle = {
+    animationDuration: `${f.durationMs}ms`,
+    "--x1": `${toLeft(f.x, arena.w)}%`,
+    "--y1": `calc(${toTop(f.y, arena.h)}% - 2.2rem)`,
+    "--x2": `${toLeft(f.x2, arena.w)}%`,
+    "--y2": `calc(${toTop(f.y2, arena.h)}% - 2.2rem)`,
+  } as CSSProperties;
+  if (f.fx) {
+    return (
+      <span className="shot pointer-events-none absolute z-[42] block -translate-x-1/2 -translate-y-1/2" style={{ ...shotStyle, width: `${(3.6 / arena.w) * 100}%`, minWidth: "2.5rem" }} aria-hidden="true">
+        <FxSprite sheet={f.fx.sheet} row={f.fx.row} ms={420} loop style={{ width: "100%", transform: f.x2 < f.x ? "scaleX(-1)" : undefined }} />
+      </span>
+    );
+  }
   return (
     <span
       className="shot pointer-events-none absolute z-[42] block size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-ink sm:size-4"
-      style={
-        {
-          background: color,
-          boxShadow: `0 0 8px ${color}`,
-          animationDuration: `${f.durationMs}ms`,
-          "--x1": `${toLeft(f.x, arena.w)}%`,
-          "--y1": `calc(${toTop(f.y, arena.h)}% - 2.2rem)`,
-          "--x2": `${toLeft(f.x2, arena.w)}%`,
-          "--y2": `calc(${toTop(f.y2, arena.h)}% - 2.2rem)`,
-        } as CSSProperties
-      }
+      style={{ ...shotStyle, background: color, boxShadow: `0 0 8px ${color}` } as CSSProperties}
       aria-hidden="true"
     />
   );

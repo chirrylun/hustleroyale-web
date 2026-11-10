@@ -173,7 +173,9 @@ export interface FloatText {
 /** Short-lived visuals: danger zones, explosions and shots. */
 export interface Effect {
   id: number;
-  kind: "zone" | "burst" | "shot";
+  kind: "zone" | "burst" | "shot" | "vfx";
+  /** Skill-effect animation (sheet + row) for "vfx" impacts and for shot projectiles. */
+  fx?: { sheet: "tank" | "healer" | "dps" | "shared"; row: number };
   x: number;
   y: number;
   radius: number;
@@ -282,6 +284,10 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
   const addEffect = (e: Omit<Effect, "id" | "expires" | "x2" | "y2" | "zoneId" | "radius" | "durationMs"> & Partial<Effect>) => {
     effects.push({ id: nextId++, radius: 0, x2: e.x, y2: e.y, durationMs: 400, zoneId: -1, ...e, expires: now + (e.durationMs ?? 400) + 300 });
   };
+  const vfx = (id: string, fx: NonNullable<Effect["fx"]>, durationMs = 560) => {
+    const u = units[id];
+    if (u) addEffect({ kind: "vfx", x: u.x, y: u.y, tone: "physical", side: meta(id)?.side ?? 1, fx, durationMs });
+  };
   const bigShake = (power: number) => {
     shake = { n: shake.n + 1, power: Math.max(power, shake.power > 0 && shake.n === view.shake.n ? shake.power : 0) };
   };
@@ -320,6 +326,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
             durationMs: 260,
             tone: skill.kind === "heal" ? "heal" : skill.damageType === "magical" ? "magical" : "physical",
             side: actor.side,
+            fx: actor.role === "healer" ? { sheet: "healer", row: 2 } : actor.role === "dps" ? { sheet: "dps", row: 2 } : undefined,
           });
         }
         log = e.skillIndex === 0 ? `${actor.name} attacks` : `${actor.name} uses ${skill.name}`;
@@ -383,22 +390,37 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         else say(e.targetId, `-${dealt}`, "dmg");
         const heavy = target && dealt >= target.maxHp * 0.12;
         if (heavy) bigShake(1);
+        if (!e.ring) {
+          const src = meta(e.sourceId);
+          const crit = !!e.mult && e.mult > 1.05;
+          const ranged = (src?.skills[0]?.range ?? 0) > MELEE_RANGE;
+          vfx(
+            e.targetId,
+            src?.role === "tank" ? { sheet: "tank", row: crit ? 5 : heavy ? 1 : 0 }
+              : src?.role === "dps" ? { sheet: "dps", row: ranged ? 3 : crit ? 1 : 0 }
+              : { sheet: "healer", row: 3 },
+          );
+        }
         break;
       }
       case "heal":
         touch(e.targetId, { hp: e.hp }, "heal");
         if (e.amount > 0) say(e.targetId, `+${e.amount}`, "heal");
+        vfx(e.targetId, { sheet: "healer", row: units[e.targetId] && e.amount >= units[e.targetId].maxHp * 0.2 ? 1 : 0 });
         break;
       case "shield":
         touch(e.targetId, { shield: e.amount }, "shield");
         say(e.targetId, "SHIELD", "shield");
+        vfx(e.targetId, { sheet: "tank", row: 2 }, 700);
         break;
       case "mod":
         say(e.targetId, `${e.pct > 0 ? "+" : ""}${e.pct}% ${e.stat.toUpperCase()}`, "mod");
+        vfx(e.targetId, e.pct < 0 ? { sheet: "dps", row: 4 } : e.stat === "def" ? { sheet: "tank", row: 4 } : { sheet: "shared", row: 5 });
         break;
       case "death":
         touch(e.unitId, { hp: 0, alive: false, windupUntil: 0 }, "dead");
         say(e.unitId, "KO!", "ko");
+        vfx(e.unitId, { sheet: "shared", row: 2 }, 650);
         log = `${meta(e.unitId)?.name ?? "A fighter"} is down`;
         finalBlowId = e.unitId;
         hitStop += 1;
