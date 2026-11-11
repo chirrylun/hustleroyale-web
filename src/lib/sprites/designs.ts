@@ -19,5 +19,15 @@ const TIER: Record<string, number> = {
   street_scrapper: 0, gen_mage: 1, molue_mauler: 2, eko_shadow: 3,
 };
 
-/** Each fighter wears the sheet for its class and rarity. */
-export const sheetUrl = (key: string, role: Role) => `/sprites/${role}_${RARITY[TIER[key] ?? 0]}.png`;
+/** Archetypes that have their own sheet at /sprites/<archetype>_<rarity>.png. Add a name here once its four sheets are in. */
+const ARCHETYPE_ART = new Set<string>([]);
+
+/** Keys look like `<archetype>_<rarity>`. Archetypes without art yet wear their class sheet at the same rarity. */
+export const sheetUrl = (key: string, role: Role) => {
+  const i = key.lastIndexOf("_");
+  const rarity = key.slice(i + 1);
+  if (RARITY.includes(rarity as (typeof RARITY)[number])) {
+    return ARCHETYPE_ART.has(key.slice(0, i)) ? `/sprites/${key}.png` : `/sprites/${role}_${rarity}.png`;
+  }
+  return `/sprites/${role}_${RARITY[TIER[key] ?? 0]}.png`;
+};
