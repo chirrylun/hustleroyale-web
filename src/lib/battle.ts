@@ -390,15 +390,6 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         else say(e.targetId, `-${dealt}`, "dmg");
         const heavy = target && dealt >= target.maxHp * 0.12;
         if (heavy) bigShake(1);
-        if (!e.ring) {
-          const src = meta(e.sourceId);
-          const crit = !!e.mult && e.mult > 1.05;
-          const ranged = (src?.skills[0]?.range ?? 0) > MELEE_RANGE;
-          vfx(
-            e.targetId,
-            { sheet: "hit", row: crit ? 3 : heavy ? 1 : ranged ? 2 : 0 },
-          );
-        }
         break;
       }
       case "heal":
@@ -418,7 +409,6 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
       case "death":
         touch(e.unitId, { hp: 0, alive: false, windupUntil: 0 }, "dead");
         say(e.unitId, "KO!", "ko");
-        vfx(e.unitId, { sheet: "status", row: 1 }, 650);
         log = `${meta(e.unitId)?.name ?? "A fighter"} is down`;
         finalBlowId = e.unitId;
         hitStop += 1;

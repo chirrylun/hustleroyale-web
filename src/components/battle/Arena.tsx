@@ -231,7 +231,7 @@ export function Arena({
                   />
                 </div>
               </div>
-              <div className={clsx("mx-auto mt-0.5 h-1.5 w-3/4 rounded-full", meta.controlled ? "bg-gold/70" : "bg-black/40")} />
+              <div className={clsx("mx-auto -mt-1.5 h-1.5 w-3/4 translate-y-[3px] rounded-full", meta.controlled ? "bg-gold/70" : "bg-black/40")} />
             </>
           );
           const common = {
