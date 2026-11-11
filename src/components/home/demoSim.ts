@@ -12,10 +12,7 @@ const W = 48;
 const H = 24;
 const R = 1.2;
 const CLOCK = { regularMs: 20_000, shrinkMs: 8_000, minRadius: 1, capMs: 35_000 };
-const OBSTACLES = [
-  { id: "p1", x: 24, y: 7.6, r: 1.8, kind: "pillar" as const },
-  { id: "p2", x: 24, y: 16.4, r: 1.8, kind: "pillar" as const },
-];
+const OBSTACLES: { id: string; x: number; y: number; r: number; kind: "pillar" | "stall" }[] = []; // open arena
 
 type Rnd = () => number;
 type Skill = UnitMeta["skills"][number];

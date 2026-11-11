@@ -242,8 +242,8 @@ export function Arena({
             ),
             style: {
               transform: `translate3d(calc(${toLeft(live.x, arena.w)}cqw - 50%), calc(${toTop(live.y, arena.h)}cqh - 100%), 0)`,
-              width: `${((2 * UNIT_RADIUS * 3.3) / arena.w) * 100}%`,
-              minWidth: "5rem",
+              width: `${((2 * UNIT_RADIUS * 2.3) / arena.w) * 100}%`,
+              minWidth: "3.5rem",
               zIndex: 10 + Math.round(live.y),
             },
           };
