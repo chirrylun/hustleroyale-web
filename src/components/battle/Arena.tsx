@@ -8,8 +8,8 @@ import { FxSprite } from "@/components/sprites/FxSprite";
 import type { BattleView, Effect, FloatText, LiveUnit, Phase, Side, UnitMeta } from "@/lib/battle";
 
 /** The street in the backdrop starts ~58% of the way down; fighters stand on that band. */
-const GROUND_TOP = 58;
-const GROUND_HEIGHT = 38;
+const GROUND_TOP = 13;
+const GROUND_HEIGHT = 84;
 /** Must match UNIT_RADIUS on the server: a fighter is drawn exactly as wide as it collides. */
 const UNIT_RADIUS = 1.2;
 const REGULAR_WARNING_MS = 10_000;
@@ -152,7 +152,7 @@ export function Arena({
   return (
     <div
       ref={root}
-      className={clsx("pixel-box relative aspect-[3/2] w-full touch-manipulation select-none overflow-hidden bg-ink", stopped && "arena-hitstop", canMove && "cursor-pointer")}
+      className={clsx("pixel-box relative aspect-[2/1] w-full touch-manipulation select-none overflow-hidden bg-ink", stopped && "arena-hitstop", canMove && "cursor-pointer")}
       role="group"
       aria-label="The arena"
       onPointerDown={ground}
@@ -242,7 +242,7 @@ export function Arena({
             ),
             style: {
               transform: `translate3d(calc(${toLeft(live.x, arena.w)}cqw - 50%), calc(${toTop(live.y, arena.h)}cqh - 100%), 0)`,
-              width: `${((2 * UNIT_RADIUS * 2.9) / arena.w) * 100}%`,
+              width: `${((2 * UNIT_RADIUS * 3.3) / arena.w) * 100}%`,
               minWidth: "5rem",
               zIndex: 10 + Math.round(live.y),
             },

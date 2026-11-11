@@ -8,13 +8,13 @@ import type { BattleEndPayload, BattleEvent, BattleStartPayload, Role, Side, Uni
  * stuns, and the ring that closes in at sudden death.
  */
 
-const W = 32;
-const H = 20;
+const W = 48;
+const H = 24;
 const R = 1.2;
 const CLOCK = { regularMs: 20_000, shrinkMs: 8_000, minRadius: 1, capMs: 35_000 };
 const OBSTACLES = [
-  { id: "p1", x: 16, y: 6.3, r: 1.8, kind: "pillar" as const },
-  { id: "p2", x: 16, y: 13.7, r: 1.8, kind: "pillar" as const },
+  { id: "p1", x: 24, y: 7.6, r: 1.8, kind: "pillar" as const },
+  { id: "p2", x: 24, y: 16.4, r: 1.8, kind: "pillar" as const },
 ];
 
 type Rnd = () => number;
@@ -41,12 +41,12 @@ interface Def {
 
 /** Team 1 starts on the left. Team 2 is the exact mirror image, as in real matches. */
 const ROSTER: Def[] = [
-  { id: "a-tank", side: 1, name: "Danfo Guard", sprite: "danfo_guard", role: "tank", hp: 135, atk: 9, spd: 6, skills: [basicMelee, slam], x: 8, y: 10 },
-  { id: "a-dps", side: 1, name: "Gen Mage", sprite: "gen_mage", role: "dps", hp: 72, atk: 9, spd: 9, skills: [basicBolt], x: 5, y: 5.5 },
-  { id: "a-heal", side: 1, name: "Herbal Hawker", sprite: "herbal_hawker", role: "healer", hp: 90, atk: 6, spd: 7, skills: [basicBolt, heal], x: 3, y: 14.5 },
-  { id: "b-tank", side: 2, name: "Iron Iya", sprite: "iron_iya", role: "tank", hp: 125, atk: 9, spd: 6, skills: [basicMelee, slam], x: W - 8, y: 10 },
-  { id: "b-dps", side: 2, name: "Molue Mauler", sprite: "molue_mauler", role: "dps", hp: 105, atk: 16, spd: 10, skills: [basicMelee, slam], x: W - 5, y: 5.5 },
-  { id: "b-heal", side: 2, name: "Native Doctor", sprite: "native_doctor", role: "healer", hp: 90, atk: 6, spd: 7, skills: [basicBolt, heal], x: W - 3, y: 14.5 },
+  { id: "a-tank", side: 1, name: "Danfo Guard", sprite: "danfo_guard", role: "tank", hp: 135, atk: 9, spd: 6, skills: [basicMelee, slam], x: 9, y: 12 },
+  { id: "a-dps", side: 1, name: "Gen Mage", sprite: "gen_mage", role: "dps", hp: 72, atk: 9, spd: 9, skills: [basicBolt], x: 6.5, y: 6.6 },
+  { id: "a-heal", side: 1, name: "Herbal Hawker", sprite: "herbal_hawker", role: "healer", hp: 90, atk: 6, spd: 7, skills: [basicBolt, heal], x: 4, y: 17.4 },
+  { id: "b-tank", side: 2, name: "Iron Iya", sprite: "iron_iya", role: "tank", hp: 125, atk: 9, spd: 6, skills: [basicMelee, slam], x: W - 9, y: 12 },
+  { id: "b-dps", side: 2, name: "Molue Mauler", sprite: "molue_mauler", role: "dps", hp: 105, atk: 16, spd: 10, skills: [basicMelee, slam], x: W - 6.5, y: 6.6 },
+  { id: "b-heal", side: 2, name: "Native Doctor", sprite: "native_doctor", role: "healer", hp: 90, atk: 6, spd: 7, skills: [basicBolt, heal], x: W - 4, y: 17.4 },
 ];
 
 const ARMOR: Record<Role, { physical: number; magical: number }> = {
