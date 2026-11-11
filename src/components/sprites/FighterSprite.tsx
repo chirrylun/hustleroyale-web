@@ -14,9 +14,9 @@ const BASE_MS: Record<string, number> = { idle: 900, walk: 620, attack: 360, cas
  * the looping `rest` pose; change `actionKey` to replay it.
  */
 export function FighterSprite({
-  spriteKey, role, flip = false, className, rest = "idle", action = null, actionKey = 0, tempo = 1,
+  spriteKey, role, flip = false, className, rest = "idle", action = null, actionKey = 0, tempo = 1, still = false,
 }: {
-  spriteKey: string; role: Role; flip?: boolean; className?: string; rest?: Rest; action?: Action | null; actionKey?: number; tempo?: number;
+  spriteKey: string; role: Role; flip?: boolean; className?: string; rest?: Rest; action?: Action | null; actionKey?: number; tempo?: number; still?: boolean;
 }) {
   const [done, setDone] = useState(-1);
   const once = action && done !== actionKey ? action : null;
@@ -37,7 +37,7 @@ export function FighterSprite({
         backgroundPosition: `0% ${(row / (ANIMS.length - 1)) * 100}%`,
         backgroundRepeat: "no-repeat",
         transform: flip ? "scaleX(-1)" : undefined,
-        animation: `spr ${ms}ms steps(${n}, jump-none) ${once ? "1 forwards" : "infinite"}`,
+        animation: still ? undefined : `spr ${ms}ms steps(${n}, jump-none) ${once ? "1 forwards" : "infinite"}`,
         ["--to" as string]: `${((n - 1) / (COLS - 1)) * 100}%`,
       }}
     />

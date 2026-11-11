@@ -39,8 +39,8 @@ export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; del
       >
         {/* Ground shadow, then the fighter scaled up around its feet so it fills the portrait. */}
         <div className="absolute bottom-[7%] left-1/2 h-[6%] w-[44%] -translate-x-1/2 rounded-[50%] bg-black/45" />
-        <div className="relative w-full origin-[50%_90%] scale-[1.4]">
-          <FighterSprite spriteKey={t.sprite_key} role={t.role} />
+        <div className="relative w-full origin-[50%_90%] scale-[1.15]">
+          <FighterSprite spriteKey={t.sprite_key} role={t.role} still />
         </div>
       </div>
 
