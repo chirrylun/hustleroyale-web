@@ -1,8 +1,8 @@
 """Turns AI-generated sprite sheets (flat magenta background) into the game's fixed-grid sheets.
 
 Characters: 6 cols x 6 rows of 208px cells; rows = idle(4) walk(6) attack(5) cast(5) hurt(2) windup(2).
-Effects:    N cols x 6 rows of 128px cells, effect centred in each cell.
-Usage: python tools/build_sprites.py <character-src-root> <fx-src-root> <out-dir>   (see SRC maps below)
+Effects:    4 cols x 4 rows of 96px cells (one effect per row, 4 frames), centred in each cell.
+Usage: python tools/build_sprites.py <src-root> <out-dir>   (src-root holds the unzipped sheet folders listed in main)
 """
 import sys
 import numpy as np
@@ -10,7 +10,7 @@ from PIL import Image
 from scipy import ndimage as ndi
 
 CELL, SCALE, BASE, PAD = 208, 0.56, 188, 160
-FXCELL = 128
+FXCELL = 96
 TARGETS = [("idle", 4), ("walk", 6), ("attack", 5), ("cast", 5), ("hurt", 2)]
 
 
@@ -51,7 +51,7 @@ def scaled(rgba, s):
 
 
 def pick(frames, n, pingpong=False):
-    if len(frames) >= n:
+    if len(frames) >= n or not pingpong:  # too many: sample evenly; too few: stretch (hold frames) in order
         return [frames[round(i * (len(frames) - 1) / max(1, n - 1))] for i in range(n)]
     seq = frames + frames[-2:0:-1] if pingpong else frames
     return [seq[i % len(seq)] for i in range(n)]
@@ -73,7 +73,7 @@ def character(src, dst, tag):
     for ri, ((name, n), (y0, y1)) in enumerate(zip(TARGETS, rows)):
         band = solid[y0:y1]
         segs = segments(band.sum(0), 10, 14, thr=max(3, (y1 - y0) // 25))
-        if name != "idle" and len(segs) != n:  # fixed-count rows are evenly spaced: split evenly instead
+        if name != "idle" and not 3 <= len(segs) <= 8:  # fixed-count rows are evenly spaced: split evenly instead
             W = solid.shape[1]
             xs = np.flatnonzero(band.any(0))
             lo, hi = xs[0], xs[-1] + 1
@@ -108,26 +108,35 @@ def character(src, dst, tag):
     sheet.quantize(256, method=Image.FASTOCTREE, dither=Image.NONE).save(dst, optimize=True)
 
 
-def effects(src, dst, cols, tag):
+def effects(src, dst, cols, rows, tag):
     rgba = cut_background(src)
     h, w = rgba.shape[:2]
-    cw, ch = w / cols, h / 6
+    cw, ch = w / cols, h / rows
     s = FXCELL / max(cw, ch)
-    sheet = Image.new("RGBA", (FXCELL * cols, FXCELL * 6))
-    for r in range(6):
+    sheet = Image.new("RGBA", (FXCELL * cols, FXCELL * rows))
+    for r in range(rows):
         for c in range(cols):
             cell = rgba[round(r * ch):round((r + 1) * ch), round(c * cw):round((c + 1) * cw)]
             t = scaled(cell, s)
             sheet.paste(t, (c * FXCELL + (FXCELL - t.width) // 2, r * FXCELL + (FXCELL - t.height) // 2))
     sheet.quantize(256, method=Image.FASTOCTREE, dither=Image.NONE).save(dst, optimize=True)
-    print(f"  {tag}: {cols}x6 effects")
+    print(f"  {tag}: {cols}x{rows} effects")
 
 
 if __name__ == "__main__":
-    chars, fx, out = sys.argv[1:4]
-    files = ["GPT Image 2 1.png", "GPT Image 2 1 (1).png", "GPT Image 2 1 (2).png", "GPT Image 2 1 (3).png"]
-    for cls, folder in (("tank", "n6"), ("healer", "n5"), ("dps", "n4")):
-        for rar, f in zip(("common", "uncommon", "rare", "legendary"), files):
-            character(f"{chars}/{folder}/Spritesheet/{f}", f"{out}/{cls}_{rar}.png", f"{cls}_{rar}")
-    for name, path, cols in (("tank", f"{fx}/n1/Moves/{files[0]}", 7), ("dps", f"{fx}/n2/Moves/{files[0]}", 6), ("healer", f"{fx}/n3/Moves/{files[0]}", 6), ("shared", f"{fx}/shared.png", 6)):
-        effects(path, f"{out}/fx_{name}.png", cols, name)
+    root, out = sys.argv[1:3]
+    sheets = {  # class -> rarity order common, uncommon, rare, legendary (source files differ per class)
+        "tank": ("m1", ["(6)", "(4)", "(5)", "(3)"]),
+        "healer": ("n5", ["", "(1)", "(2)", "(3)"]),
+        "dps": ("m2", ["", "(2)", "11", "(3)"]),
+    }
+    for cls, (folder, suffixes) in sheets.items():
+        for rar, suf in zip(("common", "uncommon", "rare", "legendary"), suffixes):
+            if cls == "dps" and suf in ("", "11"):
+                name = "GPT Image 2 1.png" if suf == "" else "GPT Image 2 11.png"
+            else:
+                name = "GPT Image 2 1.png" if suf == "" else f"GPT Image 2 1 {suf}.png"
+            character(f"{root}/{folder}/Spritesheet/{name}", f"{out}/{cls}_{rar}.png", f"{cls}_{rar}")
+    for name, f in (("support", "(3)"), ("hit", "(2)"), ("status", ""), ("shot", "(7)")):
+        fn = "GPT Image 2 1.png" if f == "" else f"GPT Image 2 1 {f}.png"
+        effects(f"{root}/m3/Moves/{fn}", f"{out}/fx_{name}.png", 4, 4, name)

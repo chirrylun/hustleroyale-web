@@ -1,5 +1,6 @@
 export type Role = "tank" | "healer" | "dps";
-export type FxSheet = "tank" | "healer" | "dps" | "shared";
+/** Effect sheets: 4 rows (one effect each) x 4 frames. hit: physical, heavy, magic, crit. support: heal, shield, buff, debuff. shot: dart, magic, fire, holy. status: stun, death, shield break, danger. */
+export type FxSheet = "hit" | "support" | "shot" | "status";
 
 /** Sheet layout produced by tools/build_sprites.py: 6 columns, one row per animation. */
 export const ANIMS = [
@@ -8,8 +9,8 @@ export const ANIMS = [
 export type AnimName = (typeof ANIMS)[number]["name"];
 export const COLS = 6;
 
-/** Effect sheets are 6 rows (one animation each); tank has 7 frames per row, the rest 6. */
-export const FX_COLS: Record<FxSheet, number> = { tank: 7, healer: 6, dps: 6, shared: 6 };
+export const FX_COLS = 4;
+export const FX_ROWS = 4;
 
 const RARITY = ["common", "uncommon", "rare", "legendary"] as const;
 const TIER: Record<string, number> = {

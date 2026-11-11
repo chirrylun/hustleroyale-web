@@ -350,7 +350,7 @@ function EffectView({ f, arena }: { f: Effect; arena: { w: number; h: number } }
         row={f.fx.row}
         ms={f.durationMs}
         className="pointer-events-none absolute z-[41] -translate-x-1/2 -translate-y-1/2"
-        style={{ left: `${toLeft(f.x, arena.w)}%`, top: `${toTop(f.y, arena.h) - (2.4 / arena.h) * 100}%`, width: `${(7 / arena.w) * 100}%` }}
+        style={{ left: `${toLeft(f.x, arena.w)}%`, top: `${toTop(f.y, arena.h) - (2.4 / arena.h) * 100}%`, width: `${(4.2 / arena.w) * 100}%`, minWidth: "2.5rem" }}
       />
     );
   }
@@ -383,7 +383,7 @@ function EffectView({ f, arena }: { f: Effect; arena: { w: number; h: number } }
   } as CSSProperties;
   if (f.fx) {
     return (
-      <span className="shot pointer-events-none absolute z-[42] block -translate-x-1/2 -translate-y-1/2" style={{ ...shotStyle, width: `${(3.6 / arena.w) * 100}%`, minWidth: "2.5rem" }} aria-hidden="true">
+      <span className="shot pointer-events-none absolute z-[42] block -translate-x-1/2 -translate-y-1/2" style={{ ...shotStyle, width: `${(2.2 / arena.w) * 100}%`, minWidth: "1.75rem" }} aria-hidden="true">
         <FxSprite sheet={f.fx.sheet} row={f.fx.row} ms={420} loop style={{ width: "100%", transform: f.x2 < f.x ? "scaleX(-1)" : undefined }} />
       </span>
     );

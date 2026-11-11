@@ -32,11 +32,14 @@ export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; del
       </div>
 
       <div
-        className={clsx("flex aspect-square items-end justify-center overflow-hidden border-4 bg-panel px-6 pt-4", r.border)}
+        className={clsx("relative flex aspect-square items-end justify-center overflow-hidden border-4", r.border)}
+        style={{ background: "radial-gradient(ellipse at 50% 88%, rgba(148,176,194,0.35), transparent 62%), linear-gradient(#333c57, #1a1c2c)" }}
         data-sprite={t.sprite_key}
         aria-hidden="true"
       >
-        <div className="sprite-idle w-full">
+        {/* Ground shadow, then the fighter scaled up around its feet so it fills the portrait. */}
+        <div className="absolute bottom-[7%] left-1/2 h-[6%] w-[44%] -translate-x-1/2 rounded-[50%] bg-black/45" />
+        <div className="relative w-full origin-[50%_90%] scale-[1.4]">
           <FighterSprite spriteKey={t.sprite_key} role={t.role} />
         </div>
       </div>

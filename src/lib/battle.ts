@@ -175,7 +175,7 @@ export interface Effect {
   id: number;
   kind: "zone" | "burst" | "shot" | "vfx";
   /** Skill-effect animation (sheet + row) for "vfx" impacts and for shot projectiles. */
-  fx?: { sheet: "tank" | "healer" | "dps" | "shared"; row: number };
+  fx?: { sheet: "hit" | "support" | "shot" | "status"; row: number };
   x: number;
   y: number;
   radius: number;
@@ -326,7 +326,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
             durationMs: 260,
             tone: skill.kind === "heal" ? "heal" : skill.damageType === "magical" ? "magical" : "physical",
             side: actor.side,
-            fx: actor.role === "healer" ? { sheet: "healer", row: 2 } : actor.role === "dps" ? { sheet: "dps", row: 2 } : undefined,
+            fx: { sheet: "shot", row: actor.role === "healer" ? 3 : skill.damageType === "magical" ? (actor.role === "dps" ? 2 : 1) : 0 },
           });
         }
         log = e.skillIndex === 0 ? `${actor.name} attacks` : `${actor.name} uses ${skill.name}`;
@@ -396,9 +396,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
           const ranged = (src?.skills[0]?.range ?? 0) > MELEE_RANGE;
           vfx(
             e.targetId,
-            src?.role === "tank" ? { sheet: "tank", row: crit ? 5 : heavy ? 1 : 0 }
-              : src?.role === "dps" ? { sheet: "dps", row: ranged ? 3 : crit ? 1 : 0 }
-              : { sheet: "healer", row: 3 },
+            { sheet: "hit", row: crit ? 3 : heavy ? 1 : ranged ? 2 : 0 },
           );
         }
         break;
@@ -406,21 +404,21 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
       case "heal":
         touch(e.targetId, { hp: e.hp }, "heal");
         if (e.amount > 0) say(e.targetId, `+${e.amount}`, "heal");
-        vfx(e.targetId, { sheet: "healer", row: units[e.targetId] && e.amount >= units[e.targetId].maxHp * 0.2 ? 1 : 0 });
+        vfx(e.targetId, { sheet: "support", row: 0 });
         break;
       case "shield":
         touch(e.targetId, { shield: e.amount }, "shield");
         say(e.targetId, "SHIELD", "shield");
-        vfx(e.targetId, { sheet: "tank", row: 2 }, 700);
+        vfx(e.targetId, { sheet: "support", row: 1 }, 700);
         break;
       case "mod":
         say(e.targetId, `${e.pct > 0 ? "+" : ""}${e.pct}% ${e.stat.toUpperCase()}`, "mod");
-        vfx(e.targetId, e.pct < 0 ? { sheet: "dps", row: 4 } : e.stat === "def" ? { sheet: "tank", row: 4 } : { sheet: "shared", row: 5 });
+        vfx(e.targetId, { sheet: "support", row: e.pct < 0 ? 3 : 2 });
         break;
       case "death":
         touch(e.unitId, { hp: 0, alive: false, windupUntil: 0 }, "dead");
         say(e.unitId, "KO!", "ko");
-        vfx(e.unitId, { sheet: "shared", row: 2 }, 650);
+        vfx(e.unitId, { sheet: "status", row: 1 }, 650);
         log = `${meta(e.unitId)?.name ?? "A fighter"} is down`;
         finalBlowId = e.unitId;
         hitStop += 1;
