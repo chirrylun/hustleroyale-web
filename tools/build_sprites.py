@@ -10,18 +10,19 @@ from PIL import Image
 from scipy import ndimage as ndi
 
 CELL, SCALE, BASE, PAD = 208, 0.56, 188, 160
+TARGET_H = 122  # idle body height in the cell, so every class stands the same size
 FXCELL = 96
 TARGETS = [("idle", 4), ("walk", 6), ("attack", 5), ("cast", 5), ("hurt", 2)]
 
 
-def cut_background(path):
+def cut_background(path, strict=False):
     """RGBA with the magenta removed: soft alpha plus colour un-mixing on edge pixels."""
     a = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     m = np.minimum(r, b)
     mag = m - g
     bgish = (np.abs(r - b) < 70) & (m > 120)
-    alpha = np.where(bgish, 1 - np.clip((mag - 70) / 90, 0, 1), 1.0)
+    alpha = np.where(bgish, 1 - np.clip((mag - (25 if strict else 70)) / (55 if strict else 90), 0, 1), 1.0)
     safe = np.maximum(alpha, 0.05)[..., None]
     bg = np.array([255, 0, 255], np.float32)
     col = np.where(alpha[..., None] < 1, (a - (1 - safe) * bg) / safe, a)
@@ -57,17 +58,26 @@ def pick(frames, n, pingpong=False):
     return [seq[i % len(seq)] for i in range(n)]
 
 
-def character(src, dst, tag):
-    rgba = cut_background(src)
-    solid = rgba[..., 3] > 128
+def character(src, dst, tag, fit=False, strict=False):
+    rgba = cut_background(src, strict)
+    solid = rgba[..., 3] > (200 if strict else 128)
     lab, k = ndi.label(solid)
     if k:
         keep = np.flatnonzero(ndi.sum(solid, lab, range(1, k + 1)) >= 60) + 1
         solid = np.isin(lab, keep)
-    rows = segments(solid.sum(1), 10, 20, thr=14)
+    rows = segments(solid.sum(1), 6 if strict else 10, 20, thr=14)
     if len(rows) != 5:  # glow/sparkles glued rows together: the sheets are laid out in even fifths
         print(f"  .. {tag}: found {len(rows)} rows, using even bands")
         rows = [(round(i * solid.shape[0] / 5), round((i + 1) * solid.shape[0] / 5)) for i in range(5)]
+    SCALE = globals()["SCALE"]
+    if fit:  # size by the idle row so tall hats, staffs and glows do not change how big a fighter stands
+        b0 = solid[rows[0][0]:rows[0][1]]
+        hs = []
+        for x0, x1 in segments(b0.sum(0), 10, 14, thr=3)[:4]:
+            ys = np.flatnonzero(b0[:, x0:x1].sum(1) >= 2)
+            hs.append(ys[-1] - ys[0] + 1)
+        SCALE = TARGET_H / float(np.median(hs))
+        print(f"  {tag}: scale {SCALE:.3f}")
     sheet = Image.new("RGBA", (CELL * 6, CELL * 6))
     counts = []
     for ri, ((name, n), (y0, y1)) in enumerate(zip(TARGETS, rows)):
@@ -124,19 +134,21 @@ def effects(src, dst, cols, rows, tag):
 
 
 if __name__ == "__main__":
-    root, out = sys.argv[1:3]
-    sheets = {  # class -> rarity order common, uncommon, rare, legendary (source files differ per class)
-        "tank": ("m1", ["(6)", "(4)", "(5)", "(3)"]),
-        "healer": ("n5", ["", "(1)", "(2)", "(3)"]),
-        "dps": ("m2", ["", "(2)", "11", "(3)"]),
-    }
-    for cls, (folder, suffixes) in sheets.items():
-        for rar, suf in zip(("common", "uncommon", "rare", "legendary"), suffixes):
-            if cls == "dps" and suf in ("", "11"):
-                name = "GPT Image 2 1.png" if suf == "" else "GPT Image 2 11.png"
-            else:
-                name = "GPT Image 2 1.png" if suf == "" else f"GPT Image 2 1 {suf}.png"
-            character(f"{root}/{folder}/Spritesheet/{name}", f"{out}/{cls}_{rar}.png", f"{cls}_{rar}")
-    for name, f in (("support", "(3)"), ("hit", "(2)"), ("status", ""), ("shot", "(7)")):
-        fn = "GPT Image 2 1.png" if f == "" else f"GPT Image 2 1 {f}.png"
-        effects(f"{root}/m3/Moves/{fn}", f"{out}/fx_{name}.png", 4, 4, name)
+    # Original class sheets: python tools/build_sprites.py <src> <out> classes   (kept for reference)
+    # New packs:             python tools/build_sprites.py <new-root> <out> new
+    root, out, mode = sys.argv[1], sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "new")
+    R = ("common", "uncommon", "rare", "legendary")
+    if mode == "new":
+        packs = {  # archetype -> {rarity: source file}
+            "bard": ("Bard/Bard", dict(zip(R, ["(2)", "(4)", "(5)", "(3)"]))),
+            "marksman": ("Marksman/Marksman", dict(zip(R, ["(4)", "(5)", "(2)", "(6)"]))),
+            "rogue": ("Rogue/Rogue", dict(zip(R, ["(2)", "(3)", "rare", "("]))),
+            "necromancer": ("Necromancer/Necromancer", {r: r for r in R}),
+            "paladin": ("Paladin/Paladin", {r: r for r in R}),
+        }
+        for arch, (folder, m) in packs.items():
+            for rar, key in m.items():
+                name = f"{key}.png" if key in R or key == "rare" else f"GPT Image 2 1 {key}.png" if key != "(" else "GPT Image 2 1 (.png"
+                character(f"{root}/{folder}/{name}", f"{out}/{arch}_{rar}.png", f"{arch}_{rar}", fit=True, strict=(arch in ("marksman", "paladin") and rar == "legendary"))
+        for name, f in (("shot2", "(2.png"), ("support2", "(3.png"), ("ground", "(4).png")):
+            effects(f"{root}/Moves_2/Moves/GPT Image 2 1 {f}", f"{out}/fx_{name}.png", 4, 4, name)
