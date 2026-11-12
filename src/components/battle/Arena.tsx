@@ -56,7 +56,7 @@ function fxClass(u: LiveUnit, side: Side) {
 }
 
 const teamHp = (view: BattleView, side: Side) => {
-  const team = view.metas.filter((m) => m.side === side);
+  const team = view.metas.filter((m) => m.side === side && !m.summon);
   const hp = team.reduce((sum, m) => sum + (view.units[m.id]?.hp ?? 0), 0);
   const max = team.reduce((sum, m) => sum + (view.units[m.id]?.maxHp ?? 0), 0);
   return max > 0 ? Math.round((hp / max) * 100) : 0;
@@ -91,7 +91,7 @@ export function Arena({
   const [marker, setMarker] = useState<{ x: number; y: number; n: number } | null>(null);
   const ordered = view.metas
     .map((m) => ({ meta: m, live: view.units[m.id] }))
-    .filter((e): e is { meta: UnitMeta; live: LiveUnit } => !!e.live)
+    .filter((e): e is { meta: UnitMeta; live: LiveUnit } => !!e.live && !(e.meta.summon && !e.live.alive && e.live.fx.kind !== "dead"))
     .sort((a, b) => a.live.y - b.live.y);
 
   const finale = !!view.end && phase === "fighting";
@@ -218,7 +218,7 @@ export function Arena({
                 </span>
               )}
               <div className={clsx("origin-bottom", fxClass(live, meta.side))} key={live.fx.n}>
-                <div className={clsx(live.alive && charging && !stunned && "sprite-charge", stunned && "sprite-stunned")}>
+                <div className={clsx(live.alive && charging && !stunned && "sprite-charge", stunned && "sprite-stunned", meta.summon && "[filter:hue-rotate(80deg)_saturate(.8)]")}>
                   <FighterSprite
                     spriteKey={meta.spriteKey}
                     role={meta.role}

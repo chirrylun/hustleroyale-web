@@ -1,5 +1,6 @@
 "use client";
 
+import type { FxSheet } from "@/lib/sprites/designs";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { getGameSocket } from "@/lib/socket";
 import { playSfx, unlockAudio, type Sfx } from "@/lib/sfx";
@@ -26,6 +27,8 @@ export interface UnitMeta {
   level: number;
   spd: number;
   controlled: boolean;
+  /** A minion that sits out until its owner summons it. */
+  summon?: boolean;
   skills: {
     index: number;
     name: string;
@@ -90,8 +93,8 @@ export type BattleEvent =
   | { t: number; type: "move"; units: { id: string; x: number; y: number }[] }
   | { t: number; type: "stance"; side: Side; stance: Stance }
   | { t: number; type: "cast"; actorId: string; skill: string; skillIndex: number; targetIds: string[] }
-  | { t: number; type: "damage"; sourceId: string; targetId: string; amount: number; absorbed: number; hp: number; mult?: number; ring?: boolean }
-  | { t: number; type: "heal"; sourceId: string; targetId: string; amount: number; hp: number }
+  | { t: number; type: "damage"; sourceId: string; targetId: string; amount: number; absorbed: number; hp: number; mult?: number; ring?: boolean; dot?: boolean; crit?: boolean }
+  | { t: number; type: "heal"; sourceId: string; targetId: string; amount: number; hp: number; quiet?: boolean }
   | { t: number; type: "shield"; sourceId: string; targetId: string; amount: number }
   | { t: number; type: "mod"; sourceId: string; targetId: string; stat: string; pct: number; durationMs: number }
   | { t: number; type: "telegraph"; id: number; actorId: string; skill: string; skillIndex: number; x: number; y: number; radius: number; durationMs: number }
@@ -100,6 +103,9 @@ export type BattleEvent =
   | { t: number; type: "interrupt"; unitId: string; id: number }
   | { t: number; type: "displace"; unitId: string; x: number; y: number; fromX: number; fromY: number }
   | { t: number; type: "phase"; phase: "warning" | "sudden_death" }
+  | { t: number; type: "evade"; sourceId: string; targetId: string }
+  | { t: number; type: "cleanse"; targetId: string }
+  | { t: number; type: "summon"; ownerId: string; unitId: string; x: number; y: number }
   | { t: number; type: "death"; unitId: string }
   | { t: number; type: "end"; winnerSide: Side | null };
 
@@ -175,7 +181,7 @@ export interface Effect {
   id: number;
   kind: "zone" | "burst" | "shot" | "vfx";
   /** Skill-effect animation (sheet + row) for "vfx" impacts and for shot projectiles. */
-  fx?: { sheet: "hit" | "support" | "shot" | "status"; row: number };
+  fx?: { sheet: FxSheet; row: number };
   x: number;
   y: number;
   radius: number;
@@ -262,6 +268,25 @@ function applySnapshot(units: Record<string, LiveUnit>, snap: BattleSnapshot): R
   return next;
 }
 
+/** Which projectile a skill throws. Named skills have their own art; the rest go by role and damage type. */
+function shotArt(name: string, role: string, kind: string, damageType: string): NonNullable<Effect["fx"]> {
+  switch (name) {
+    case "Sonic Note": return { sheet: "shot2", row: 0 };
+    case "Aimed Shot": case "Pin Shot": case "Poison Arrow": return { sheet: "shot2", row: 1 };
+    case "Dark Bolt": case "Soul Drain": return { sheet: "shot2", row: 2 };
+    case "Shadow Step": return { sheet: "shot2", row: 3 };
+  }
+  return { sheet: "shot", row: role === "healer" || kind === "heal" ? 3 : damageType === "magical" ? (role === "dps" ? 2 : 1) : 0 };
+}
+
+/** Buff and debuff art by what changed. */
+function modArt(stat: string, pct: number): NonNullable<Effect["fx"]> {
+  if (stat === "spd") return { sheet: "support2", row: pct > 0 ? 1 : 2 };
+  if (stat === "atk" && pct > 0) return { sheet: "support2", row: 0 };
+  if (stat === "def" && pct < 0) return { sheet: "support2", row: 3 };
+  return { sheet: "support", row: pct < 0 ? 3 : 2 };
+}
+
 function applyEvents(view: BattleView, events: BattleEvent[], now: number): BattleView {
   const units = { ...view.units };
   let texts = [...view.texts];
@@ -326,9 +351,10 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
             durationMs: 260,
             tone: skill.kind === "heal" ? "heal" : skill.damageType === "magical" ? "magical" : "physical",
             side: actor.side,
-            fx: { sheet: "shot", row: actor.role === "healer" ? 3 : skill.damageType === "magical" ? (actor.role === "dps" ? 2 : 1) : 0 },
+            fx: shotArt(skill.name, actor.role, skill.kind, skill.damageType),
           });
         }
+        if (skill.name === "Vanish") vfx(e.actorId, { sheet: "ground", row: 1 }, 600);
         log = e.skillIndex === 0 ? `${actor.name} attacks` : `${actor.name} uses ${skill.name}`;
         break;
       }
@@ -381,9 +407,10 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         break;
       case "damage": {
         const target = units[e.targetId];
-        touch(e.targetId, { hp: e.hp }, "hurt");
+        touch(e.targetId, { hp: e.hp }, e.dot ? undefined : "hurt");
         const dealt = e.amount - e.absorbed;
-        if (e.ring) say(e.targetId, `-${dealt}`, "dmg");
+        if (e.ring || e.dot) say(e.targetId, `-${dealt}`, "dmg");
+        else if (e.crit) say(e.targetId, `-${dealt}!`, "crit");
         else if (dealt <= 0) say(e.targetId, "BLOCKED", "block");
         else if (e.mult && e.mult > 1.05) say(e.targetId, `-${dealt}!`, "crit");
         else if (e.mult && e.mult < 0.95) say(e.targetId, `-${dealt}`, "weak");
@@ -393,9 +420,9 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         break;
       }
       case "heal":
-        touch(e.targetId, { hp: e.hp }, "heal");
+        touch(e.targetId, { hp: e.hp }, e.quiet ? undefined : "heal");
         if (e.amount > 0) say(e.targetId, `+${e.amount}`, "heal");
-        vfx(e.targetId, { sheet: "support", row: 0 });
+        if (!e.quiet) vfx(e.targetId, { sheet: "support", row: 0 });
         break;
       case "shield":
         touch(e.targetId, { shield: e.amount }, "shield");
@@ -404,8 +431,22 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         break;
       case "mod":
         say(e.targetId, `${e.pct > 0 ? "+" : ""}${e.pct}% ${e.stat.toUpperCase()}`, "mod");
-        vfx(e.targetId, { sheet: "support", row: e.pct < 0 ? 3 : 2 });
+        vfx(e.targetId, modArt(e.stat, e.pct));
         break;
+      case "evade":
+        say(e.targetId, "DODGE", "block");
+        break;
+      case "cleanse":
+        say(e.targetId, "CLEANSED", "shield");
+        vfx(e.targetId, { sheet: "support", row: 0 });
+        break;
+      case "summon": {
+        const u = units[e.unitId];
+        if (u) units[e.unitId] = { ...u, x: e.x, y: e.y, alive: true, hp: Math.max(1, u.hp || 1), fx: { kind: null, n: u.fx.n + 1 } };
+        vfx(e.unitId, { sheet: "ground", row: 1 }, 600);
+        log = `${meta(e.ownerId)?.name ?? "A fighter"} raises a skeleton`;
+        break;
+      }
       case "death":
         touch(e.unitId, { hp: 0, alive: false, windupUntil: 0 }, "dead");
         say(e.unitId, "KO!", "ko");

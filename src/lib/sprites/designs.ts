@@ -1,6 +1,6 @@
 export type Role = "tank" | "healer" | "dps";
 /** Effect sheets: 4 rows (one effect each) x 4 frames. hit: physical, heavy, magic, crit. support: heal, shield, buff, debuff. shot: dart, magic, fire, holy. status: stun, death, shield break, danger. */
-export type FxSheet = "hit" | "support" | "shot" | "status";
+export type FxSheet = "hit" | "support" | "shot" | "status" | "shot2" | "support2" | "ground";
 
 /** Sheet layout produced by tools/build_sprites.py: 6 columns, one row per animation. */
 export const ANIMS = [
@@ -20,10 +20,11 @@ const TIER: Record<string, number> = {
 };
 
 /** Archetypes that have their own sheet at /sprites/<archetype>_<rarity>.png. Add a name here once its four sheets are in. */
-const ARCHETYPE_ART = new Set<string>([]);
+const ARCHETYPE_ART = new Set<string>(["paladin", "bard", "marksman", "necromancer", "rogue", "magical_dps"]);
 
 /** Keys look like `<archetype>_<rarity>`. Archetypes without art yet wear their class sheet at the same rarity. */
 export const sheetUrl = (key: string, role: Role) => {
+  if (key === "skeleton") return "/sprites/necromancer_uncommon.png"; // stand-in until the minion has its own sheet
   const i = key.lastIndexOf("_");
   const rarity = key.slice(i + 1);
   if (RARITY.includes(rarity as (typeof RARITY)[number])) {
