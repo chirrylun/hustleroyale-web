@@ -20,15 +20,18 @@ const TIER: Record<string, number> = {
 };
 
 /** Archetypes that have their own sheet at /sprites/<archetype>_<rarity>.png. Add a name here once its four sheets are in. */
-const ARCHETYPE_ART = new Set<string>(["paladin", "bard", "marksman", "necromancer", "rogue", "magical_dps"]);
+const ARCHETYPE_ART = new Set<string>(["paladin", "bard", "marksman", "necromancer", "rogue"]);
+/** Archetypes still waiting for their own art borrow another class sheet. Remove the entry once the sheets are in. */
+const BORROWED_ART: Record<string, Role> = { magical_dps: "healer" };
 
 /** Keys look like `<archetype>_<rarity>`. Archetypes without art yet wear their class sheet at the same rarity. */
 export const sheetUrl = (key: string, role: Role) => {
-  if (key === "skeleton") return "/sprites/necromancer_uncommon.png"; // stand-in until the minion has its own sheet
+  if (key === "skeleton") return "/sprites/skeleton.png";
   const i = key.lastIndexOf("_");
   const rarity = key.slice(i + 1);
   if (RARITY.includes(rarity as (typeof RARITY)[number])) {
-    return ARCHETYPE_ART.has(key.slice(0, i)) ? `/sprites/${key}.png` : `/sprites/${role}_${rarity}.png`;
+    const arch = key.slice(0, i);
+    return ARCHETYPE_ART.has(arch) ? `/sprites/${key}.png` : `/sprites/${BORROWED_ART[arch] ?? role}_${rarity}.png`;
   }
   return `/sprites/${role}_${RARITY[TIER[key] ?? 0]}.png`;
 };

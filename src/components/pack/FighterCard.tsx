@@ -15,6 +15,13 @@ const roleTag: Record<Role, { label: string; bg: string }> = {
   dps: { label: "Damage", bg: "bg-ember" },
 };
 
+/** What the tag shows: the fighter's archetype, coloured by its role. */
+export const ARCHETYPE_LABEL: Record<string, string> = {
+  shield_tank: "Shield Tank", fighter_tank: "Fighter Tank", debuff_tank: "Debuff Tank", paladin: "Paladin",
+  pure_healer: "Pure Healer", healer_fighter: "Battle Medic", healer_tank: "Warden", bard: "Bard",
+  rogue: "Rogue", magical_dps: "Mage", marksman: "Marksman", necromancer: "Necromancer",
+};
+
 const STATS = ["hp", "atk", "def", "spd", "stamina", "magic"] as const;
 
 export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; delayMs: number }) {
@@ -24,10 +31,10 @@ export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; del
     <article
       className={clsx("pixel-box card-reveal flex flex-col gap-3 bg-night p-4", r.glow)}
       style={{ animationDelay: `${delayMs}ms` }}
-      aria-label={`${t.name}, ${t.rarity} ${t.role}`}
+      aria-label={`${t.name}, ${t.rarity} ${ARCHETYPE_LABEL[t.archetype] ?? t.role}`}
     >
       <div className="flex items-center justify-between text-sm uppercase">
-        <span className={clsx("px-2 py-0.5 text-ink", roleTag[t.role].bg)}>{roleTag[t.role].label}</span>
+        <span className={clsx("px-2 py-0.5 text-ink", roleTag[t.role].bg)}>{ARCHETYPE_LABEL[t.archetype] ?? roleTag[t.role].label}</span>
         <span className={r.text}>{t.rarity}</span>
       </div>
 
@@ -40,7 +47,9 @@ export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; del
         {/* Ground shadow, then the fighter scaled up around its feet so it fills the portrait. */}
         <div className="absolute bottom-[7%] left-1/2 h-[6%] w-[44%] -translate-x-1/2 rounded-[50%] bg-black/45" />
         <div className="relative w-full origin-[50%_90%] scale-[1.15]">
-          <FighterSprite spriteKey={t.sprite_key} role={t.role} still />
+          <div className="card-breathe" style={{ animationDelay: `${(delayMs % 1700) * -1}ms` }}>
+            <FighterSprite spriteKey={t.sprite_key} role={t.role} still />
+          </div>
         </div>
       </div>
 

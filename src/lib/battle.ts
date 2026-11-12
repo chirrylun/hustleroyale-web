@@ -427,7 +427,6 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
       case "shield":
         touch(e.targetId, { shield: e.amount }, "shield");
         say(e.targetId, "SHIELD", "shield");
-        vfx(e.targetId, { sheet: "support", row: 1 }, 700);
         break;
       case "mod":
         say(e.targetId, `${e.pct > 0 ? "+" : ""}${e.pct}% ${e.stat.toUpperCase()}`, "mod");

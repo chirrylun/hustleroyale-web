@@ -374,7 +374,7 @@ canvas,
 }
 
 .fx-shield {
-  animation: shield 700ms steps(7) both;
+  animation: shield 900ms steps(9) both;
 }
 @keyframes shield {
   0%,
@@ -383,7 +383,7 @@ canvas,
   }
   30%,
   70% {
-    filter: brightness(1.4) drop-shadow(0 0 6px var(--ice));
+    filter: brightness(1.15) sepia(1) hue-rotate(165deg) saturate(2.4) drop-shadow(0 0 6px var(--sky));
   }
 }
 
@@ -432,6 +432,26 @@ canvas,
   .fx-hurt,
   .fx-heal,
   .fx-shield {
+    animation: none;
+  }
+}
+
+/* Cards: a slow breath and a tiny sway, so a still portrait feels alive without shouting. */
+.card-breathe {
+  transform-origin: 50% 100%;
+  animation: breathe 3.4s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-1.5%) scale(1.012, 1.02);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-breathe {
     animation: none;
   }
 }

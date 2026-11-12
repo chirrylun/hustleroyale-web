@@ -218,7 +218,7 @@ export function Arena({
                 </span>
               )}
               <div className={clsx("origin-bottom", fxClass(live, meta.side))} key={live.fx.n}>
-                <div className={clsx(live.alive && charging && !stunned && "sprite-charge", stunned && "sprite-stunned", meta.summon && "[filter:hue-rotate(80deg)_saturate(.8)]")}>
+                <div className={clsx(live.alive && charging && !stunned && "sprite-charge", stunned && "sprite-stunned")}>
                   <FighterSprite
                     spriteKey={meta.spriteKey}
                     role={meta.role}
