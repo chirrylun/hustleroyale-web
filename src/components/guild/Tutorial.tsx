@@ -1,33 +1,28 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { FighterSprite } from "@/components/sprites/FighterSprite";
-import { StarterPackExperience } from "@/components/pack/StarterPackExperience";
+import { useEffect, useState, useTransition } from "react";
+import { FighterCard } from "@/components/pack/FighterCard";
 import { GAME_NAME } from "@/lib/brand";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import type { StarterFighter } from "@/lib/starter-pack";
 import { createClient } from "@/lib/supabase/client";
 import { InfoBox } from "./InfoBox";
+import { TutorialFight } from "./TutorialFight";
 
-const TOTAL = 6; // welcome, guild, quests, pack, fighters, ready
+const TOTAL = 6; // welcome, guild, what you'll do, recruits, fight 1, fight 2
 
 /** Steps 0-5. Progress is saved after each step so a refresh resumes where the player was. */
-export function Tutorial({
-  username, initialStep, packOpened, fighters: existing,
-}: { username: string; initialStep: number; packOpened: boolean; fighters: GuildFighter[] }) {
+export function Tutorial({ username, initialStep, fighters: existing }: { username: string; initialStep: number; fighters: GuildFighter[] }) {
   const router = useRouter();
   const [step, setStep] = useState(Math.min(initialStep, TOTAL - 1));
   const [fighters, setFighters] = useState<(StarterFighter | GuildFighter)[]>(existing);
-  const [pack, setPack] = useState(packOpened);
-  const [busy, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [, start] = useTransition();
 
-  const save = (n: number) => void createClient().rpc("set_tutorial_step", { p_step: n });
   const go = (n: number) => {
-    // A player who already has their fighters never needs to see the pack again.
-    const next = n === 3 && pack ? (n > step ? 4 : 2) : n;
-    setStep(next);
-    save(next);
+    setStep(n);
+    void createClient().rpc("set_tutorial_step", { p_step: n });
   };
   const finish = () =>
     start(async () => {
@@ -35,17 +30,23 @@ export function Tutorial({
       router.refresh();
     });
 
-  if (step === 3 && !pack) {
+  // Everyone starts with three Novices; the server hands them out the first time they're needed.
+  useEffect(() => {
+    if (step < 3 || fighters.length > 0) return;
+    let live = true;
+    createClient().rpc("grant_novices").then(({ data, error: e }) => {
+      if (!live) return;
+      if (e || !Array.isArray(data)) setError("Couldn't set up your fighters. Refresh and try again.");
+      else setFighters(data as StarterFighter[]);
+    });
+    return () => { live = false; };
+  }, [step, fighters.length]);
+
+  if (step === 4 || step === 5) {
     return (
-      <StarterPackExperience
-        username={username}
-        onDone={(f) => {
-          setFighters(f);
-          setPack(true);
-          setStep(4);
-          save(4);
-        }}
-      />
+      <main className="mx-auto flex w-full flex-1 flex-col items-center justify-center gap-4 p-3 sm:p-6">
+        <TutorialFight key={step} stage={step === 4 ? 1 : 2} step={step} total={TOTAL} onBack={() => go(step - 1)} onWin={() => (step === 4 ? go(5) : finish())} />
+      </main>
     );
   }
 
@@ -71,27 +72,21 @@ export function Tutorial({
             <p>Enter them in arena tournaments to climb the leaderboard.</p>
           </InfoBox>
         );
-      case 4:
-        return (
-          <InfoBox step={4} total={TOTAL} title="Meet your fighters" onBack={() => go(pack && existing.length ? 2 : 4)} onNext={() => go(5)}>
-            <p>Each fighter has a role, stats and skills. Every one starts as a <span className="text-gold">Novice</span>.</p>
-            <p>At level 10 a fighter picks a class. Classes start at Rank 1 and climb to Rank 4 as they level.</p>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {fighters.slice(0, 3).map((f) => (
-                <div key={f.id} className="flex min-w-0 flex-col items-center text-center text-base">
-                  <FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} />
-                  <span className="truncate text-gold">{f.template.name}</span>
-                  <span className="text-steel">{f.template.role} · Lv {f.level}</span>
-                </div>
-              ))}
-            </div>
-          </InfoBox>
-        );
       default:
         return (
-          <InfoBox step={5} total={TOTAL} title="Your guild awaits" onBack={() => go(4)} onNext={finish} nextLabel="Enter the guild" busy={busy}>
-            <p>Your first job is waiting on the job board. Take it, win a battle and earn your first reward.</p>
-          </InfoBox>
+          <div className="flex w-full flex-col items-center gap-4">
+            <div className="grid w-full max-w-4xl gap-4 sm:grid-cols-3">
+              {fighters.slice(0, 3).map((f, i) => (
+                <FighterCard key={f.id} fighter={f} delayMs={i * 350} />
+              ))}
+              {fighters.length === 0 && !error && [0, 1, 2].map((i) => <div key={i} className="h-72 animate-pulse bg-panel" aria-busy="true" />)}
+            </div>
+            {error && <p role="alert" className="text-xl text-ember">{error}</p>}
+            <InfoBox step={3} total={TOTAL} title="Meet your recruits" onBack={() => go(2)} onNext={() => go(4)} nextLabel="First fight" busy={fighters.length === 0}>
+              <p>Three Novices have joined your guild. Each has a role, stats and skills.</p>
+              <p>At level 10 a Novice can choose a class and start climbing the ranks.</p>
+            </InfoBox>
+          </div>
         );
     }
   })();

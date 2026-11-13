@@ -323,7 +323,7 @@ const STANCES: { id: Stance; label: string; hint: string }[] = [
   { id: "defensive", label: "Defend", hint: "Hold back and heal early" },
 ];
 
-function StanceBar({ current, onPick }: { current: Stance; onPick: (s: Stance) => void }) {
+export function StanceBar({ current, onPick }: { current: Stance; onPick: (s: Stance) => void }) {
   return (
     <PixelPanel title="Tell your team what to do">
       <div className="grid gap-2 sm:grid-cols-3">

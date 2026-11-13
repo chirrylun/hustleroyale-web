@@ -636,6 +636,30 @@ export function useSoloBattle() {
     }
   }, []);
 
+  /** Scripted first fights (stage 1: one fighter vs a slime; stage 2: the crew vs three). No rewards. */
+  const startTutorial = useCallback((stage: 1 | 2) => {
+    const socket = getGameSocket();
+    unlockAudio();
+    setError(null);
+    setPhase("starting");
+    const go = () =>
+      socket.timeout(8000).emit("tutorial:start", { stage }, (err: Error | null, ack?: StartAck) => {
+        if (err || !ack) {
+          setError("The game server didn't answer. Try again.");
+          setPhase("lobby");
+        } else if (!ack.ok) {
+          setError(START_ERRORS[ack.error]);
+          setPhase("lobby");
+          if (ack.error === "match_in_progress") socket.emit("battle:rejoin");
+        }
+      });
+    if (socket.connected) go();
+    else {
+      socket.once("connect", go);
+      socket.connect();
+    }
+  }, []);
+
   const cast = useCallback((skillIndex: number) => getGameSocket().emit("battle:intent", { type: "cast", skillIndex }), []);
   const focus = useCallback((id: string) => {
     getGameSocket().emit("battle:intent", { type: "focus", targetId: id });
@@ -657,7 +681,7 @@ export function useSoloBattle() {
     setPhase("lobby");
   }, []);
 
-  return { phase, view, error, lastReward, start, cast, focus, move, auto, setStance, reset };
+  return { phase, view, error, lastReward, start, startTutorial, cast, focus, move, auto, setStance, reset };
 }
 
 function soundFor(e: BattleEvent): Sfx | null {

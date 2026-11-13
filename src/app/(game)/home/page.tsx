@@ -41,7 +41,7 @@ async function HomeContent() {
 
   // New players (and existing ones, once) walk through the tutorial; after that, the guild hall.
   if (step < 6) {
-    return <Tutorial username={username} initialStep={step} packOpened={!!profile?.starter_pack_opened} fighters={fighters} />;
+    return <Tutorial username={username} initialStep={step} fighters={fighters} />;
   }
   return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} />;
 }
