@@ -1,0 +1,91 @@
+{
+ "aspect": [
+  16,
+  9
+ ],
+ "floor": {
+  "x0": 6,
+  "x1": 94,
+  "y0": 42,
+  "y1": 94
+ },
+ "props": [
+  {
+   "id": "adventure",
+   "label": "Adventure",
+   "action": "adventure",
+   "x": 4,
+   "y": 6,
+   "w": 13,
+   "h": 30
+  },
+  {
+   "id": "jobs",
+   "label": "Job Board",
+   "action": "jobs",
+   "x": 21,
+   "y": 9,
+   "w": 15,
+   "h": 26
+  },
+  {
+   "id": "leaderboard",
+   "label": "Hall of Champions",
+   "href": "/leaderboard",
+   "x": 41,
+   "y": 8,
+   "w": 17,
+   "h": 24
+  },
+  {
+   "id": "arena",
+   "label": "Arena Gate",
+   "href": "/arena",
+   "x": 62,
+   "y": 6,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "id": "hearth",
+   "label": "",
+   "x": 82,
+   "y": 8,
+   "w": 13,
+   "h": 24
+  },
+  {
+   "id": "training",
+   "label": "Training Yard",
+   "href": "/training",
+   "x": 4,
+   "y": 56,
+   "w": 20,
+   "h": 34
+  },
+  {
+   "id": "barracks",
+   "label": "Barracks",
+   "href": "/team",
+   "x": 38,
+   "y": 64,
+   "w": 24,
+   "h": 28
+  },
+  {
+   "id": "market",
+   "label": "Marketplace",
+   "href": "/market",
+   "x": 74,
+   "y": 58,
+   "w": 20,
+   "h": 32
+  }
+ ],
+ "rug": {
+  "x": 29,
+  "y": 40,
+  "w": 42,
+  "h": 22
+ }
+}

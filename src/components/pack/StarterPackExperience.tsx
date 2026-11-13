@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { GAME_NAME } from "@/lib/brand";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { StarterPackError, openStarterPack, type StarterFighter } from "@/lib/starter-pack";
 import { FighterCard } from "./FighterCard";
@@ -12,7 +13,7 @@ const MIN_OPEN_MS = 900; // keep the burst on screen even if the server answers 
 
 type Stage = "ready" | "opening" | "reveal";
 
-export function StarterPackExperience({ username }: { username: string }) {
+export function StarterPackExperience({ username, onDone }: { username: string; onDone?: (fighters: StarterFighter[]) => void }) {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>("ready");
   const [percent, setPercent] = useState(0);
@@ -100,7 +101,7 @@ export function StarterPackExperience({ username }: { username: string }) {
     return (
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center gap-6 p-6">
         <h1 className="text-center text-4xl uppercase text-gold">Your crew</h1>
-        <p className="text-center text-xl text-steel">Three fighters, ready for the arena.</p>
+        <p className="text-center text-xl text-steel">Three novices, ready to grow.</p>
 
         <div className="grid w-full gap-6 sm:grid-cols-3">
           {fighters.map((f, i) => (
@@ -109,8 +110,8 @@ export function StarterPackExperience({ username }: { username: string }) {
         </div>
 
         <div className="card-reveal" style={{ animationDelay: `${fighters.length * 450 + 200}ms` }}>
-          <PixelButton className="text-2xl" disabled={leaving} onClick={() => startLeaving(() => router.refresh())}>
-            {leaving ? "Loading..." : "Go to homepage"}
+          <PixelButton className="text-2xl" disabled={leaving} onClick={() => (onDone ? onDone(fighters) : startLeaving(() => router.refresh()))}>
+            {leaving ? "Loading..." : onDone ? "Continue" : "Go to homepage"}
           </PixelButton>
         </div>
       </main>
@@ -122,7 +123,7 @@ export function StarterPackExperience({ username }: { username: string }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-8 p-6 text-center">
       <section className="pixel-box w-full bg-night p-5" aria-live="polite">
-        <p className="text-lg uppercase text-steel">Welcome to Hustle Royale</p>
+        <p className="text-lg uppercase text-steel">Welcome to {GAME_NAME}</p>
         <h1 className="mt-1 text-4xl uppercase text-gold sm:text-5xl">Hey, {username}!</h1>
         <p className="mt-3 text-xl text-paper">
           Your starter pack is here. <span className="text-lime">Press and hold</span> the pack to open it.

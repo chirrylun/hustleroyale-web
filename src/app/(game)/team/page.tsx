@@ -6,7 +6,8 @@ import { PageShell } from "@/components/layout/PageShell";
 import { FighterCard } from "@/components/pack/FighterCard";
 import { PixelPanel } from "@/components/pixel/PixelPanel";
 import { createClient } from "@/lib/supabase/server";
-import type { StarterFighter } from "@/lib/starter-pack";
+import { ROSTER_CAP, loadFighters } from "@/lib/guild";
+import { ClassActions } from "@/components/guild/ClassActions";
 
 export default function TeamPage() {
   return (
@@ -18,21 +19,6 @@ export default function TeamPage() {
   );
 }
 
-interface Row {
-  id: string;
-  grade: StarterFighter["grade"];
-  level: number;
-  team_slot: number | null;
-  hp: number;
-  atk: number;
-  def: number;
-  spd: number;
-  stamina: number;
-  magic: number;
-  template: StarterFighter["template"];
-  fighter_skills: { slot: number; skill: { name: string } | null }[] | null;
-}
-
 async function Fighters() {
   await connection(); // keeps the Supabase session check at request time
   const supabase = await createClient();
@@ -41,31 +27,7 @@ async function Fighters() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // RLS only returns this player's own fighters.
-  const { data } = await supabase
-    .from("fighters")
-    .select(
-      "id, grade, level, team_slot, hp, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), fighter_skills(slot, skill:skills(name))",
-    )
-    .eq("owner_id", user.id)
-    .order("team_slot", { ascending: true, nullsFirst: false });
-
-  const fighters: StarterFighter[] = ((data ?? []) as unknown as Row[]).map((f) => ({
-    id: f.id,
-    grade: f.grade,
-    level: f.level,
-    team_slot: f.team_slot ?? 0,
-    hp: f.hp,
-    atk: f.atk,
-    def: f.def,
-    spd: f.spd,
-    stamina: f.stamina,
-    magic: f.magic,
-    template: f.template,
-    skills: (f.fighter_skills ?? [])
-      .map((s) => ({ slot: s.slot, name: s.skill?.name ?? "" }))
-      .sort((a, b) => a.slot - b.slot),
-  }));
+  const fighters = await loadFighters(supabase, user.id);
 
   if (fighters.length === 0) {
     return (
@@ -79,10 +41,18 @@ async function Fighters() {
   }
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {fighters.map((f, i) => (
-        <FighterCard key={f.id} fighter={f} delayMs={i * 120} />
-      ))}
-    </div>
+    <>
+      <p className="text-xl text-steel">
+        Guild roster: <span className="text-gold">{fighters.length}</span> / {ROSTER_CAP} fighters
+      </p>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {fighters.map((f, i) => (
+          <div key={f.id} className="flex flex-col gap-3">
+            <FighterCard fighter={f} delayMs={i * 120} />
+            <ClassActions id={f.id} level={f.level} role={f.template.role} archetype={f.template.archetype} rarity={f.template.rarity} />
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

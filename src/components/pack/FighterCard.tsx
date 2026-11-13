@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
+import { ARCHETYPE_LABEL } from "@/lib/guild";
 import type { Rarity, Role, StarterFighter } from "@/lib/starter-pack";
 
 const rarityStyle: Record<Rarity, { border: string; text: string; glow: string }> = {
@@ -15,13 +16,6 @@ const roleTag: Record<Role, { label: string; bg: string }> = {
   dps: { label: "Damage", bg: "bg-ember" },
 };
 
-/** What the tag shows: the fighter's archetype, coloured by its role. */
-export const ARCHETYPE_LABEL: Record<string, string> = {
-  shield_tank: "Shield Tank", fighter_tank: "Fighter Tank", debuff_tank: "Debuff Tank", paladin: "Paladin",
-  pure_healer: "Pure Healer", healer_fighter: "Battle Medic", healer_tank: "Warden", bard: "Bard",
-  rogue: "Rogue", magical_dps: "Mage", marksman: "Marksman", necromancer: "Necromancer",
-};
-
 const STATS = ["hp", "atk", "def", "spd", "stamina", "magic"] as const;
 
 export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; delayMs: number }) {
@@ -35,7 +29,7 @@ export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; del
     >
       <div className="flex items-center justify-between text-sm uppercase">
         <span className={clsx("px-2 py-0.5 text-ink", roleTag[t.role].bg)}>{ARCHETYPE_LABEL[t.archetype] ?? roleTag[t.role].label}</span>
-        <span className={r.text}>{t.rarity}</span>
+        <span className={r.text}>{t.archetype === "novice" ? `Lv ${fighter.level}` : `${t.rarity} · Lv ${fighter.level}`}</span>
       </div>
 
       <div

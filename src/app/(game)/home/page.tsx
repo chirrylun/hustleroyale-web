@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { HomeDashboard } from "@/components/home/HomeDashboard";
-import { StarterPackExperience } from "@/components/pack/StarterPackExperience";
+import { GuildScreen } from "@/components/guild/GuildScreen";
+import { Tutorial } from "@/components/guild/Tutorial";
+import { loadFighters } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/server";
 import { connection } from "next/server";
 
@@ -30,28 +31,19 @@ async function HomeContent() {
   // RLS lets a player read only their own row, so this cannot leak anyone else's data.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username, level, coins, rating, wins, losses, starter_pack_opened")
+    .select("username, level, coins, starter_pack_opened, tutorial_step")
     .eq("id", user.id)
     .single();
 
-  // First visit: welcome banner + starter pack. Once opened, the server component re-renders
-  // (router.refresh) with the flag set and the normal home screen takes over.
-  if (profile && !profile.starter_pack_opened) {
-    return <StarterPackExperience username={profile.username} />;
-  }
+  const fighters = await loadFighters(supabase, user.id);
+  const step = profile?.tutorial_step ?? 0;
+  const username = profile?.username ?? "hustler";
 
-  return (
-    <HomeDashboard
-      profile={{
-        username: profile?.username ?? "hustler",
-        level: profile?.level ?? 1,
-        coins: profile?.coins ?? 0,
-        rating: profile?.rating ?? 0,
-        wins: profile?.wins ?? 0,
-        losses: profile?.losses ?? 0,
-      }}
-    />
-  );
+  // New players (and existing ones, once) walk through the tutorial; after that, the guild hall.
+  if (step < 6) {
+    return <Tutorial username={username} initialStep={step} packOpened={!!profile?.starter_pack_opened} fighters={fighters} />;
+  }
+  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} />;
 }
 
 function HomeFallback() {
