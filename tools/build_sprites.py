@@ -58,7 +58,10 @@ def pick(frames, n, pingpong=False):
     return [seq[i % len(seq)] for i in range(n)]
 
 
-def character(src, dst, tag, fit=False, strict=False):
+def character(src, dst, tag, fit=False, strict=False, six=False):
+    """six=True: the source already has its own windup row (6 rows) instead of deriving it from the cast."""
+    NR = 6 if six else 5
+    targets = TARGETS + [("windup", 2)] if six else TARGETS
     rgba = cut_background(src, strict)
     solid = rgba[..., 3] > (200 if strict else 128)
     lab, k = ndi.label(solid)
@@ -66,9 +69,9 @@ def character(src, dst, tag, fit=False, strict=False):
         keep = np.flatnonzero(ndi.sum(solid, lab, range(1, k + 1)) >= 60) + 1
         solid = np.isin(lab, keep)
     rows = segments(solid.sum(1), 6 if strict else 10, 20, thr=14)
-    if len(rows) != 5:  # glow/sparkles glued rows together: the sheets are laid out in even fifths
+    if len(rows) != NR:  # glow/sparkles glued rows together: the sheets are laid out in even fifths
         print(f"  .. {tag}: found {len(rows)} rows, using even bands")
-        rows = [(round(i * solid.shape[0] / 5), round((i + 1) * solid.shape[0] / 5)) for i in range(5)]
+        rows = [(round(i * solid.shape[0] / NR), round((i + 1) * solid.shape[0] / NR)) for i in range(NR)]
     SCALE = globals()["SCALE"]
     if fit:  # size by the idle row so tall hats, staffs and glows do not change how big a fighter stands
         b0 = solid[rows[0][0]:rows[0][1]]
@@ -80,7 +83,7 @@ def character(src, dst, tag, fit=False, strict=False):
         print(f"  {tag}: scale {SCALE:.3f}")
     sheet = Image.new("RGBA", (CELL * 6, CELL * 6))
     counts = []
-    for ri, ((name, n), (y0, y1)) in enumerate(zip(TARGETS, rows)):
+    for ri, ((name, n), (y0, y1)) in enumerate(zip(targets, rows)):
         band = solid[y0:y1]
         segs = segments(band.sum(0), 10, 14, thr=max(3, (y1 - y0) // 25))
         if name != "idle" and not 3 <= len(segs) <= 8:  # fixed-count rows are evenly spaced: split evenly instead
@@ -111,7 +114,7 @@ def character(src, dst, tag, fit=False, strict=False):
         placed = pick(placed, n, pingpong=(name == "idle"))
         for ci, t in enumerate(placed):
             sheet.paste(t, (ci * CELL, ri * CELL))
-        if name == "cast":
+        if name == "cast" and not six:
             for ci, t in enumerate(placed[1:3]):  # windup = the raise/charge frames of the cast
                 sheet.paste(t, (ci * CELL, 5 * CELL))
     print(f"  {tag}: frames per row {counts}")
@@ -156,3 +159,7 @@ if __name__ == "__main__":
         src = {"common": "common.png", "uncommon": "uncommon.png", "rare": "GPT Image 2 1 (5).png", "legendary": "GPT Image 2 e.png"}
         for rar, f in src.items():
             character(f"{root}/Mage/{f}", f"{out}/magical_dps_{rar}.png", f"magical_dps_{rar}", fit=True)
+
+    if mode == "novice":  # Novice/male.png + female.png, pre-keyed onto magenta
+        for g in ("male", "female"):
+            character(f"{root}/{g}.png", f"{out}/novice_{g}.png", f"novice_{g}", fit=True, six=True)

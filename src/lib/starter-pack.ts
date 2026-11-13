@@ -7,6 +7,7 @@ export interface StarterFighter {
   id: string;
   grade: "E" | "D" | "C" | "B" | "A" | "S";
   level: number;
+  xp?: number;
   team_slot: number;
   hp: number;
   atk: number;

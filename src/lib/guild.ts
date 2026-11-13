@@ -44,6 +44,7 @@ interface Row {
   grade: StarterFighter["grade"];
   level: number;
   xp: number;
+  gender: string;
   team_slot: number | null;
   hp: number; atk: number; def: number; spd: number; stamina: number; magic: number;
   template: StarterFighter["template"];
@@ -56,12 +57,12 @@ export type GuildFighter = StarterFighter & { xp: number };
 export async function loadFighters(supabase: SupabaseClient, userId: string): Promise<GuildFighter[]> {
   const { data } = await supabase
     .from("fighters")
-    .select("id, grade, level, xp, team_slot, hp, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), fighter_skills(slot, skill:skills(name))")
+    .select("id, grade, level, xp, gender, team_slot, hp, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), fighter_skills(slot, skill:skills(name))")
     .eq("owner_id", userId)
     .order("team_slot", { ascending: true, nullsFirst: false });
   return ((data ?? []) as unknown as Row[]).map((f) => ({
     id: f.id, grade: f.grade, level: f.level, xp: f.xp, team_slot: f.team_slot ?? 0,
-    hp: f.hp, atk: f.atk, def: f.def, spd: f.spd, stamina: f.stamina, magic: f.magic, template: f.template,
+    hp: f.hp, atk: f.atk, def: f.def, spd: f.spd, stamina: f.stamina, magic: f.magic, template: f.template.archetype === "novice" ? { ...f.template, sprite_key: `novice_${f.gender}` } : f.template,
     skills: (f.fighter_skills ?? []).map((s) => ({ slot: s.slot, name: s.skill?.name ?? "" })).sort((a, b) => a.slot - b.slot),
   }));
 }

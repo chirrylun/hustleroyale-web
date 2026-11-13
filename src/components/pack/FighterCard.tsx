@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
-import { ARCHETYPE_LABEL } from "@/lib/guild";
+import { ARCHETYPE_LABEL, xpRequired } from "@/lib/guild";
 import type { Rarity, Role, StarterFighter } from "@/lib/starter-pack";
 
 const rarityStyle: Record<Rarity, { border: string; text: string; glow: string }> = {
@@ -21,6 +21,8 @@ const STATS = ["hp", "atk", "def", "spd", "stamina", "magic"] as const;
 export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; delayMs: number }) {
   const { template: t } = fighter;
   const r = rarityStyle[t.rarity];
+  const xp = fighter.xp ?? 0;
+  const need = xpRequired(fighter.level);
   return (
     <article
       className={clsx("pixel-box card-reveal flex flex-col gap-3 bg-night p-4", r.glow)}
@@ -52,6 +54,16 @@ export function FighterCard({ fighter, delayMs }: { fighter: StarterFighter; del
         <span className="text-xl text-gold" title="Grade">
           {fighter.grade}
         </span>
+      </div>
+
+      <div>
+        <div className="mb-0.5 flex justify-between text-xs uppercase text-steel">
+          <span>XP</span>
+          <span className="text-paper">{xp} / {need}</span>
+        </div>
+        <div className="h-2 bg-panel" role="progressbar" aria-valuemin={0} aria-valuemax={need} aria-valuenow={xp} aria-label="Experience">
+          <div className="h-full bg-leaf transition-[width] duration-700" style={{ width: `${Math.min(100, (xp / need) * 100)}%` }} />
+        </div>
       </div>
 
       <dl className="grid grid-cols-3 gap-x-3 gap-y-1 text-base">

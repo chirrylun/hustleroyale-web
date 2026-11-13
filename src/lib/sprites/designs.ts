@@ -24,7 +24,7 @@ const ARCHETYPE_ART = new Set<string>(["paladin", "bard", "marksman", "necromanc
 
 /** Keys look like `<archetype>_<rarity>`. Archetypes without art yet wear their class sheet at the same rarity. */
 export const sheetUrl = (key: string, role: Role) => {
-  if (key === "skeleton") return "/sprites/skeleton.png";
+  if (key === "skeleton" || key === "novice_male" || key === "novice_female") return `/sprites/${key}.png`;
   const i = key.lastIndexOf("_");
   const rarity = key.slice(i + 1);
   if (RARITY.includes(rarity as (typeof RARITY)[number])) {
