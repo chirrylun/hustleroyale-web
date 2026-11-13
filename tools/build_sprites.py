@@ -152,3 +152,7 @@ if __name__ == "__main__":
                 character(f"{root}/{folder}/{name}", f"{out}/{arch}_{rar}.png", f"{arch}_{rar}", fit=True, strict=(arch in ("marksman", "paladin") and rar == "legendary"))
         for name, f in (("shot2", "(2.png"), ("support2", "(3.png"), ("ground", "(4).png")):
             effects(f"{root}/Moves_2/Moves/GPT Image 2 1 {f}", f"{out}/fx_{name}.png", 4, 4, name)
+    if mode == "mage":  # Mage/Mage: common, uncommon, "(5)" = rare, "e" = legendary
+        src = {"common": "common.png", "uncommon": "uncommon.png", "rare": "GPT Image 2 1 (5).png", "legendary": "GPT Image 2 e.png"}
+        for rar, f in src.items():
+            character(f"{root}/Mage/{f}", f"{out}/magical_dps_{rar}.png", f"magical_dps_{rar}", fit=True)
