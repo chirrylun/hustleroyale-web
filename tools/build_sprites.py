@@ -15,9 +15,27 @@ FXCELL = 96
 TARGETS = [("idle", 4), ("walk", 6), ("attack", 5), ("cast", 5), ("hurt", 2)]
 
 
+def to_magenta(path):
+    """RGB array on a flat magenta background, whatever the source used: real alpha, magenta, or a baked-in checkerboard."""
+    im = Image.open(path)
+    if im.mode == "RGBA" and np.asarray(im)[..., 3].min() < 250:
+        bg = Image.new("RGBA", im.size, (255, 0, 255, 255))
+        bg.alpha_composite(im)
+        return np.asarray(bg.convert("RGB")).copy()
+    a = np.asarray(im.convert("RGB")).copy()
+    c = a[0, 0].astype(int)
+    if c[0] > 200 and c[1] > 200 and c[2] > 200:  # light grey/white checkerboard: key out what touches the border
+        v = a.astype(int)
+        m = ((v.max(2) - v.min(2)) <= 8) & (v.min(2) >= 205)
+        lab, n = ndi.label(m)
+        edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
+        a[np.isin(lab, edge[edge > 0])] = (255, 0, 255)
+    return a
+
+
 def cut_background(path, strict=False):
     """RGBA with the magenta removed: soft alpha plus colour un-mixing on edge pixels."""
-    a = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
+    a = to_magenta(path).astype(np.float32)
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     m = np.minimum(r, b)
     mag = m - g
@@ -71,7 +89,13 @@ def character(src, dst, tag, fit=False, strict=False, six=False):
     rows = segments(solid.sum(1), 6 if strict else 10, 20, thr=14)
     if len(rows) != NR:  # glow/sparkles glued rows together: the sheets are laid out in even fifths
         print(f"  .. {tag}: found {len(rows)} rows, using even bands")
-        rows = [(round(i * solid.shape[0] / NR), round((i + 1) * solid.shape[0] / NR)) for i in range(NR)]
+        H = solid.shape[0]
+        if six:  # cut at the emptiest line near each expected row boundary
+            dens = np.convolve(solid.sum(1), np.ones(9), "same")
+            cuts = [0] + [int(np.argmin(dens[int(H * j / NR - H * 0.06):int(H * j / NR + H * 0.06)]) + int(H * j / NR - H * 0.06)) for j in range(1, NR)] + [H]
+            rows = list(zip(cuts[:-1], cuts[1:]))
+        else:
+            rows = [(round(i * H / NR), round((i + 1) * H / NR)) for i in range(NR)]
     SCALE = globals()["SCALE"]
     if fit:  # size by the idle row so tall hats, staffs and glows do not change how big a fighter stands
         b0 = solid[rows[0][0]:rows[0][1]]
@@ -86,7 +110,7 @@ def character(src, dst, tag, fit=False, strict=False, six=False):
     for ri, ((name, n), (y0, y1)) in enumerate(zip(targets, rows)):
         band = solid[y0:y1]
         segs = segments(band.sum(0), 10, 14, thr=max(3, (y1 - y0) // 25))
-        if name != "idle" and not 3 <= len(segs) <= 8:  # fixed-count rows are evenly spaced: split evenly instead
+        if (six and (not 3 <= len(segs) <= 6 if name == "idle" else len(segs) != n)) or (name != "idle" and not 3 <= len(segs) <= 8):  # fixed-count rows are evenly spaced: split evenly instead
             W = solid.shape[1]
             xs = np.flatnonzero(band.any(0))
             lo, hi = xs[0], xs[-1] + 1
@@ -163,3 +187,18 @@ if __name__ == "__main__":
     if mode == "novice":  # Novice/male.png + female.png, pre-keyed onto magenta
         for g in ("male", "female"):
             character(f"{root}/{g}.png", f"{out}/novice_{g}.png", f"novice_{g}", fit=True, six=True)
+
+    if mode == "mobs":  # slime/bat/direwolf/goblin/golem/mushroom folders -> mob_<name>_<rarity>.png
+        F = {
+            "slime": ["(3)", "(4)", "(5)", "(6)"],
+            "bat": ["(14)", "(17)", "(16)", "(19)"],
+            "direwolf": ["(11)", "(3)", "(13)", "(12)"],
+            "goblin": ["(7)", "(8)", "(10)", "(9)"],
+            "mushroom": ["(18)", "(20)", "(21)", "(22)"],
+        }
+        R = ["common", "uncommon", "rare", "legendary"]
+        for mob, files in F.items():
+            for rar, f in zip(R, files):
+                character(f"{root}/{mob}/{mob}/GPT Image 2 1 {f}.png".replace("/slime/slime", "/slime"), f"{out}/mob_{mob}_{rar}.png", f"{mob}_{rar}", fit=True, six=True)
+        for rar in R:
+            character(f"{root}/golem/golem/{rar}.png", f"{out}/mob_golem_{rar}.png", f"golem_{rar}", fit=True, six=True)
