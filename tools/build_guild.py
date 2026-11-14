@@ -1,136 +1,195 @@
-"""Draws the top-down guild hall (public/guild/hall.png) and writes the prop layout the game reads
-(src/components/guild/layout.json). One layout drives both the art and the walking/tap logic.
-Run: python tools/build_guild.py"""
-import json, random
-from PIL import Image, ImageDraw
+"""Builds the guild hall from the guild tilesets in tools/tilesets/.
 
-W, H, S = 240, 135, 4  # base pixels, upscale
-C = dict(ink="#1a1c2c", plum="#5d275d", red="#b13e53", orange="#ef7d57", gold="#ffcd75", lime="#a7f070", leaf="#38b764",
-         teal="#257179", night="#29366f", blue="#3b5dc9", sky="#41a6f6", ice="#73eff7", paper="#f4f4f4", steel="#94b0c2",
-         mist="#566c86", panel="#333c57", w1="#6b4430", w2="#7d5238", w3="#8f6444", w4="#4f3223", stone="#4a4f6a", stone2="#5a6080")
+Outputs
+  public/guild/hall.png        floor, rugs, walls and baked prop shadows (1600x896, 64 px per tile)
+  public/guild/props/<id>.png  every prop as its own transparent sprite (so fighters can walk in front of / behind them)
+  src/components/guild/layout.json  the prop placement, footprints (what blocks walking), hotspots and spots fighters visit
 
-# id, label, link (href) or action, x, y, w, h  (percent of the hall)
-PROPS = [
-    dict(id="adventure", label="Adventure", action="adventure", x=4, y=6, w=13, h=30),
-    dict(id="jobs", label="Job Board", action="jobs", x=21, y=9, w=15, h=26),
-    dict(id="leaderboard", label="Hall of Champions", href="/leaderboard", x=41, y=8, w=17, h=24),
-    dict(id="arena", label="Arena Gate", href="/arena", x=62, y=6, w=16, h=30),
-    dict(id="hearth", label="", x=82, y=8, w=13, h=24),
-    dict(id="training", label="Training Yard", href="/training", x=4, y=56, w=20, h=34),
-    dict(id="barracks", label="Barracks", href="/team", x=38, y=64, w=24, h=28),
-    dict(id="market", label="Marketplace", href="/market", x=74, y=58, w=20, h=32),
-]
-RUG = dict(x=29, y=40, w=42, h=22)
+One layout drives the art, the walking (obstacles) and the tap logic. Everything is in tile units (1 tile = 64 px).
+Run from the web repo root:  python tools/build_guild.py
+"""
+import json, os, random
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter
+from scipy import ndimage as ndi
 
-img = Image.new("RGB", (W, H), C["w1"])
-d = ImageDraw.Draw(img)
-rnd = random.Random(7)
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+T, COLS, ROWS = 64, 25, 14            # px per tile, hall size in tiles (25 x 14 = 1600 x 896)
+W, H = COLS * T, ROWS * T
+WALL_H = 3 * T                         # the back wall is three tiles tall
+FRAME_TILES = 3.25                     # a fighter's sprite frame, in tiles (the character itself is ~1 x 1.9 tiles)
 
-def px(v, n):  # percent -> base pixels
-    return int(v / 100 * n)
+tiles_img = Image.open(os.path.join(HERE, "tilesets", "tiles_guild.png")).convert("RGB")
+CELL = tiles_img.width / 8             # the tile sheet is an 8 x 8 grid of 156.75 px cells
 
-def box(x0, y0, x1, y1, c, o=None):
-    d.rectangle([x0, y0, x1, y1], fill=C[c], outline=C[o] if o else None)
 
-# Floor planks
-for y in range(0, H, 9):
-    for x in range(-(rnd.randint(0, 20)), W, 28):
-        tone = rnd.choice(["w1", "w2", "w3", "w2"])
-        box(x, y, x + 27, y + 8, tone, "w4")
-        if rnd.random() < 0.4:
-            d.point((x + rnd.randint(3, 24), y + rnd.randint(2, 6)), fill=C["w4"])
+def tile(c, r, w, h=None, inset=4):
+    h = h or w
+    t = tiles_img.crop((round(c * CELL) + inset, round(r * CELL) + inset, round((c + 1) * CELL) - inset, round((r + 1) * CELL) - inset))
+    return t.resize((w, h), Image.LANCZOS)
 
-# Back wall
-box(0, 0, W, 22, "stone")
-for y in range(0, 22, 7):
-    for x in range(-(y // 7 % 2) * 8, W, 16):
-        box(x, y, x + 15, y + 6, "stone2" if (x // 16 + y // 7) % 2 else "stone", "panel")
-box(0, 22, W, 25, "ink")
-# Wall torches + banners
-for tx in (50, 118, 190):
-    box(tx, 4, tx + 3, 11, "w4")
-    box(tx - 1, 1, tx + 4, 4, "orange"); box(tx, 0, tx + 3, 2, "gold")
-for bx in (36, 150, 212):
-    box(bx, 3, bx + 8, 17, "red", "ink"); box(bx + 3, 7, bx + 5, 12, "gold")
 
-# Rug
-rx, ry, rw, rh = px(RUG["x"], W), px(RUG["y"], H), px(RUG["w"], W), px(RUG["h"], H)
-box(rx, ry, rx + rw, ry + rh, "plum", "ink")
-box(rx + 3, ry + 3, rx + rw - 3, ry + rh - 3, "red", "gold")
-box(rx + 9, ry + 8, rx + rw - 9, ry + rh - 8, "plum")
-for i in range(5):
-    cx = rx + rw // 2 + (i - 2) * 9
-    box(cx - 1, ry + rh // 2 - 1, cx + 1, ry + rh // 2 + 1, "gold")
+rnd = random.Random(11)
+hall = Image.new("RGB", (W, H), (110, 70, 40))
 
-def rectp(p):
-    return px(p["x"], W), px(p["y"], H), px(p["x"] + p["w"], W), px(p["y"] + p["h"], H)
+# ---- floor: wooden planks in 2x2-tile blocks, never the same neighbour twice
+B = 2 * T
+prev_row = [-1] * (W // B + 2)
+for j, y in enumerate(range(WALL_H, H, B)):
+    last = -1
+    for i, x in enumerate(range(0, W, B)):
+        choices = [c for c in range(8) if c != last and c != prev_row[i]]
+        c = rnd.choice(choices)
+        hall.paste(tile(c, 0, B), (x, y))
+        last, prev_row[i] = c, c
 
-def shadow(x0, y0, x1, y1):
-    d.rectangle([x0 + 1, y1 - 1, x1 + 2, y1 + 2], fill="#2a1c14")
+# a few floor decals (stain, coins, scratches) on open wood
+for (cx, cy, c) in ((1216, 448, 5), (1344, 704, 7), (704, 704, 6), (960, 192 + 128 * 4, 7)):
+    hall.paste(tile(c, 3, B), (cx, cy))
 
-for p in PROPS:
-    x0, y0, x1, y1 = rectp(p)
-    w, h = x1 - x0, y1 - y0
-    shadow(x0, y0, x1, y1)
-    k = p["id"]
-    if k == "adventure":  # dark portal in a stone frame
-        box(x0, y0, x1, y1, "stone2", "ink")
-        box(x0 + 3, y0 + 4, x1 - 3, y1, "ink")
-        box(x0 + 5, y0 + 6, x1 - 5, y1 - 1, "night")
-        for i in range(6):
-            yy = y0 + 8 + i * 5
-            box(x0 + 7, yy, x1 - 7, yy + 1, "blue" if i % 2 else "sky")
-        box(x0 + w // 2 - 2, y0 + h // 2 - 6, x0 + w // 2 + 2, y0 + h // 2 + 6, "ice")
-    elif k == "jobs":  # wooden board with pinned notes
-        box(x0 + 3, y1 - 8, x0 + 6, y1, "w4"); box(x1 - 6, y1 - 8, x1 - 3, y1, "w4")
-        box(x0, y0, x1, y1 - 6, "w3", "w4")
-        box(x0 + 2, y0 + 2, x1 - 2, y1 - 8, "w2")
-        for i, (nx, ny, nc) in enumerate([(4, 4, "paper"), (14, 6, "gold"), (24, 4, "paper"), (7, 17, "ice"), (18, 18, "paper"), (28, 16, "orange")]):
-            if x0 + nx + 7 < x1 - 2:
-                box(x0 + nx, y0 + ny, x0 + nx + 7, y0 + ny + 9, nc, "ink"); box(x0 + nx + 3, y0 + ny, x0 + nx + 4, y0 + ny + 1, "red")
-    elif k == "leaderboard":  # trophy shelf
-        box(x0, y0 + 6, x1, y1, "w3", "w4"); box(x0 + 2, y0 + 8, x1 - 2, y1 - 2, "w4")
-        for tx, c in ((x0 + 6, "gold"), (x0 + w // 2 - 3, "gold"), (x1 - 12, "steel")):
-            box(tx, y0 + 12, tx + 6, y0 + 15, c, "ink"); box(tx + 2, y0 + 15, tx + 4, y0 + 20, c); box(tx, y0 + 20, tx + 6, y0 + 22, "w2", "ink")
-        box(x0 + 4, y0, x1 - 4, y0 + 5, "red", "ink")
-    elif k == "arena":  # stone gate with bars and crossed swords
-        box(x0, y0, x1, y1, "stone2", "ink")
-        box(x0 + 4, y0 + 8, x1 - 4, y1, "ink")
-        for bx in range(x0 + 6, x1 - 5, 4):
-            box(bx, y0 + 9, bx + 1, y1, "mist")
-        box(x0 + 4, y0 + 8, x1 - 4, y0 + 10, "steel")
-        d.line([(x0 + w // 2 - 6, y0 + 1), (x0 + w // 2 + 6, y0 + 7)], fill=C["steel"], width=2)
-        d.line([(x0 + w // 2 + 6, y0 + 1), (x0 + w // 2 - 6, y0 + 7)], fill=C["steel"], width=2)
-    elif k == "hearth":
-        box(x0, y0, x1, y1, "stone2", "ink"); box(x0 + 4, y0 + 8, x1 - 4, y1, "ink")
-        box(x0 + 8, y1 - 8, x1 - 8, y1 - 1, "orange"); box(x0 + 11, y1 - 12, x1 - 11, y1 - 4, "gold"); box(x0 + 13, y1 - 16, x1 - 13, y1 - 8, "orange")
-        box(x0 - 1, y0 + 4, x1 + 1, y0 + 8, "w4")
-    elif k == "training":  # straw dummies + weapon rack
-        for i in range(2):
-            cx = x0 + 10 + i * 18
-            box(cx - 1, y0 + 6, cx + 1, y1 - 2, "w4"); box(cx - 7, y0 + 12, cx + 7, y0 + 15, "w4")
-            box(cx - 4, y0 + 2, cx + 4, y0 + 9, "gold", "ink"); box(cx - 5, y0 + 15, cx + 5, y0 + 27, "gold", "ink")
-            box(cx - 2, y0 + 5, cx - 1, y0 + 6, "ink"); box(cx + 1, y0 + 5, cx + 2, y0 + 6, "ink")
-        box(x0 + 2, y1 - 8, x1 - 2, y1, "w3", "w4")
-        for i in range(5):
-            d.line([(x0 + 4 + i * 6, y1 - 7), (x0 + 7 + i * 6, y1 - 15)], fill=C["steel"], width=1)
-    elif k == "barracks":  # two bunks and a table
-        for i in range(2):
-            bx = x0 + 2 + i * (w // 2)
-            box(bx, y0, bx + w // 2 - 4, y1 - 6, "w3", "w4")
-            box(bx + 2, y0 + 3, bx + w // 2 - 6, y0 + 10, "paper", "ink"); box(bx + 2, y0 + 10, bx + w // 2 - 6, y1 - 9, "blue", "ink")
-        box(x0 + w // 2 - 6, y1 - 7, x0 + w // 2 + 6, y1, "w2", "w4")
-    elif k == "market":  # striped awning stall
-        box(x0, y0 + 10, x1, y1, "w3", "w4")
-        for i in range(0, w, 6):
-            box(x0 + i, y0, min(x1, x0 + i + 5), y0 + 12, "red" if (i // 6) % 2 else "paper", "ink")
-        for cx, c in ((x0 + 4, "lime"), (x0 + 14, "orange"), (x0 + 24, "gold"), (x0 + 33, "leaf")):
-            if cx + 7 < x1:
-                box(cx, y0 + 18, cx + 7, y0 + 25, c, "ink")
-        box(x0 + 3, y1 - 9, x0 + 12, y1, "w2", "w4"); box(x1 - 12, y1 - 9, x1 - 3, y1, "w2", "w4")
+# ---- stone training yard (bottom-left): ragged top edge, solid stone, ragged right edge
+yard_top = WALL_H + 2 * B                               # y = 448 (wood above, ragged stone edge)
+cols = 4                                                # 4 cells of 128 px wide
+for i in range(cols):
+    for j, y in enumerate(range(yard_top, H, B)):
+        last_col, first_row = i == cols - 1, j == 0
+        if first_row and last_col:
+            t = tile(3, 3, B).transpose(Image.FLIP_TOP_BOTTOM)                                      # stone bottom-left, wood elsewhere
+        elif first_row:
+            t = tile(i % 8, 2, B).transpose(Image.FLIP_TOP_BOTTOM)
+        elif last_col:
+            t = tile(i % 8, 2, B).transpose(Image.ROTATE_90)                                         # stone on the left, wood on the right
+        else:
+            t = tile(rnd.choice([0, 1, 2, 3, 4, 5, 6, 7]), 1, B)
+        hall.paste(t, (i * B, y))
 
-img.resize((W * S, H * S), Image.NEAREST).save("public/guild/hall.png")
+# ---- red rug in the middle: framed squares in four patterns
+RUG = dict(x=8.5, y=6.0, w=8, h=4)
+for i in range(RUG["w"] // 2):
+    for j in range(RUG["h"] // 2):
+        hall.paste(tile(rnd.randrange(4), 4, B), (round(RUG["x"] * T) + i * B, round(RUG["y"] * T) + j * B))
 
-layout = dict(aspect=[16, 9], floor=dict(x0=6, x1=94, y0=42, y1=94), props=PROPS, rug=RUG)
-json.dump(layout, open("src/components/guild/layout.json", "w"), indent=1)
-print("ok")
+# ---- back wall: eight 200 x 192 px segments (beams, banners, torches)
+SEG = W // 8
+for i in range(8):
+    hall.paste(tile(i, 5, SEG, WALL_H), (i * SEG, 0))
+shade = Image.new("L", (W, 26))
+sd = ImageDraw.Draw(shade)
+for yy in range(26):
+    sd.line([(0, yy), (W, yy)], fill=int(120 * (1 - yy / 26) ** 2))
+hall.paste((20, 12, 8), (0, WALL_H), shade)  # shadow the wall casts on the floor
+
+# ---- props: cut each one out of the keyed sheet
+props_img = Image.open(os.path.join(HERE, "tilesets", "props_guild.png")).convert("RGB")
+pa = np.array(props_img).astype(int)
+r_, g_, b_ = pa[..., 0], pa[..., 1], pa[..., 2]
+bgmask = (r_ > 160) & (b_ > 160) & (g_ < 120)
+fg = ndi.binary_fill_holes(ndi.binary_opening(~bgmask, iterations=1))
+pink = (r_ > 140) & (b_ > 140) & (g_ < 150) & ((r_ + b_) / 2 - g_ > 70)
+fg &= ~(pink & ndi.binary_dilation(bgmask, iterations=2))   # drop the magenta fringe
+labels, _ = ndi.label(ndi.binary_dilation(fg, iterations=6))
+rgba_full = np.dstack([pa, fg * 255]).astype(np.uint8)
+
+# name -> a point inside the prop on the sheet (and an optional vertical split for two props that touch)
+SRC = dict(
+    board=(112, 120), portal=(322, 117), gate=(528, 113), trophy=(734, 124), fireplace=(948, 120, "top"), scarecrow=(1107, 123),
+    target=(1197, 133), bunk=(110, 336), market=(320, 331), desk=(530, 343), rack=(736, 331), anvil=(930, 340, "bottom"),
+    shelf=(1150, 328), roundtable=(110, 530), banquet=(330, 540), banner_red=(505, 530), banner_blue=(595, 530), torch=(737, 523),
+    candelabra=(944, 530), barrels=(1150, 533), crates=(115, 724), chest=(331, 741), gold=(533, 737), plant=(735, 725),
+    map=(941, 733), statue=(1156, 734), clock=(111, 930), door=(338, 930), window=(530, 935), stairs=(728, 933), dog=(946, 955),
+    potion=(1154, 943),
+)
+SPLIT_Y = 255
+
+
+def cut(name):
+    x, y, *part = SRC[name]
+    lab = labels[y, x]
+    if lab == 0:  # click landed in a gap: take the nearest label
+        win = labels[max(0, y - 30):y + 30, max(0, x - 30):x + 30]
+        lab = np.bincount(win[win > 0]).argmax()
+    m = labels == lab
+    if part:
+        yy = np.arange(labels.shape[0])[:, None]
+        m &= (yy < SPLIT_Y) if part[0] == "top" else (yy >= SPLIT_Y)
+    a = rgba_full.copy()
+    a[..., 3] = np.where(m & fg, 255, 0)
+    img = Image.fromarray(a, "RGBA")
+    return img.crop(img.getbbox())
+
+
+# id, sheet name, scale (hall px per sheet px), centre x tile, bottom y tile (where it touches the floor),
+# footprint (fractions of the sprite box x0,y0,x1,y1 that block walking), extras
+P = []
+
+
+def prop(pid, src, cx, by, k=0.9, foot=(0.06, 0.58, 0.94, 0.98), group=None, href=None, action=None, solid=True, spot=None, emote=None, wall=False, work=None):
+    P.append(dict(id=pid, src=src, cx=cx, by=by, k=k, foot=foot, group=group or pid, href=href, action=action, solid=solid, spot=spot, emote=emote, wall=wall, work=work))
+
+
+# back wall, left to right
+prop("portal", "portal", 3.0, 4.25, foot=(0.05, 0.62, 0.95, 0.98), group="adventure", action="adventure", spot=(3.0, 5.2), emote="🌀")
+prop("banner_blue", "banner_blue", 5.25, 4.4, k=0.8, foot=(0.3, 0.88, 0.7, 1.0), spot=(5.25, 5.3))
+prop("board", "board", 7.6, 4.3, foot=(0.05, 0.62, 0.95, 0.98), group="jobs", action="jobs", spot=(7.6, 5.3), emote="📜")
+prop("window", "window", 10.2, 3.0, k=0.9, solid=False, wall=True)
+prop("trophy", "trophy", 12.5, 4.45, foot=(0.04, 0.5, 0.96, 0.95), group="leaderboard", href="/leaderboard", spot=(12.5, 5.5), emote="🏆")
+prop("banner_red", "banner_red", 14.7, 4.4, k=0.8, foot=(0.3, 0.88, 0.7, 1.0), spot=(14.7, 5.3))
+prop("gate", "gate", 17.1, 4.25, foot=(0.04, 0.6, 0.96, 0.98), group="arena", href="/arena", spot=(17.1, 5.3), emote="⚔️")
+prop("fireplace", "fireplace", 21.9, 4.7, k=0.92, foot=(0.08, 0.45, 0.92, 0.82), group="hearth", spot=(21.9, 5.9), emote="🔥")
+prop("clock", "clock", 0.85, 5.6, k=0.8, foot=(0.15, 0.82, 0.85, 1.0))
+# left: forge corner and the training yard on stone
+prop("anvil", "anvil", 3.1, 8.1, k=0.85, foot=(0.05, 0.5, 0.95, 0.95), spot=(3.1, 8.9), emote="🔨")
+prop("shelf", "shelf", 6.4, 7.5, k=0.9, foot=(0.04, 0.68, 0.96, 0.98), spot=(6.4, 8.3), emote="📖")
+prop("scarecrow", "scarecrow", 1.7, 11.7, k=0.85, foot=(0.2, 0.8, 0.8, 1.0), group="training", href="/training", spot=(1.7, 12.7), work="attack")
+prop("target", "target", 4.2, 11.7, k=0.85, foot=(0.2, 0.8, 0.8, 1.0), group="training", href="/training", spot=(4.2, 12.7), work="attack")
+prop("rack", "rack", 6.9, 13.4, k=0.8, foot=(0.05, 0.55, 0.95, 0.98), group="training", href="/training", spot=(6.9, 11.6), emote="🗡️")
+# middle: council table on the rug, barracks below
+prop("roundtable", "roundtable", 12.5, 9.2, k=0.85, foot=(0.1, 0.3, 0.9, 0.9), spot=(12.5, 10.3), emote="🍺")
+prop("bunk_a", "bunk", 10.6, 13.5, k=0.85, foot=(0.04, 0.5, 0.96, 0.98), group="barracks", href="/team", spot=(10.6, 11.7), emote="💤")
+prop("bunk_b", "bunk", 14.0, 13.5, k=0.85, foot=(0.04, 0.5, 0.96, 0.98), group="barracks", href="/team", spot=(14.0, 11.7), emote="💤")
+prop("candelabra", "candelabra", 9.1, 6.6, k=0.8, foot=(0.3, 0.8, 0.7, 1.0))
+# right: dining, market and the guild's stores
+prop("banquet", "banquet", 20.4, 9.6, k=0.85, foot=(0.04, 0.35, 0.96, 0.9), spot=(20.4, 10.7), emote="🍖")
+prop("map", "map", 23.3, 7.6, k=0.8, foot=(0.1, 0.78, 0.9, 1.0), spot=(23.0, 8.4), emote="🗺️")
+prop("market", "market", 20.9, 13.4, k=0.9, foot=(0.04, 0.55, 0.96, 0.98), group="market", href="/market", spot=(20.9, 11.4), emote="🛒")
+prop("barrels", "barrels", 24.0, 13.7, k=0.8, foot=(0.06, 0.55, 0.94, 0.98))
+prop("crates", "crates", 18.2, 13.6, k=0.8, foot=(0.06, 0.55, 0.94, 0.98))
+prop("statue", "statue", 16.1, 13.1, k=0.7, foot=(0.1, 0.78, 0.9, 1.0))
+prop("plant", "plant", 0.95, 8.0, k=0.7, foot=(0.2, 0.65, 0.8, 1.0))
+prop("dog", "dog", 22.0, 6.7, k=0.7, solid=False)
+
+os.makedirs(os.path.join(ROOT, "public", "guild", "props"), exist_ok=True)
+out = []
+shadow = Image.new("L", (W, H), 0)
+sdraw = ImageDraw.Draw(shadow)
+for p in P:
+    sprite = cut(p["src"])
+    w, h = round(sprite.width * p["k"]), round(sprite.height * p["k"])
+    sprite = sprite.resize((w, h), Image.LANCZOS)
+    sprite.save(os.path.join(ROOT, "public", "guild", "props", f"{p['id']}.png"), optimize=True)
+    tw, th = w / T, h / T
+    tx, ty = p["cx"] - tw / 2, p["by"] - th
+    f0, g0, f1, g1 = p["foot"]
+    foot = [round(tx + f0 * tw, 2), round(ty + g0 * th, 2), round(tx + f1 * tw, 2), round(ty + g1 * th, 2)]
+    if p["solid"]:  # soft contact shadow under the footprint
+        x0, y0, x1, y1 = (v * T for v in foot)
+        sdraw.ellipse([x0 - 4, y1 - (y1 - y0) * 0.5, x1 + 6, y1 + 10], fill=110)
+    ent = dict(id=p["id"], group=p["group"], x=round(tx, 3), y=round(ty, 3), w=round(tw, 3), h=round(th, 3), foot=foot if p["solid"] else None, wall=p["wall"])
+    for k_ in ("href", "action", "spot", "emote", "work"):
+        if p[k_]:
+            ent[k_] = list(p[k_]) if k_ == "spot" else p[k_]
+    out.append(ent)
+
+shadow = shadow.filter(ImageFilter.GaussianBlur(5))
+hall.paste((24, 14, 10), (0, 0), shadow.point(lambda v: int(v * 0.75)))
+hall.save(os.path.join(ROOT, "public", "guild", "hall.png"), optimize=True)
+
+layout = dict(
+    cols=COLS, rows=ROWS, frame=FRAME_TILES,
+    # where a fighter's feet may go (tiles); the rest is wall and furniture
+    floor=dict(x0=0.8, x1=COLS - 0.8, y0=3.9, y1=ROWS - 0.35),
+    props=out,
+)
+json.dump(layout, open(os.path.join(ROOT, "src", "components", "guild", "layout.json"), "w"), indent=1)
+print("ok", len(out), "props")

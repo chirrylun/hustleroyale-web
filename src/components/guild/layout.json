@@ -1,91 +1,491 @@
 {
- "aspect": [
-  16,
-  9
- ],
+ "cols": 25,
+ "rows": 14,
+ "frame": 3.25,
  "floor": {
-  "x0": 6,
-  "x1": 94,
-  "y0": 42,
-  "y1": 94
+  "x0": 0.8,
+  "x1": 24.2,
+  "y0": 3.9,
+  "y1": 13.65
  },
  "props": [
   {
-   "id": "adventure",
-   "label": "Adventure",
+   "id": "portal",
+   "group": "adventure",
+   "x": 1.727,
+   "y": 1.406,
+   "w": 2.547,
+   "h": 2.844,
+   "foot": [
+    1.85,
+    3.17,
+    4.15,
+    4.19
+   ],
+   "wall": false,
    "action": "adventure",
-   "x": 4,
-   "y": 6,
-   "w": 13,
-   "h": 30
+   "spot": [
+    3.0,
+    5.2
+   ],
+   "emote": "\ud83c\udf00"
   },
   {
-   "id": "jobs",
-   "label": "Job Board",
+   "id": "banner_blue",
+   "group": "banner_blue",
+   "x": 4.82,
+   "y": 2.15,
+   "w": 0.859,
+   "h": 2.25,
+   "foot": [
+    5.08,
+    4.13,
+    5.42,
+    4.4
+   ],
+   "wall": false,
+   "spot": [
+    5.25,
+    5.3
+   ]
+  },
+  {
+   "id": "board",
+   "group": "jobs",
+   "x": 6.319,
+   "y": 1.534,
+   "w": 2.562,
+   "h": 2.766,
+   "foot": [
+    6.45,
+    3.25,
+    8.75,
+    4.24
+   ],
+   "wall": false,
    "action": "jobs",
-   "x": 21,
-   "y": 9,
-   "w": 15,
-   "h": 26
+   "spot": [
+    7.6,
+    5.3
+   ],
+   "emote": "\ud83d\udcdc"
   },
   {
-   "id": "leaderboard",
-   "label": "Hall of Champions",
+   "id": "window",
+   "group": "window",
+   "x": 9.2,
+   "y": 0.641,
+   "w": 2.0,
+   "h": 2.359,
+   "foot": null,
+   "wall": true
+  },
+  {
+   "id": "trophy",
+   "group": "leaderboard",
+   "x": 11.258,
+   "y": 2.138,
+   "w": 2.484,
+   "h": 2.312,
+   "foot": [
+    11.36,
+    3.29,
+    13.64,
+    4.33
+   ],
+   "wall": false,
    "href": "/leaderboard",
-   "x": 41,
-   "y": 8,
-   "w": 17,
-   "h": 24
+   "spot": [
+    12.5,
+    5.5
+   ],
+   "emote": "\ud83c\udfc6"
   },
   {
-   "id": "arena",
-   "label": "Arena Gate",
+   "id": "banner_red",
+   "group": "banner_red",
+   "x": 14.27,
+   "y": 2.15,
+   "w": 0.859,
+   "h": 2.25,
+   "foot": [
+    14.53,
+    4.13,
+    14.87,
+    4.4
+   ],
+   "wall": false,
+   "spot": [
+    14.7,
+    5.3
+   ]
+  },
+  {
+   "id": "gate",
+   "group": "arena",
+   "x": 15.756,
+   "y": 1.641,
+   "w": 2.688,
+   "h": 2.609,
+   "foot": [
+    15.86,
+    3.21,
+    18.34,
+    4.2
+   ],
+   "wall": false,
    "href": "/arena",
-   "x": 62,
-   "y": 6,
-   "w": 16,
-   "h": 30
+   "spot": [
+    17.1,
+    5.3
+   ],
+   "emote": "\u2694\ufe0f"
   },
   {
-   "id": "hearth",
-   "label": "",
-   "x": 82,
-   "y": 8,
-   "w": 13,
-   "h": 24
+   "id": "fireplace",
+   "group": "hearth",
+   "x": 20.462,
+   "y": 1.216,
+   "w": 2.875,
+   "h": 3.484,
+   "foot": [
+    20.69,
+    2.78,
+    23.11,
+    4.07
+   ],
+   "wall": false,
+   "spot": [
+    21.9,
+    5.9
+   ],
+   "emote": "\ud83d\udd25"
   },
   {
-   "id": "training",
-   "label": "Training Yard",
+   "id": "clock",
+   "group": "clock",
+   "x": 0.256,
+   "y": 3.131,
+   "w": 1.188,
+   "h": 2.469,
+   "foot": [
+    0.43,
+    5.16,
+    1.27,
+    5.6
+   ],
+   "wall": false
+  },
+  {
+   "id": "anvil",
+   "group": "anvil",
+   "x": 1.834,
+   "y": 5.866,
+   "w": 2.531,
+   "h": 2.234,
+   "foot": [
+    1.96,
+    6.98,
+    4.24,
+    7.99
+   ],
+   "wall": false,
+   "spot": [
+    3.1,
+    8.9
+   ],
+   "emote": "\ud83d\udd28"
+  },
+  {
+   "id": "shelf",
+   "group": "shelf",
+   "x": 5.228,
+   "y": 4.781,
+   "w": 2.344,
+   "h": 2.719,
+   "foot": [
+    5.32,
+    6.63,
+    7.48,
+    7.45
+   ],
+   "wall": false,
+   "spot": [
+    6.4,
+    8.3
+   ],
+   "emote": "\ud83d\udcd6"
+  },
+  {
+   "id": "scarecrow",
+   "group": "training",
+   "x": 1.137,
+   "y": 9.481,
+   "w": 1.125,
+   "h": 2.219,
+   "foot": [
+    1.36,
+    11.26,
+    2.04,
+    11.7
+   ],
+   "wall": false,
    "href": "/training",
-   "x": 4,
-   "y": 56,
-   "w": 20,
-   "h": 34
+   "spot": [
+    1.7,
+    12.7
+   ],
+   "work": "attack"
   },
   {
-   "id": "barracks",
-   "label": "Barracks",
+   "id": "target",
+   "group": "training",
+   "x": 3.653,
+   "y": 9.778,
+   "w": 1.094,
+   "h": 1.922,
+   "foot": [
+    3.87,
+    11.32,
+    4.53,
+    11.7
+   ],
+   "wall": false,
+   "href": "/training",
+   "spot": [
+    4.2,
+    12.7
+   ],
+   "work": "attack"
+  },
+  {
+   "id": "rack",
+   "group": "training",
+   "x": 5.83,
+   "y": 11.197,
+   "w": 2.141,
+   "h": 2.203,
+   "foot": [
+    5.94,
+    12.41,
+    7.86,
+    13.36
+   ],
+   "wall": false,
+   "href": "/training",
+   "spot": [
+    6.9,
+    11.6
+   ],
+   "emote": "\ud83d\udde1\ufe0f"
+  },
+  {
+   "id": "roundtable",
+   "group": "roundtable",
+   "x": 11.25,
+   "y": 7.075,
+   "w": 2.5,
+   "h": 2.125,
+   "foot": [
+    11.5,
+    7.71,
+    13.5,
+    8.99
+   ],
+   "wall": false,
+   "spot": [
+    12.5,
+    10.3
+   ],
+   "emote": "\ud83c\udf7a"
+  },
+  {
+   "id": "bunk_a",
+   "group": "barracks",
+   "x": 9.412,
+   "y": 11.141,
+   "w": 2.375,
+   "h": 2.359,
+   "foot": [
+    9.51,
+    12.32,
+    11.69,
+    13.45
+   ],
+   "wall": false,
    "href": "/team",
-   "x": 38,
-   "y": 64,
-   "w": 24,
-   "h": 28
+   "spot": [
+    10.6,
+    11.7
+   ],
+   "emote": "\ud83d\udca4"
+  },
+  {
+   "id": "bunk_b",
+   "group": "barracks",
+   "x": 12.812,
+   "y": 11.141,
+   "w": 2.375,
+   "h": 2.359,
+   "foot": [
+    12.91,
+    12.32,
+    15.09,
+    13.45
+   ],
+   "wall": false,
+   "href": "/team",
+   "spot": [
+    14.0,
+    11.7
+   ],
+   "emote": "\ud83d\udca4"
+  },
+  {
+   "id": "candelabra",
+   "group": "candelabra",
+   "x": 8.53,
+   "y": 4.475,
+   "w": 1.141,
+   "h": 2.125,
+   "foot": [
+    8.87,
+    6.17,
+    9.33,
+    6.6
+   ],
+   "wall": false
+  },
+  {
+   "id": "banquet",
+   "group": "banquet",
+   "x": 19.009,
+   "y": 7.756,
+   "w": 2.781,
+   "h": 1.844,
+   "foot": [
+    19.12,
+    8.4,
+    21.68,
+    9.42
+   ],
+   "wall": false,
+   "spot": [
+    20.4,
+    10.7
+   ],
+   "emote": "\ud83c\udf56"
+  },
+  {
+   "id": "map",
+   "group": "map",
+   "x": 22.152,
+   "y": 5.381,
+   "w": 2.297,
+   "h": 2.219,
+   "foot": [
+    22.38,
+    7.11,
+    24.22,
+    7.6
+   ],
+   "wall": false,
+   "spot": [
+    23.0,
+    8.4
+   ],
+   "emote": "\ud83d\uddfa\ufe0f"
   },
   {
    "id": "market",
-   "label": "Marketplace",
+   "group": "market",
+   "x": 19.478,
+   "y": 10.9,
+   "w": 2.844,
+   "h": 2.5,
+   "foot": [
+    19.59,
+    12.28,
+    22.21,
+    13.35
+   ],
+   "wall": false,
    "href": "/market",
-   "x": 74,
-   "y": 58,
-   "w": 20,
-   "h": 32
+   "spot": [
+    20.9,
+    11.4
+   ],
+   "emote": "\ud83d\uded2"
+  },
+  {
+   "id": "barrels",
+   "group": "barrels",
+   "x": 23.008,
+   "y": 11.856,
+   "w": 1.984,
+   "h": 1.844,
+   "foot": [
+    23.13,
+    12.87,
+    24.87,
+    13.66
+   ],
+   "wall": false
+  },
+  {
+   "id": "crates",
+   "group": "crates",
+   "x": 17.192,
+   "y": 11.756,
+   "w": 2.016,
+   "h": 1.844,
+   "foot": [
+    17.31,
+    12.77,
+    19.09,
+    13.56
+   ],
+   "wall": false
+  },
+  {
+   "id": "statue",
+   "group": "statue",
+   "x": 15.538,
+   "y": 10.975,
+   "w": 1.125,
+   "h": 2.125,
+   "foot": [
+    15.65,
+    12.63,
+    16.55,
+    13.1
+   ],
+   "wall": false
+  },
+  {
+   "id": "plant",
+   "group": "plant",
+   "x": 0.302,
+   "y": 6.188,
+   "w": 1.297,
+   "h": 1.812,
+   "foot": [
+    0.56,
+    7.37,
+    1.34,
+    8.0
+   ],
+   "wall": false
+  },
+  {
+   "id": "dog",
+   "group": "dog",
+   "x": 20.82,
+   "y": 5.45,
+   "w": 2.359,
+   "h": 1.25,
+   "foot": null,
+   "wall": false
   }
- ],
- "rug": {
-  "x": 29,
-  "y": 40,
-  "w": 42,
-  "h": 22
- }
+ ]
 }
