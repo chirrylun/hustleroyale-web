@@ -128,6 +128,8 @@ export interface BattleStartPayload {
   tickMs: number;
   units: UnitMeta[];
   snapshot: BattleSnapshot;
+  /** The fight is set up but frozen until the player presses Start (tutorial fights). */
+  awaitingStart?: boolean;
 }
 
 export interface BattleEndPayload {
@@ -234,6 +236,7 @@ export type BattleAction =
   | { type: "events"; matchId: string; events: BattleEvent[]; now: number }
   | { type: "sync"; matchId: string; snapshot: BattleSnapshot }
   | { type: "end"; payload: BattleEndPayload }
+  | { type: "begin"; matchId: string }
   | { type: "focus"; id: string }
   | { type: "prune"; now: number }
   | { type: "reset" };
@@ -495,7 +498,7 @@ export function battleReducer(view: BattleView | null, action: BattleAction): Ba
         shake: { n: 0, power: 0 },
         hitStop: 0,
         finalBlowId: null,
-        log: "Fight!",
+        log: p.awaitingStart ? "Get ready" : "Fight!",
         focusId: null,
         nextId: 1,
         end: null,
@@ -517,6 +520,8 @@ export function battleReducer(view: BattleView | null, action: BattleAction): Ba
     }
     case "end":
       return view && view.matchId === action.payload.matchId ? { ...view, end: action.payload } : view;
+    case "begin":
+      return view && view.matchId === action.matchId ? { ...view, log: "Fight!" } : view;
     case "focus":
       return view ? { ...view, focusId: action.id } : view;
     case "prune": {
@@ -532,7 +537,8 @@ export function battleReducer(view: BattleView | null, action: BattleAction): Ba
 
 /* ---------------------------------------------------------------- the hook */
 
-export type Phase = "lobby" | "starting" | "fighting" | "ended";
+/** `ready`: the fight is set up and frozen, waiting for the player to press Start (tutorial only). */
+export type Phase = "lobby" | "starting" | "ready" | "fighting" | "ended";
 
 const START_ERRORS: Record<StartError, string> = {
   invalid_request: "That match setup didn't work. Pick again and try once more.",
@@ -562,7 +568,11 @@ export function useSoloBattle() {
       if (finaleTimer.current) clearTimeout(finaleTimer.current);
       dispatch({ type: "start", payload, now: Date.now() });
       setError(null);
-      setPhase("fighting");
+      setPhase(payload.awaitingStart ? "ready" : "fighting");
+    };
+    const onBegin = (p: { matchId: string }) => {
+      dispatch({ type: "begin", matchId: p.matchId });
+      setPhase((cur) => (cur === "ready" ? "fighting" : cur));
     };
     const onEvents = (p: { matchId: string; events: BattleEvent[] }) => {
       dispatch({ type: "events", ...p, now: Date.now() });
@@ -593,6 +603,7 @@ export function useSoloBattle() {
     socket.on("battle:events", onEvents);
     socket.on("battle:sync", onSync);
     socket.on("battle:end", onEnd);
+    socket.on("battle:begin", onBegin);
     socket.on("connect", rejoin);
     socket.on("connect_error", onConnectError);
     if (socket.connected) rejoin();
@@ -604,6 +615,7 @@ export function useSoloBattle() {
       socket.off("battle:events", onEvents);
       socket.off("battle:sync", onSync);
       socket.off("battle:end", onEnd);
+      socket.off("battle:begin", onBegin);
       socket.off("connect", rejoin);
       socket.off("connect_error", onConnectError);
     };
@@ -668,6 +680,15 @@ export function useSoloBattle() {
     }
   }, []);
 
+  /** The player has read the instructions: let the frozen tutorial fight run. */
+  const beginTutorial = useCallback(() => {
+    unlockAudio();
+    getGameSocket().timeout(8000).emit("tutorial:begin", (err: Error | null, res?: { ok: boolean }) => {
+      if (err || !res) setError("The game server didn't answer. Tap Start again.");
+      else if (!res.ok) setError("That fight isn't waiting any more. Go back and try again.");
+    });
+  }, []);
+
   const cast = useCallback((skillIndex: number) => getGameSocket().emit("battle:intent", { type: "cast", skillIndex }), []);
   const focus = useCallback((id: string) => {
     getGameSocket().emit("battle:intent", { type: "focus", targetId: id });
@@ -689,7 +710,7 @@ export function useSoloBattle() {
     setPhase("lobby");
   }, []);
 
-  return { phase, view, error, lastReward, start, startTutorial, cast, focus, move, auto, setStance, reset };
+  return { phase, view, error, lastReward, start, startTutorial, beginTutorial, cast, focus, move, auto, setStance, reset };
 }
 
 function soundFor(e: BattleEvent): Sfx | null {
