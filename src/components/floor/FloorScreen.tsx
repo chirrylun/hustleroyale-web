@@ -217,11 +217,11 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
     };
   }, [floor]);
 
-  const spawnText = (x: number, y: number, text: string, cls: string, ms = 700) => {
+  const spawnText = (x: number, y: number, text: string, cls: string, ms = 700, anim = "dmg", extra = "") => {
     const d = document.createElement("div");
     d.textContent = text;
     d.className = `pointer-events-none absolute z-[9000] text-xl font-bold ${cls}`;
-    d.style.cssText += `;left:${x * T}px;top:${(y - 1.6) * T}px;animation:dmg ${ms}ms ease-out forwards`;
+    d.style.cssText += `;left:${x * T}px;top:${(y - 1.6) * T}px;animation:${anim} ${ms}ms ease-out forwards;${extra}`;
     world.current?.appendChild(d);
     setTimeout(() => d.remove(), ms + 20);
   };
@@ -241,19 +241,45 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
       }
     });
   };
+  // Text that floats up over a fighter's head and walks with them (damage numbers stay where they were struck).
+  const overHead = (a: Ag, text: string, cls: string, ms: number, anim = "dmg", extra = "") => {
+    const el = a.el;
+    if (!el) return;
+    const d = document.createElement("div");
+    d.textContent = text;
+    d.className = `over-head pointer-events-none absolute z-[9000] text-xl font-bold ${cls}`;
+    d.style.cssText += `;animation:${anim} ${ms}ms ease-out forwards;${extra}`;
+    el.appendChild(d);
+    setTimeout(() => d.remove(), ms + 20);
+  };
+
+  // A level-up: a golden aura behind the fighter, a ring spreading on the ground, a glow around their outline, and a
+  // big banner overhead. All of it is attached to the fighter, so it follows them if they keep moving.
+  const celebrate = (a: Ag) => {
+    const el = a.el;
+    if (el) {
+      const sprite = (el.children[1] as HTMLElement | undefined) ?? el; // children[0] is the health bar
+      const glow = document.createElement("div");
+      glow.className = "levelup-glow";
+      el.appendChild(glow);
+      sprite.style.filter = "drop-shadow(0 0 3px #fff4b0) drop-shadow(0 0 10px #ffb82e)";
+      setTimeout(() => { glow.remove(); sprite.style.filter = ""; }, 2000);
+    }
+    overHead(a, "LEVEL UP!", "text-gold", 2000, "lvl-pop", "font-size:2rem;letter-spacing:.06em;white-space:nowrap;margin-bottom:1.6rem;text-shadow:0 0 10px #ffb82e,0 2px 0 #000;");
+  };
+
   // The server rolls the xp (a range, not a fixed amount) and says what each fighter got: show it over their heads.
-  const showXp = (m: Ag, data: unknown) => {
+  const showXp = (data: unknown) => {
     const res = data as { throttled?: boolean; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
     if (!res?.awards || res.throttled) return;
-    if (res.awards.length && res.awards.every((w) => w.gained === 0)) { spawnText(m.x, m.y, "Too weak: no XP", "text-steel", 1400); return; }
     for (const w of res.awards) {
       const a = allies.current.find((u) => u.id === w.id);
       if (!a || w.gained <= 0) continue;
-      spawnText(a.x, a.y, `+${w.gained} XP`, "text-leaf", 1200);
-      if (w.levels_gained > 0) setTimeout(() => spawnText(a.x, a.y - 0.6, "LEVEL UP!", "text-gold", 1600), 350);
+      overHead(a, `+${w.gained} XP`, "text-leaf", 1200);
+      if (w.levels_gained > 0) setTimeout(() => celebrate(a), 250);
     }
   };
-  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => showXp(m, data));
+  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => showXp(data));
 
   // The loop: movement, fighting, camera.
   useEffect(() => {
