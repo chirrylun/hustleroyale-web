@@ -14,26 +14,22 @@ import { InfoBox } from "./InfoBox";
 const COPY = {
   1: {
     title: "Your first fight",
-    intro: ["A wild Slime (level 1) blocks the way.", "Your fighter will attack on its own. You can also take over and steer it."],
+    intro: ["The best way to learn how fights work is by entering your first fight.", "Let's jump right in!."],
     ready: "How it works",
     read: [
-      "Your fighter fights on its own.",
-      "Tap anywhere on the ground to make it walk there instead, to back away if it gets hurt.",
-      "Tap a Slime to focus on it.",
-      "Press Auto to let your fighter fight again.",
+      "Your fighter fights on its own. You can also tap anywhere on the ground to make it walk there instead and to back away if it gets hurt.",
+      "It walks where you tap. Tap a Slime to focus on it, or press Auto to let your fighter fight again.",
     ],
     win: ["Victory!", "That's how a fight works: your fighter acts on its own, and you step in when you need to."],
   },
   2: {
     title: "Team fight",
-    intro: ["Now your whole crew fights three Slimes.", "In a team fight everyone acts on their own. You choose how bold the team is."],
+    intro: ["It works the same way in a team.", "Everyone acts on their own. You only choose how they act, they still make their own decisions."],
     ready: "How it works",
     read: [
-      "Your crew fights on its own.",
-      "Pick a mood under the arena while you fight:",
-      "Attack to charge in. Defend to hold back and heal early.",
+      "Your team fights on its own. Pick how they act below: Attack makes them more bold and charge in, Defend makes them hold back and heal early.",
     ],
-    win: ["Well fought!", "Your crew is ready. Let's head to your guild."],
+    win: ["Well fought!", "Your team is ready. Let's head to your guild."],
   },
 } as const;
 
