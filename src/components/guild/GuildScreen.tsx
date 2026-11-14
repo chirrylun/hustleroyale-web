@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
+import { MAX_FLOOR, themeOf } from "@/lib/world/floor";
 import { GuildHall } from "./GuildHall";
 import { InfoBox } from "./InfoBox";
 
@@ -14,10 +15,10 @@ const OPEN_DURING_FIRST_JOB = ["jobs", "adventure"];
 const FIRST_JOB_NOTICE = "Complete your first quest on the job board first.";
 
 /** Tutorial job: kill a bat on Floor 1 (steps 6-8 of the tutorial); afterwards the board is "empty" until more jobs land. */
-export function GuildScreen({ username, coins, level, fighters, tutorialStep }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number }) {
+export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number }) {
   const router = useRouter();
   const [step, setStep] = useState(tutorialStep);
-  const [panel, setPanel] = useState<"jobs" | "soon" | null>(null);
+  const [panel, setPanel] = useState<"jobs" | "adventure" | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, start] = useTransition();
@@ -44,7 +45,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep }: 
     if (a === "jobs") {
       if (step === 6) setTut(7);
       setPanel("jobs");
-    } else setPanel("soon");
+    } else setPanel("adventure");
   };
 
   return (
@@ -88,10 +89,26 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep }: 
         {panel && (
           <div className="absolute inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3">
             <div className="pixel-box card-reveal w-full max-w-lg bg-night p-5">
-              {panel === "soon" ? (
+              {panel === "adventure" ? (
                 <>
-                  <h2 className="mb-2 text-2xl uppercase text-gold">Coming soon</h2>
-                  <p className="text-xl text-paper">The adventure floors open soon.{step < 9 && " Floor 1 has a bat waiting for you."}</p>
+                  <h2 className="mb-2 text-2xl uppercase text-gold">Adventure</h2>
+                  {step < 9 && <p className="mb-2 text-xl text-paper">Floor 1 has a bat waiting for you.</p>}
+                  <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+                    {[0, 1, 2, 3].map((t) => (
+                      <div key={t}>
+                        <p className="mb-1 text-base uppercase text-steel">{themeOf(t * 10 + 1).name}</p>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {Array.from({ length: 10 }, (_, i) => t * 10 + i + 1).filter((n) => n <= MAX_FLOOR).map((n) =>
+                            n <= floorCleared + 1 ? (
+                              <Link key={n} href={`/floor/${n}`} className={`pixel-box py-1.5 text-center text-xl ${n <= floorCleared ? "bg-panel text-leaf" : "bg-gold text-ink"}`}>{n}</Link>
+                            ) : (
+                              <span key={n} className="pixel-box bg-night py-1.5 text-center text-xl text-steel/50" aria-label={`Floor ${n} locked`}>{n}</span>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </>
               ) : step >= 9 || step < 7 ? (
                 <>
@@ -111,7 +128,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep }: 
                       <PixelButton onClick={() => setTut(8)}>Take job</PixelButton>
                     ) : (
                       <>
-                        <PixelButton onClick={() => setPanel("soon")}>Go to adventure</PixelButton>
+                        <PixelButton onClick={() => setPanel("adventure")}>Go to adventure</PixelButton>
                         <PixelButton variant="ghost" disabled={busy} onClick={claim}>Claim reward</PixelButton>
                       </>
                     )}

@@ -32,7 +32,7 @@ async function HomeContent() {
   // RLS lets a player read only their own row, so this cannot leak anyone else's data.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username, level, coins, starter_pack_opened, tutorial_step")
+    .select("username, level, coins, starter_pack_opened, tutorial_step, floor_cleared")
     .eq("id", user.id)
     .single();
 
@@ -44,7 +44,7 @@ async function HomeContent() {
   if (step < 6) {
     return <Tutorial username={username} initialStep={step} fighters={fighters} />;
   }
-  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} />;
+  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} />;
 }
 
 function HomeFallback() {

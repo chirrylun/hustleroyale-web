@@ -475,3 +475,7 @@ canvas,
 @media (prefers-reduced-motion: reduce) {
   .sprite-blink { animation: none; }
 }
+
+@keyframes dmg { from { transform: translate(-50%, 0); opacity: 1; } to { transform: translate(-50%, -34px); opacity: 0; } }
+@keyframes marker-ping { from { transform: translate(-50%, -50%) scale(.4); opacity: 1; } to { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } }
+.marker-ping { animation: marker-ping 600ms ease-out forwards; }
