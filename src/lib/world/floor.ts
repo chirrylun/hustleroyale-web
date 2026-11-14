@@ -93,7 +93,10 @@ export interface Floor {
   /** Tile column used for each ground tile. */
   variant: Uint8Array;
   props: PropSpec[];
+  /** The mobs standing about when the floor is entered. More walk in over time (see `rollMob`). */
   mobs: MobSpec[];
+  /** Open ground where mobs live and new ones appear: x, y, radius in tiles. */
+  zones: [number, number, number][];
   start: [number, number];
   exit: [number, number];
   nav: NavLayout;
@@ -116,6 +119,19 @@ export const mobStats = (level: number, boss: boolean) => ({
   atk: Math.round((7 + 3.2 * level) * (boss ? 1.4 : 1)),
   def: Math.round(2 + 1.2 * level),
 });
+
+/** How many ordinary mobs a floor holds for one player; also how many kills open the portal. Bosses are extra. */
+export const baseMobCount = (n: number) => Math.min(9, 4 + Math.floor((((n - 1) % 10) + 1) / 2));
+
+/** A fresh ordinary mob for floor `n` (kind, level and stats), for the spawner. */
+export function rollMob(n: number, rand: () => number): Omit<MobSpec, "id" | "x" | "y"> {
+  const theme = themeOf(n);
+  const f = ((n - 1) % 10) + 1;
+  const rarity = RARITY[f <= 3 ? 0 : f <= 6 ? 1 : 2];
+  const kind = theme.mobs[Math.floor(rand() * theme.mobs.length)];
+  const level = Math.max(1, n + (rand() < 0.33 ? 1 : 0));
+  return { kind, rarity, sprite: `mob_${kind}_${rarity}`, level, boss: false, ...mobStats(level, false) };
+}
 
 export function generateFloor(n: number): Floor {
   const theme = themeOf(n);
@@ -225,7 +241,7 @@ export function generateFloor(n: number): Floor {
     const s = mobStats(level, isBoss);
     mobs.push({ id: mobs.length, kind, rarity, sprite: `mob_${kind}_${rarity}`, level, boss: isBoss, x, y, ...s });
   };
-  const count = Math.min(9, 4 + Math.floor(f / 2));
+  const count = baseMobCount(n);
   for (let i = 0; i < count; i++) {
     const c = clearings[i % clearings.length];
     const a = rand() * Math.PI * 2, d = r(0.4, Math.max(0.6, c[2] - 1.1));
@@ -236,7 +252,7 @@ export function generateFloor(n: number): Floor {
   if (boss) spawn(theme.boss_mob, "legendary", n + 2, true, exit[0] - 2.5, exit[1] - 0.2);
 
   return {
-    n, theme, w: W, h: H, cells, variant, props, mobs, start, exit,
+    n, theme, w: W, h: H, cells, variant, props, mobs, zones: clearings, start, exit,
     nav: { cols: W, rows: H, floor: { x0: 1.2, x1: W - 1.2, y0: 2.4, y1: H - 1 }, props: [...feet, ...liquidFeet(cells, W, H)] },
   };
 }

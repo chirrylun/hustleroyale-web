@@ -1,20 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type PointerEvent } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { mobScale } from "@/lib/sprites/designs";
 import type { GuildFighter } from "@/lib/guild";
-import { findPath, buildNav, nearestWalkable, type Pt } from "@/lib/guild-nav";
+import { findPath, buildNav, nearestWalkable, walkable, type Pt } from "@/lib/guild-nav";
+import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
 import { createClient } from "@/lib/supabase/client";
-import { MAX_FLOOR, TILE_SRC, generateFloor, isBossFloor, type Floor } from "@/lib/world/floor";
+import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
 
 const T = 48; // one tile on screen, in px
 const FRAME = 2.7; // a sprite frame, in tiles
 const EDGE = 44; // px from the screen edge where the camera starts to scroll
 const SPEED = 3.1;
 const MOB_SPEED = 2.3;
+/** How fast each kind ambles about when nobody is near (tiles per second) and how long it rests between walks (s). */
+const WANDER: Record<string, { speed: number; rest: [number, number] }> = {
+  slime: { speed: 0.7, rest: [2, 6] }, bat: { speed: 1.7, rest: [0.4, 1.6] }, mushroom: { speed: 0.6, rest: [3, 7] },
+  goblin: { speed: 1.1, rest: [1.5, 5] }, direwolf: { speed: 1.5, rest: [1, 4] }, golem: { speed: 0.5, rest: [3, 8] },
+};
+const LEASH = 11; // a mob gives up the chase this far from home
+const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+
+const makeAg = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "name" | "level" | "x" | "y" | "hp" | "atk" | "def" | "kind">): Ag => ({
+  role: "dps", max: p.hp, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false,
+  look: { rest: "idle", flip: false, act: null, n: 0 }, side,
+  slot: 0, speedMul: 1, delay: 0, sway: [0, 0], swayAt: 0, angle: Math.random() * Math.PI * 2, home: [p.x, p.y, 2], wanderAt: 0, born: -1e9, deadAt: 0,
+  ...p,
+});
+
 const depth = (y: number) => 10 + Math.round(y * 10);
 
 /** One fighter or mob. Its position and state are updated by the loop, so moving costs no React renders. */
@@ -42,6 +58,19 @@ interface Ag {
   el?: HTMLDivElement | null;
   bar?: HTMLDivElement | null;
   hpEl?: HTMLDivElement | null;
+  /** Allies: place in the formation (0 leads). */
+  slot: number;
+  /** Walking pace relative to the others, so a group never moves in lockstep. */
+  speedMul: number;
+  /** Allies: a short reaction delay before setting off when told to move (seconds). */
+  delay: number;
+  /** Allies: a small, slowly changing drift from their slot, so the formation stays loose. */
+  sway: Pt; swayAt: number;
+  /** Where on the ring around its target this fighter likes to stand. */
+  angle: number;
+  /** Mobs: the patch of ground it lives on, and when it next wanders (ms; Infinity while walking). */
+  home: [number, number, number]; wanderAt: number;
+  born: number; deadAt: number;
 }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -75,13 +104,13 @@ function Unit({ a }: { a: Ag }) {
  * Combat here runs in the browser and reports kills to the server, which checks the floor is unlocked and
  * pays XP. A fully server-run version comes with shared rooms.
  */
-export function FloorScreen({ floorNo, fighters, tutorialStep }: { floorNo: number; fighters: GuildFighter[]; tutorialStep: number }) {
+export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1 }: { floorNo: number; fighters: GuildFighter[]; tutorialStep: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number }) {
   const floor = useMemo(() => generateFloor(floorNo), [floorNo]);
   const [run, setRun] = useState(0); // bump to retry
-  return <FloorMap key={run} floor={floor} fighters={fighters} tutorialStep={tutorialStep} retry={() => setRun((r) => r + 1)} />;
+  return <FloorMap key={run} floor={floor} fighters={fighters} tutorialStep={tutorialStep} players={players} retry={() => setRun((r) => r + 1)} />;
 }
 
-function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; retry: () => void }) {
+function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; retry: () => void }) {
   const nav = useMemo(() => buildNav(floor.nav), [floor]);
   const squad = useMemo(() => {
     const team = fighters.filter((f) => f.team_slot != null).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
@@ -92,7 +121,12 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
   const foes = useRef<Ag[]>([]);
   const [ready, setReady] = useState(false);
   const [state, setState] = useState<"play" | "won" | "lost">("play");
-  const [left, setLeft] = useState(floor.mobs.length);
+  const goal = baseMobCount(floor.n); // kills that open the portal (boss floors also need the boss down)
+  const [kills, setKills] = useState(0);
+  const [bossDown, setBossDown] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+  const progress = useRef({ kills: 0, boss: false, unlocked: false, next: 0, heading: 0 });
   const [free, setFree] = useState(false); // camera detached from the party
 
   const view = useRef<HTMLDivElement>(null);
@@ -106,21 +140,30 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
 
   // Build the two sides once.
   useEffect(() => {
-    const mk = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "name" | "level" | "x" | "y" | "hp" | "atk" | "def" | "kind">): Ag => ({
-      role: "dps", max: p.hp, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false,
-      look: { rest: "idle", flip: false, act: null, n: 0 }, side, ...p,
-    });
-    allies.current = squad.map((f, i) =>
-      mk("ally", {
+    // Tanks lead, healers trail: that is the order they take in the formation.
+    const order = squad.map((f, i) => ({ f, i })).sort((p, q) => ROLE_RANK[p.f.template.role] - ROLE_RANK[q.f.template.role] || p.i - q.i);
+    allies.current = order.map(({ f }, slot) => {
+      const off = formationOffset(slot, order.length, 0);
+      const at = nearestWalkable(nav, floor.start[0] + 1.6 + off[0], floor.start[1] + off[1]);
+      return makeAg("ally", {
         id: f.id, sprite: f.template.sprite_key, role: f.template.role, name: f.template.name, level: f.level,
-        x: floor.start[0] + 1.6 + (i % 2) * 0.9, y: floor.start[1] + (i - 1) * 1.0, hp: f.hp, atk: f.atk, def: f.def, kind: "fighter",
+        x: at[0], y: at[1], hp: f.hp, atk: f.atk, def: f.def, kind: "fighter", slot, speedMul: rnd(0.93, 1.07),
+      });
+    });
+    const zoneOf = (x: number, y: number): [number, number, number] => {
+      let best = floor.zones[0] ?? [x, y, 2], bd = Infinity;
+      for (const z of floor.zones) { const d = Math.hypot(z[0] - x, z[1] - y); if (d < bd) { bd = d; best = z; } }
+      return best;
+    };
+    foes.current = floor.mobs.map((m) =>
+      makeAg("foe", {
+        id: `m${m.id}`, sprite: m.sprite, name: m.kind, level: m.level, x: m.x, y: m.y, hp: m.hp, atk: m.atk, def: m.def, boss: m.boss, kind: m.kind,
+        home: m.boss ? [m.x, m.y, 1.5] : zoneOf(m.x, m.y), wanderAt: rnd(0, 3000), speedMul: rnd(0.9, 1.1),
       }),
     );
-    foes.current = floor.mobs.map((m) =>
-      mk("foe", { id: `m${m.id}`, sprite: m.sprite, name: m.kind, level: m.level, x: m.x, y: m.y, hp: m.hp, atk: m.atk, def: m.def, boss: m.boss, kind: m.kind }),
-    );
+    progress.current.next = performance.now() + 8000;
     setReady(true);
-  }, [floor, squad]);
+  }, [floor, squad, nav]);
 
   // Ground: grass everywhere, then road and water laid on top through a soft mask so edges blend.
   useEffect(() => {
@@ -172,8 +215,7 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
   };
 
   const killReport = (m: Ag) => {
-    const spec = floor.mobs[Number(m.id.slice(1))];
-    void createClient().rpc("report_floor_kill", { p_floor: floor.n, p_kind: spec.kind, p_level: spec.level, p_boss: spec.boss });
+    void createClient().rpc("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss });
   };
 
   // The loop: movement, fighting, camera.
@@ -188,7 +230,8 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
       if (d <= m) { a.x = p[0]; a.y = p[1]; a.path.shift(); } else { a.x += (dx / d) * m; a.y += (dy / d) * m; }
       return true;
     };
-    const hurt = (from: Ag, to: Ag) => {
+    let spawnId = 0;
+    const hurt = (from: Ag, to: Ag, now: number) => {
       const raw = from.side === "ally" ? from.atk - to.def * 0.5 : from.atk - to.def * 0.45;
       const dmg = Math.max(2, Math.round(raw * (0.9 + Math.random() * 0.2)));
       to.hp = Math.max(0, to.hp - dmg);
@@ -196,12 +239,38 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
       from.look.act = "attack"; from.look.n++;
       spawnText(to.x, to.y, String(dmg), from.side === "ally" ? "text-gold" : "text-ember");
       if (to.hp <= 0) {
-        to.dead = true; to.path = [];
+        to.dead = true; to.path = []; to.deadAt = now;
         if (to.side === "foe") {
           killReport(to);
-          setLeft(foes.current.filter((f) => !f.dead).length);
+          const pr = progress.current;
+          if (to.boss) { pr.boss = true; setBossDown(true); } else { pr.kills++; setKills(pr.kills); }
+          // The floor refills slowly: a kill buys a quiet spell before the next arrival.
+          const plan = spawnPlan(baseMobCount(floor.n), players);
+          pr.next = Math.max(pr.next, now + rnd(plan.afterKillMs[0], plan.afterKillMs[1]));
         }
       }
+    };
+
+    /** A new mob walks in from a patch of open ground, out of sight of the party when it can. */
+    const trySpawn = (now: number, A: Ag[], F: Ag[]) => {
+      if (!floor.zones.length) return false;
+      for (let n = 0; n < 14; n++) {
+        const z = floor.zones[Math.floor(Math.random() * floor.zones.length)];
+        const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * Math.max(0.6, z[2] - 1);
+        const x = z[0] + Math.cos(ang) * d, y = z[1] + Math.sin(ang) * d * 0.7;
+        if (!walkable(nav, x, y)) continue;
+        const away = n < 9 ? 10 : 6;
+        if (A.some((a) => !a.dead && dist(a, { x, y }) < away)) continue;
+        if (F.some((f) => !f.dead && Math.hypot(f.x - x, f.y - y) < 1.6)) continue;
+        const m = rollMob(floor.n, Math.random);
+        foes.current.push(makeAg("foe", {
+          id: `s${spawnId++}`, sprite: m.sprite, name: m.kind, level: m.level, x, y, hp: m.hp, atk: m.atk, def: m.def, kind: m.kind,
+          home: [z[0], z[1], z[2]], wanderAt: now + rnd(1000, 3000), speedMul: rnd(0.9, 1.1), born: now, cd: 1,
+        }));
+        rerender();
+        return true;
+      }
+      return false;
     };
 
     const tick = (now: number) => {
@@ -210,61 +279,110 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
       const A = allies.current, F = foes.current;
       const live = stateRef.current === "play";
       const aliveA = A.filter((a) => !a.dead), aliveF = F.filter((f) => !f.dead);
+      const pr = progress.current;
 
       if (live) {
-        for (const a of aliveA) {
+        const lead = aliveA[0];
+        // The party's heading follows where it is going, smoothly, so the formation turns instead of snapping.
+        const mover = lead && lead.path.length ? lead : aliveA.find((a) => a.path.length);
+        if (mover) {
+          const q = mover.path[0];
+          pr.heading += angleDiff(Math.atan2(q[1] - mover.y, q[0] - mover.x), pr.heading) * Math.min(1, dt * 3);
+        }
+
+        aliveA.forEach((a, i) => {
           a.cd = Math.max(0, a.cd - dt);
           a.repath -= dt;
+          const spd = SPEED * a.speedMul;
           if (a.held) {
-            if (!step(a, dt, SPEED)) a.held = false;
-            continue;
+            if (a.delay > 0) { a.delay -= dt; return; } // each one sets off a beat apart
+            if (!step(a, dt, spd)) a.held = false;
+            return;
           }
           if (!a.target || a.target.dead) {
             a.target = null;
             let best = 7;
             for (const f of aliveF) { const d = dist(a, f); if (d < best) { best = d; a.target = f; } }
+            // Each fighter takes its own side of the foe instead of piling onto one point.
+            if (a.target) a.angle = Math.atan2(a.y - a.target.y, a.x - a.target.x) + (i === 0 ? 0 : i % 2 ? 0.9 : -0.9);
           }
           if (a.target) {
-            const d = dist(a, a.target);
-            if (d > 1.2) {
-              if (a.repath <= 0 || !a.path.length) { a.path = findPath(nav, [a.x, a.y], [a.target.x, a.target.y]); a.repath = 0.6; }
-              step(a, dt, SPEED);
+            const t = a.target, d = dist(a, t);
+            if (d > 1.35) {
+              if (a.repath <= 0 || !a.path.length) { a.path = findPath(nav, [a.x, a.y], ringPoint(t, a.angle, 1.0)); a.repath = 0.6; }
+              step(a, dt, spd);
             } else {
               a.path = [];
-              a.look.flip = a.target.x < a.x;
-              if (a.cd <= 0) { a.cd = 0.9; hurt(a, a.target); }
+              a.look.flip = t.x < a.x;
+              if (a.cd <= 0) { a.cd = 0.9 * rnd(0.92, 1.15); hurt(a, t, now); }
             }
-          } else {
-            // No foe near: stay with the group.
-            const lead = aliveA[0];
-            if (lead !== a && dist(a, lead) > 2.4) {
-              if (a.repath <= 0 || !a.path.length) { a.path = findPath(nav, [a.x, a.y], [lead.x, lead.y]); a.repath = 0.8; }
-              step(a, dt, SPEED);
-            }
+          } else if (a !== lead) {
+            // No foe near: drift along with the leader in a loose formation, each a little off its slot.
+            if (now > a.swayAt) { a.sway = [rnd(-0.5, 0.5), rnd(-0.4, 0.4)]; a.swayAt = now + rnd(3000, 6000); }
+            const off = formationOffset(i, aliveA.length, pr.heading);
+            const want: Pt = [lead.x + off[0] + a.sway[0], lead.y + off[1] + a.sway[1]];
+            const d = Math.hypot(want[0] - a.x, want[1] - a.y);
+            if (d > 0.9 && a.repath <= 0) { a.path = findPath(nav, [a.x, a.y], want); a.repath = 0.7; }
+            step(a, dt, spd * (d > 4 ? 1.12 : 1));
           }
-        }
+        });
+
         for (const f of aliveF) {
           f.cd = Math.max(0, f.cd - dt);
           f.repath -= dt;
-          if (!f.target || f.target.dead) {
-            f.target = null;
+          if (now - f.born < 900) continue; // just arrived
+          if (f.target && (f.target.dead || Math.hypot(f.x - f.home[0], f.y - f.home[1]) > LEASH)) {
+            f.target = null; f.path = []; f.wanderAt = now + 600; // gives up and heads back home
+          }
+          if (!f.target) {
             let best = f.boss ? 7 : 4.6;
             for (const a of aliveA) { const d = dist(f, a); if (d < best) { best = d; f.target = a; } }
+            if (f.target) { f.angle = Math.atan2(f.y - f.target.y, f.x - f.target.x) + rnd(-0.8, 0.8); f.path = []; }
           }
-          if (!f.target) continue;
-          if (dist(f, f.target) > 1.15) {
-            if (f.repath <= 0 || !f.path.length) { f.path = findPath(nav, [f.x, f.y], [f.target.x, f.target.y]); f.repath = 0.6; }
-            step(f, dt, MOB_SPEED);
+          if (!f.target) {
+            // Nobody near: amble about its patch, rest a while, amble again.
+            const w = WANDER[f.kind] ?? WANDER.slime;
+            if (f.path.length) step(f, dt, w.speed * f.speedMul);
+            else if (f.wanderAt === Infinity) f.wanderAt = now + rnd(w.rest[0], w.rest[1]) * 1000;
+            else if (now >= f.wanderAt) {
+              const rad = f.home[2] * 0.85, ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * rad;
+              const to = nearestWalkable(nav, f.home[0] + Math.cos(ang) * d, f.home[1] + Math.sin(ang) * d * 0.7);
+              f.path = findPath(nav, [f.x, f.y], to);
+              f.wanderAt = f.path.length ? Infinity : now + 2000;
+            }
+            continue;
+          }
+          const t = f.target;
+          if (dist(f, t) > 1.3) {
+            if (f.repath <= 0 || !f.path.length) { f.path = findPath(nav, [f.x, f.y], ringPoint(t, f.angle, 0.95)); f.repath = 0.6; }
+            step(f, dt, MOB_SPEED * f.speedMul);
           } else {
             f.path = [];
-            f.look.flip = f.target.x < f.x;
-            if (f.cd <= 0) { f.cd = 1.3; hurt(f, f.target); }
+            f.look.flip = t.x < f.x;
+            if (f.cd <= 0) { f.cd = 1.3; hurt(f, t, now); }
           }
         }
+
+        // Keep bodies apart so nobody stands inside anybody else.
+        separate([...aliveA, ...aliveF].filter((u) => !u.dead), nav);
+
+        // New arrivals, one at a time and never in a rush.
+        const plan = spawnPlan(baseMobCount(floor.n), players);
+        if (F.filter((f) => !f.dead && !f.boss).length < plan.cap && now >= pr.next) {
+          pr.next = trySpawn(now, A, F) ? now + rnd(plan.gapMs[0], plan.gapMs[1]) : now + 2000;
+        }
+        // The fallen fade, then are cleared away.
+        if (F.some((f) => f.dead && now - f.deadAt > 2500)) {
+          foes.current = F.filter((f) => !(f.dead && now - f.deadAt > 2500));
+          rerender();
+        }
+
         if (!A.some((a) => !a.dead)) setState("lost");
-        else if (F.every((f) => f.dead)) {
-          const lead = A.find((a) => !a.dead)!;
-          if (dist(lead, { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 }) < 2.4) {
+        else {
+          const goalMet = pr.kills >= goal && (!isBossFloor(floor.n) || pr.boss);
+          if (goalMet && !pr.unlocked) { pr.unlocked = true; setUnlocked(true); }
+          const lead2 = A.find((a) => !a.dead)!;
+          if (goalMet && dist(lead2, { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 }) < 2.4) {
             setState("won");
             void createClient().rpc("clear_floor", { p_floor: floor.n });
           }
@@ -276,7 +394,7 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
         if (!u.el) continue;
         u.el.style.transform = `translate(${u.x * T}px, ${u.y * T}px)`;
         u.el.style.zIndex = String(depth(u.y));
-        u.el.style.opacity = u.dead ? "0" : "1";
+        u.el.style.opacity = u.dead ? "0" : String(Math.min(1, (now - u.born) / 800)); // new arrivals fade in
         u.el.style.transition = u.dead ? "opacity .6s" : "";
         if (u.hpEl) u.hpEl.style.width = `${(u.hp / u.max) * 100}%`;
         const moving = u.path.length > 0 && !u.dead;
@@ -355,12 +473,23 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
     const wx = (p.x + c.x) / T, wy = (p.y + c.y) / T;
     const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 - wy) < 0.9);
     const live = allies.current.filter((a) => !a.dead);
-    if (foe) { for (const a of live) { a.target = foe; a.held = false; a.path = []; } return; }
+    if (foe) {
+      live.forEach((a, i) => {
+        a.target = foe; a.held = false; a.path = [];
+        a.angle = Math.atan2(a.y - foe.y, a.x - foe.x) + (i === 0 ? 0 : i % 2 ? 0.9 : -0.9);
+      });
+      return;
+    }
     const goal = nearestWalkable(nav, wx, wy);
+    // The party arrives as a group facing the way it travelled, not all on the tapped point.
+    const heading = live.length ? Math.atan2(goal[1] - live[0].y, goal[0] - live[0].x) : 0;
+    progress.current.heading = heading;
     live.forEach((a, i) => {
-      const to: Pt = nearestWalkable(nav, goal[0] + (i % 2 ? 0.8 : -0.8), goal[1] + (i - 1) * 0.5);
+      const off = formationOffset(i, live.length, heading);
+      const to: Pt = nearestWalkable(nav, goal[0] + off[0], goal[1] + off[1]);
       a.path = findPath(nav, [a.x, a.y], to);
       a.held = a.path.length > 0; a.target = null;
+      a.delay = i === 0 ? 0 : rnd(0.05, 0.35);
     });
     const m = marker.current;
     if (m) { m.style.left = `${goal[0] * T}px`; m.style.top = `${goal[1] * T}px`; m.classList.remove("marker-ping"); void m.offsetWidth; m.classList.add("marker-ping"); }
@@ -371,7 +500,6 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
   const boss = isBossFloor(floor.n);
   const quest = tutorialStep === 8 && floor.n === 1;
   const next = floor.n < MAX_FLOOR;
-  const alive = left;
 
   return (
     <div className="relative flex h-dvh w-full flex-col bg-ink">
@@ -381,7 +509,7 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
           <p className="truncate text-lg uppercase text-gold">Floor {floor.n}{boss && " · Boss"}</p>
           <p className="truncate text-sm text-steel">{floor.theme.name}</p>
         </div>
-        <p className="text-lg">Foes <span className="text-ember">{alive}</span>/{floor.mobs.length}</p>
+        <p className="text-lg">Defeated <span className="text-ember">{kills}</span>/{goal}{boss && <span className={bossDown ? "text-leaf" : "text-gold"}> · Boss{bossDown && " ✓"}</span>}</p>
       </div>
       {quest && state === "play" && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">First job: defeat a bat on this floor.</p>}
 
@@ -406,7 +534,7 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
                   backgroundImage: `url(${A.url})`, backgroundSize: `${A.w * k}px ${A.h * k}px`,
                   backgroundPosition: `${-r.x * k}px ${-r.y * k}px`, imageRendering: "auto",
                   zIndex: p.kind === "decor" ? 4 : depth(p.y),
-                  filter: p.kind === "exit" && alive > 0 ? "grayscale(.85) brightness(.7)" : undefined,
+                  filter: p.kind === "exit" && !unlocked ? "grayscale(.85) brightness(.7)" : undefined,
                 }}
               />
             );
@@ -420,7 +548,7 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
         </button>
         {free && <button type="button" onClick={recenter} className="pixel-box absolute bottom-3 right-3 z-[9600] bg-night/90 px-3 py-1 text-lg uppercase text-paper">Follow party</button>}
 
-        {state === "play" && alive === 0 && <p className="pointer-events-none absolute inset-x-0 top-3 z-[9600] text-center text-2xl uppercase text-gold drop-shadow">Floor clear! Head for the portal.</p>}
+        {state === "play" && unlocked && <p className="pointer-events-none absolute inset-x-0 top-3 z-[9600] text-center text-2xl uppercase text-gold drop-shadow">Floor clear! Head for the portal.</p>}
 
         {state !== "play" && (
           <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
