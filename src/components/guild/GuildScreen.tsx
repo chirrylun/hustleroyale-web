@@ -73,8 +73,8 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         {step === 6 && !panel && (
           <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
             <InfoBox step={0} total={1} title="Your guild" onNext={() => onAction("jobs")} nextLabel="Open job board">
-              <p>This is home. Your fighters roam here. Tap one, then tap the floor to send it somewhere.</p>
-              <p>Tap the glowing job board to find work.</p>
+              <p>This is your guild. Your control your adventurers and send them on quests from here. Let's get started with your first quest</p>
+              <p>Tap the glowing Job board to find work.</p>
             </InfoBox>
           </div>
         )}
