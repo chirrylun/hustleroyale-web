@@ -30,6 +30,8 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
   }, [notice]);
 
   const firstJobOpen = step < 9;
+  /** Floors open one at a time: every cleared floor plus the next one. Nothing beyond that is shown. */
+  const unlocked = Math.min(MAX_FLOOR, floorCleared + 1);
 
   const setTut = (n: number) => { setStep(n); void createClient().rpc("set_tutorial_step", { p_step: n }); };
   const claim = () =>
@@ -94,17 +96,13 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
                   <h2 className="mb-2 text-2xl uppercase text-gold">Adventure</h2>
                   {step < 9 && <p className="mb-2 text-xl text-paper">Floor 1 has a bat waiting for you.</p>}
                   <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
-                    {[0, 1, 2, 3].map((t) => (
+                    {[0, 1, 2, 3].filter((t) => t * 10 + 1 <= unlocked).map((t) => (
                       <div key={t}>
                         <p className="mb-1 text-base uppercase text-steel">{themeOf(t * 10 + 1).name}</p>
                         <div className="grid grid-cols-5 gap-1.5">
-                          {Array.from({ length: 10 }, (_, i) => t * 10 + i + 1).filter((n) => n <= MAX_FLOOR).map((n) =>
-                            n <= floorCleared + 1 ? (
-                              <Link key={n} href={`/floor/${n}`} className={`pixel-box py-1.5 text-center text-xl ${n <= floorCleared ? "bg-panel text-leaf" : "bg-gold text-ink"}`}>{n}</Link>
-                            ) : (
-                              <span key={n} className="pixel-box bg-night py-1.5 text-center text-xl text-steel/50" aria-label={`Floor ${n} locked`}>{n}</span>
-                            ),
-                          )}
+                          {Array.from({ length: 10 }, (_, i) => t * 10 + i + 1).filter((n) => n <= unlocked).map((n) => (
+                            <Link key={n} href={`/floor/${n}`} className={`pixel-box py-1.5 text-center text-xl ${n <= floorCleared ? "bg-panel text-leaf" : "bg-gold text-ink"}`}>{n}</Link>
+                          ))}
                         </div>
                       </div>
                     ))}

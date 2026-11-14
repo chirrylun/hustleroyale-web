@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
+import { mobScale } from "@/lib/sprites/designs";
 import type { GuildFighter } from "@/lib/guild";
 import { findPath, buildNav, nearestWalkable, type Pt } from "@/lib/guild-nav";
 import { createClient } from "@/lib/supabase/client";
@@ -47,14 +48,15 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.
 
 function Unit({ a }: { a: Ag }) {
   const [look, setLook] = useState(a.look);
-  const size = FRAME * T * (a.boss ? 1.5 : 1);
+  // Bosses are drawn large on purpose; everything else is scaled to a realistic size next to a fighter.
+  const size = FRAME * T * (a.boss ? 1.5 : mobScale(a.sprite));
   return (
     <div
       ref={(el) => { a.el = el; a.setLook = setLook; }}
       className="absolute left-0 top-0 will-change-transform"
       style={{ width: size, height: size, marginLeft: -size / 2, marginTop: -size * 0.86 }}
     >
-      <div className="absolute left-1/4 top-0 h-1.5 w-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
+      <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
         <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
       </div>
       <FighterSprite

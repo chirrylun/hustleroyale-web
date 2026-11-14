@@ -6,6 +6,7 @@ import { ArenaBackdrop } from "@/components/home/ArenaBackdrop";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { FxSprite } from "@/components/sprites/FxSprite";
 import { BLINK_MS } from "@/lib/battle";
+import { mobScale } from "@/lib/sprites/designs";
 import type { BattleView, Effect, FloatText, LiveUnit, Phase, Side, UnitMeta } from "@/lib/battle";
 
 /** The street in the backdrop starts ~58% of the way down; fighters stand on that band. */
@@ -222,6 +223,7 @@ export function Arena({
               )}
               <div className={clsx("origin-bottom", fxClass(live, meta.side))} key={live.fx.n}>
                 <div className={clsx(live.alive && charging && !stunned && "sprite-charge", stunned && "sprite-stunned", hidden && "sprite-hidden", blinking && "sprite-blink")}>
+                  <div className="mx-auto" style={{ width: `${mobScale(meta.spriteKey) * 100}%` }}>
                   <FighterSprite
                     spriteKey={meta.spriteKey}
                     role={meta.role}
@@ -232,6 +234,7 @@ export function Arena({
                     tempo={0.8 + Math.min(meta.spd, 100) / 200}
                     className="-mb-[10%]"
                   />
+                  </div>
                 </div>
               </div>
               <div className={clsx("mx-auto -mt-1.5 h-1.5 w-3/4 translate-y-[3px] rounded-full", meta.controlled ? "bg-gold/70" : "bg-black/40")} />

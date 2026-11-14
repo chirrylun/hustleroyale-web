@@ -22,6 +22,17 @@ const TIER: Record<string, number> = {
 /** Archetypes that have their own sheet at /sprites/<archetype>_<rarity>.png. Add a name here once its four sheets are in. */
 const ARCHETYPE_ART = new Set<string>(["paladin", "bard", "marksman", "necromancer", "rogue", "magical_dps"]);
 
+/**
+ * Mob sheets all draw the creature big enough to fill its frame, which makes a slime as tall as a hero and
+ * three times as wide. This scales each kind to a believable size next to a fighter (about 1.8 m, 120 px
+ * of a frame): slimes knee-high, bats the size of bats, a wolf long and low. Bosses keep the full size.
+ */
+const MOB_SCALE: Record<string, number> = { slime: 0.3, bat: 0.35, mushroom: 0.5, goblin: 0.6, direwolf: 0.62, golem: 1 };
+export const mobScale = (spriteKey: string): number => {
+  const m = /^mob_([a-z]+)_/.exec(spriteKey);
+  return m ? (MOB_SCALE[m[1]] ?? 1) : 1;
+};
+
 /** Keys look like `<archetype>_<rarity>`. Archetypes without art yet wear their class sheet at the same rarity. */
 export const sheetUrl = (key: string, role: Role) => {
   if (key === "skeleton" || key === "novice_male" || key === "novice_female" || key.startsWith("mob_") || key.startsWith("recruit_")) return `/sprites/${key}.png`;
