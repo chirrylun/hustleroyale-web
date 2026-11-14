@@ -22,9 +22,11 @@ export function Tutorial({ username, initialStep, fighters: existing }: { userna
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
 
+  // rpc() only sends once awaited, so the save lives in an async function.
+  const save = async (n: number) => { await createClient().rpc("set_tutorial_step", { p_step: n }); };
   const go = (n: number) => {
     setStep(n);
-    void createClient().rpc("set_tutorial_step", { p_step: n });
+    void save(n);
   };
   const finish = () =>
     start(async () => {

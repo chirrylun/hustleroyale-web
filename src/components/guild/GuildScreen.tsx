@@ -33,12 +33,28 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
   /** Floors open one at a time: every cleared floor plus the next one. Nothing beyond that is shown. */
   const unlocked = Math.min(MAX_FLOOR, floorCleared + 1);
 
-  const setTut = (n: number) => { setStep(n); void createClient().rpc("set_tutorial_step", { p_step: n }); };
+  // Supabase's rpc() only sends once it is awaited, so every call here is awaited inside an async function.
+  const saveStep = async (n: number) => {
+    const { error } = await createClient().rpc("set_tutorial_step", { p_step: n });
+    return !error;
+  };
+  const setTut = (n: number) => { setStep(n); void saveStep(n); };
+  /** Taking the job is saved first: the server only counts the bat kill (and the claim) once it knows the job was taken. */
+  const takeJob = () =>
+    start(async () => {
+      setMsg(null);
+      if (!(await saveStep(8))) return setMsg("Couldn't take the job. Try again.");
+      setStep(8);
+    });
   const claim = () =>
     start(async () => {
       setMsg(null);
       const { error } = await createClient().rpc("claim_first_job");
-      if (error) return setMsg(error.message.includes("job_not_done") ? "Kill the bat on Floor 1 first." : "That didn't work. Try again.");
+      if (error) {
+        if (error.message.includes("job_not_done")) return setMsg("Kill the bat on Floor 1 first.");
+        if (error.message.includes("no_job_to_claim")) return setMsg("Take the job from the board first.");
+        return setMsg("That didn't work. Try again.");
+      }
       setStep(9);
       router.refresh();
     });
@@ -123,7 +139,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     {step === 7 ? (
-                      <PixelButton onClick={() => setTut(8)}>Take job</PixelButton>
+                      <PixelButton disabled={busy} onClick={takeJob}>Take job</PixelButton>
                     ) : (
                       <>
                         <PixelButton onClick={() => setPanel("adventure")}>Go to adventure</PixelButton>

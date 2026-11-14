@@ -6,7 +6,9 @@ import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { mobScale } from "@/lib/sprites/designs";
 import type { GuildFighter } from "@/lib/guild";
-import { findPath, buildNav, nearestWalkable, walkable, type Pt } from "@/lib/guild-nav";
+import { findPath, buildNav, clearLine, nearestWalkable, walkable, type Pt } from "@/lib/guild-nav";
+import type { Stance } from "@/lib/battle";
+import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal, sway } from "@/lib/world/stance";
 import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
 import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
@@ -28,6 +30,7 @@ const makeAg = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "n
   role: "dps", max: p.hp, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false,
   look: { rest: "idle", flip: false, act: null, n: 0 }, side,
   slot: 0, speedMul: 1, delay: 0, sway: [0, 0], swayAt: 0, angle: Math.random() * Math.PI * 2, home: [p.x, p.y, 2], wanderAt: 0, born: -1e9, deadAt: 0,
+  movedAt: 0, skipId: "", skipUntil: 0,
   ...p,
 });
 
@@ -71,6 +74,10 @@ interface Ag {
   /** Mobs: the patch of ground it lives on, and when it next wanders (ms; Infinity while walking). */
   home: [number, number, number]; wanderAt: number;
   born: number; deadAt: number;
+  /** When it last moved (ms), so the walk animation does not flicker on and off between short hops. */
+  movedAt: number;
+  /** A foe it could not find a way to, left alone until `skipUntil` (ms). */
+  skipId: string; skipUntil: number;
 }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -126,7 +133,9 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
   const [bossDown, setBossDown] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
-  const progress = useRef({ kills: 0, boss: false, unlocked: false, next: 0, heading: 0 });
+  const progress = useRef({ kills: 0, boss: false, unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false });
+  const [stance, setStanceState] = useState<Stance>("neutral");
+  const stanceRef = useRef<Stance>("neutral");
   const [free, setFree] = useState(false); // camera detached from the party
 
   const view = useRef<HTMLDivElement>(null);
@@ -162,6 +171,9 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
       }),
     );
     progress.current.next = performance.now() + 8000;
+    progress.current.strollAt = performance.now() + 3500;
+    const lead0 = allies.current[0];
+    if (lead0) progress.current.anchor = [lead0.x, lead0.y];
     setReady(true);
   }, [floor, squad, nav]);
 
@@ -214,9 +226,22 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
     setTimeout(() => d.remove(), 720);
   };
 
-  const killReport = (m: Ag) => {
-    void createClient().rpc("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss });
+  // Supabase's rpc() only sends once it is awaited. Kills are reported in order, each retried a few times so a
+  // blip in the connection can't lose one (the server pays XP, drops and quest progress from these).
+  const reports = useRef<Promise<void>>(Promise.resolve());
+  const send = (fn: string, args: Record<string, unknown>) => {
+    reports.current = reports.current.then(async () => {
+      for (let i = 0; i < 3; i++) {
+        try {
+          const { error } = await createClient().rpc(fn, args);
+          if (!error) return;
+          if (/floor_locked|bad_monster|unauthorized/.test(error.message)) return; // retrying won't help
+        } catch { /* network error: try again */ }
+        await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+      }
+    });
   };
+  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss });
 
   // The loop: movement, fighting, camera.
   useEffect(() => {
@@ -290,6 +315,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
           pr.heading += angleDiff(Math.atan2(q[1] - mover.y, q[0] - mover.x), pr.heading) * Math.min(1, dt * 3);
         }
 
+        const rule = RULES[stanceRef.current];
+        const hold = stanceRef.current === "defensive";
+        const spot = pr.anchor; // the ground Defend holds: where the party stood, or where it was last sent
+
         aliveA.forEach((a, i) => {
           a.cd = Math.max(0, a.cd - dt);
           a.repath -= dt;
@@ -299,31 +328,59 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
             if (!step(a, dt, spd)) a.held = false;
             return;
           }
-          if (!a.target || a.target.dead) {
-            a.target = null;
-            let best = 7;
-            for (const f of aliveF) { const d = dist(a, f); if (d < best) { best = d; a.target = f; } }
+          if (a.target && a.target.dead) a.target = null;
+          if (!a.target) {
+            // How far each fighter looks, and whether it may wander off the held ground, depends on the stance.
+            let best = rule.aggro;
+            for (const f of aliveF) {
+              if (f.id === a.skipId && now < a.skipUntil) continue;
+              const d = dist(a, f);
+              if (d >= best) continue;
+              if (hold && Math.hypot(f.x - spot[0], f.y - spot[1]) > rule.leash) continue;
+              best = d; a.target = f;
+            }
             // Each fighter takes its own side of the foe instead of piling onto one point.
             if (a.target) a.angle = Math.atan2(a.y - a.target.y, a.x - a.target.x) + (i === 0 ? 0 : i % 2 ? 0.9 : -0.9);
           }
           if (a.target) {
             const t = a.target, d = dist(a, t);
             if (d > 1.35) {
-              if (a.repath <= 0 || !a.path.length) { a.path = findPath(nav, [a.x, a.y], ringPoint(t, a.angle, 1.0)); a.repath = 0.6; }
-              step(a, dt, spd);
+              if (a.repath <= 0 || !a.path.length) {
+                a.path = findPath(nav, [a.x, a.y], ringPoint(t, a.angle, 1.0));
+                a.repath = d > 14 ? 1.4 : 0.6; // long routes are worked out less often
+                if (!a.path.length) { a.skipId = t.id; a.skipUntil = now + 4000; a.target = null; return; } // no way through: try another
+              }
+              step(a, dt, spd * rule.charge);
             } else {
               a.path = [];
               a.look.flip = t.x < a.x;
               if (a.cd <= 0) { a.cd = 0.9 * rnd(0.92, 1.15); hurt(a, t, now); }
             }
-          } else if (a !== lead) {
-            // No foe near: drift along with the leader in a loose formation, each a little off its slot.
-            if (now > a.swayAt) { a.sway = [rnd(-0.5, 0.5), rnd(-0.4, 0.4)]; a.swayAt = now + rnd(3000, 6000); }
+          } else if (hold || a !== lead) {
+            // Nothing to fight: keep a loose formation around the leader (or around the held ground). Each fighter
+            // eases toward its slot and drifts a little, slowly and smoothly, instead of twitching.
+            const ref: Pt = hold ? spot : [lead.x, lead.y];
             const off = formationOffset(i, aliveA.length, pr.heading);
-            const want: Pt = [lead.x + off[0] + a.sway[0], lead.y + off[1] + a.sway[1]];
+            const w = sway(a.slot * 2.1 + a.speedMul * 6, now);
+            const want: Pt = [ref[0] + off[0] + w[0], ref[1] + off[1] + w[1]];
             const d = Math.hypot(want[0] - a.x, want[1] - a.y);
-            if (d > 0.9 && a.repath <= 0) { a.path = findPath(nav, [a.x, a.y], want); a.repath = 0.7; }
-            step(a, dt, spd * (d > 4 ? 1.12 : 1));
+            if (d > (a.path.length ? STOP_MOVING : START_MOVING)) {
+              if (a.repath <= 0 || !a.path.length) {
+                const me: Pt = [a.x, a.y];
+                a.path = d < 1.5 && walkable(nav, want[0], want[1]) && clearLine(nav, me, want) ? [want] : findPath(nav, me, want);
+                a.repath = 0.5;
+              }
+              step(a, dt, spd * arriveEase(d));
+            } else a.path = [];
+          } else if (stanceRef.current === "neutral") {
+            // The leader strolls a few tiles toward the mobs, rests, then strolls again; the others flow along behind.
+            if (a.path.length) { pr.strolling = true; step(a, dt, spd * STROLL_SPEED); }
+            else if (pr.strolling) { pr.strolling = false; pr.strollAt = now + rnd(4500, 9000); }
+            else if (pr.strollAt < 0) pr.strollAt = now + 2500;
+            else if (now >= pr.strollAt) {
+              a.path = findPath(nav, [a.x, a.y], strollGoal(nav, [a.x, a.y], floor.zones));
+              if (!a.path.length) pr.strollAt = now + 3000;
+            }
           }
         });
 
@@ -384,7 +441,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
           const lead2 = A.find((a) => !a.dead)!;
           if (goalMet && dist(lead2, { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 }) < 2.4) {
             setState("won");
-            void createClient().rpc("clear_floor", { p_floor: floor.n });
+            send("clear_floor", { p_floor: floor.n });
           }
         }
       }
@@ -397,7 +454,8 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
         u.el.style.opacity = u.dead ? "0" : String(Math.min(1, (now - u.born) / 800)); // new arrivals fade in
         u.el.style.transition = u.dead ? "opacity .6s" : "";
         if (u.hpEl) u.hpEl.style.width = `${(u.hp / u.max) * 100}%`;
-        const moving = u.path.length > 0 && !u.dead;
+        if (u.path.length > 0 && !u.dead) u.movedAt = now;
+        const moving = !u.dead && now - u.movedAt < 220; // short pauses between hops don't flicker to idle
         const rest = u.dead ? "stun" : moving ? "walk" : "idle";
         const l = u.look;
         if (l.rest !== rest) l.rest = rest;
@@ -484,6 +542,8 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
     // The party arrives as a group facing the way it travelled, not all on the tapped point.
     const heading = live.length ? Math.atan2(goal[1] - live[0].y, goal[0] - live[0].x) : 0;
     progress.current.heading = heading;
+    progress.current.anchor = goal; // Defend holds wherever the party was last sent
+    progress.current.strolling = false;
     live.forEach((a, i) => {
       const off = formationOffset(i, live.length, heading);
       const to: Pt = nearestWalkable(nav, goal[0] + off[0], goal[1] + off[1]);
@@ -495,6 +555,16 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
     if (m) { m.style.left = `${goal[0] * T}px`; m.style.top = `${goal[1] * T}px`; m.classList.remove("marker-ping"); void m.offsetWidth; m.classList.add("marker-ping"); }
   };
   const recenter = () => { cam.current.free = false; setFree(false); };
+
+  const pickStance = (s: Stance) => {
+    stanceRef.current = s;
+    setStanceState(s);
+    const pr = progress.current, lead = allies.current.find((a) => !a.dead);
+    if (lead) pr.anchor = [lead.x, lead.y]; // Defend holds where the party is standing right now
+    pr.strolling = false; pr.strollAt = -1; // the loop schedules the next stroll
+    // Everyone looks again under the new rules, so the buttons feel immediate.
+    allies.current.forEach((a) => { if (!a.held) { a.target = null; a.path = []; } });
+  };
 
   const A = floor.theme.atlas;
   const boss = isBossFloor(floor.n);
@@ -576,6 +646,20 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
           </div>
         )}
       </div>
+
+      {state === "play" && (
+        <div role="group" aria-label="Party behaviour" className="z-[9500] grid grid-cols-3 gap-2 bg-night/90 px-3 py-2">
+          {STANCES.map((o) => (
+            <button
+              key={o.id} type="button" aria-pressed={stance === o.id} onClick={() => pickStance(o.id)}
+              className={`pixel-box px-2 py-1.5 text-center leading-tight ${stance === o.id ? "bg-gold text-ink" : "bg-panel text-paper"}`}
+            >
+              <span className="block text-xl uppercase">{o.label}</span>
+              <span className="block truncate text-sm opacity-80">{o.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
