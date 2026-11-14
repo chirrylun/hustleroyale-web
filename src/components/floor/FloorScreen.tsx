@@ -217,31 +217,43 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
     };
   }, [floor]);
 
-  const spawnText = (x: number, y: number, text: string, cls: string) => {
+  const spawnText = (x: number, y: number, text: string, cls: string, ms = 700) => {
     const d = document.createElement("div");
     d.textContent = text;
     d.className = `pointer-events-none absolute z-[9000] text-xl font-bold ${cls}`;
-    d.style.cssText += `;left:${x * T}px;top:${(y - 1.6) * T}px;animation:dmg 700ms ease-out forwards`;
+    d.style.cssText += `;left:${x * T}px;top:${(y - 1.6) * T}px;animation:dmg ${ms}ms ease-out forwards`;
     world.current?.appendChild(d);
-    setTimeout(() => d.remove(), 720);
+    setTimeout(() => d.remove(), ms + 20);
   };
 
   // Supabase's rpc() only sends once it is awaited. Kills are reported in order, each retried a few times so a
   // blip in the connection can't lose one (the server pays XP, drops and quest progress from these).
   const reports = useRef<Promise<void>>(Promise.resolve());
-  const send = (fn: string, args: Record<string, unknown>) => {
+  const send = (fn: string, args: Record<string, unknown>, done?: (data: unknown) => void) => {
     reports.current = reports.current.then(async () => {
       for (let i = 0; i < 3; i++) {
         try {
-          const { error } = await createClient().rpc(fn, args);
-          if (!error) return;
+          const { data, error } = await createClient().rpc(fn, args);
+          if (!error) { done?.(data); return; }
           if (/floor_locked|bad_monster|unauthorized/.test(error.message)) return; // retrying won't help
         } catch { /* network error: try again */ }
         await new Promise((r) => setTimeout(r, 700 * (i + 1)));
       }
     });
   };
-  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss });
+  // The server rolls the xp (a range, not a fixed amount) and says what each fighter got: show it over their heads.
+  const showXp = (m: Ag, data: unknown) => {
+    const res = data as { throttled?: boolean; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
+    if (!res?.awards || res.throttled) return;
+    if (res.awards.length && res.awards.every((w) => w.gained === 0)) { spawnText(m.x, m.y, "Too weak: no XP", "text-steel", 1400); return; }
+    for (const w of res.awards) {
+      const a = allies.current.find((u) => u.id === w.id);
+      if (!a || w.gained <= 0) continue;
+      spawnText(a.x, a.y, `+${w.gained} XP`, "text-leaf", 1200);
+      if (w.levels_gained > 0) setTimeout(() => spawnText(a.x, a.y - 0.6, "LEVEL UP!", "text-gold", 1600), 350);
+    }
+  };
+  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => showXp(m, data));
 
   // The loop: movement, fighting, camera.
   useEffect(() => {
