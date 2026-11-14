@@ -57,28 +57,28 @@ export function Tutorial({ username, initialStep, fighters: existing }: { userna
       case 0:
         return (
           <InfoBox step={0} total={TOTAL} title={`Welcome to ${GAME_NAME}`} onNext={() => go(1)} nextLabel="Let's go">
-            <p>Hello, {username}! A new adventure starts here.</p>
+            <p>Hello, {username}! Your adventure starts here.</p>
           </InfoBox>
         );
       case 1:
         return (
-          <InfoBox step={1} total={TOTAL} title="You run a guild" onBack={() => go(0)} onNext={() => go(2)}>
-            <p>You are the guild manager. Your fighters work for you, and the guild grows as they do.</p>
+          <InfoBox step={1} total={TOTAL} title="You run a guild of adventurers" onBack={() => go(0)} onNext={() => go(2)}>
+            <p>You manage an adventure guild. You hire or buy fighters to work for you and go on quests. Your guild grows as they do.</p>
           </InfoBox>
         );
       case 2:
         return (
           <InfoBox step={2} total={TOTAL} title="What you'll do" onBack={() => go(1)} onNext={() => go(3)}>
-            <p>Recruit fighters, up to {ROSTER_CAP} in your roster.</p>
-            <p>Send them on quests from the job board, or up the adventure floors.</p>
-            <p>Enter them in arena tournaments to climb the leaderboard.</p>
+            <p>Recruit up to {ROSTER_CAP} fighters in your roster.</p>
+            <p>Take requests on the job board from real players, or go on quests across the different floors.</p>
+            <p>Enter your fighters into arena tournaments to climb the leaderboard, win <span className="text-gold">real money</span> and <span className="text-gold">prices</span>.</p>
           </InfoBox>
         );
       default:
         return (
-          <InfoBox step={3} total={TOTAL} title="Meet your Starters" onBack={() => go(2)} onNext={() => go(4)} nextLabel="First fight" busy={fighters.length === 0}>
+          <InfoBox step={3} total={TOTAL} title="Meet your Starters" onBack={() => go(2)} onNext={() => go(4)} nextLabel="Next" busy={fighters.length === 0}>
             <p>Each Starter has a role, stats and skills. Every one starts as a <span className="text-gold">Novice</span>.</p>
-            <p>At level 10 a Novice becomes a Recruit, and later a full class that climbs the ranks.</p>
+            <p>At level 10, you can rank up a Novice into a Recruit, and many other <span className="text-gold">Classes</span> as you level up.</p>
             <div className="mt-2 grid grid-cols-3 gap-2">
               {fighters.slice(0, 3).map((f) => (
                 <div key={f.id} className="flex min-w-0 flex-col items-center text-center text-base">
