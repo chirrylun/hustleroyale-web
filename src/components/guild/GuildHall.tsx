@@ -53,7 +53,16 @@ const depth = (bottom: number) => 10 + Math.round(bottom * 10);
  * stop at the job board, the hearth, the training dummies and so on, and you can tap one then tap
  * the floor to send it somewhere.
  */
-export function GuildHall({ fighters, onAction, highlight }: { fighters: GuildFighter[]; onAction: (a: string) => void; highlight?: string }) {
+export function GuildHall({
+  fighters, onAction, highlight, isLocked, onBlocked,
+}: {
+  fighters: GuildFighter[];
+  onAction: (a: string) => void;
+  highlight?: string;
+  /** Props whose group is locked don't open; `onBlocked` is called instead (e.g. to explain why). */
+  isLocked?: (group: string) => boolean;
+  onBlocked?: (group: string) => void;
+}) {
   const [looks, setLooks] = useState<Record<string, Look>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const hall = useRef<HTMLDivElement>(null);
@@ -199,7 +208,7 @@ export function GuildHall({ fighters, onAction, highlight }: { fighters: GuildFi
     <div
       ref={hall}
       onPointerDown={onFloor}
-      className="relative w-full select-none overflow-hidden"
+      className="relative isolate w-full select-none overflow-hidden"
       style={{ aspectRatio: `${layout.cols} / ${layout.rows}`, backgroundImage: "url(/guild/hall.png)", backgroundSize: "100% 100%", containerType: "inline-size" }}
     >
       {sorted.map((p) => {
@@ -213,8 +222,21 @@ export function GuildHall({ fighters, onAction, highlight }: { fighters: GuildFi
           </span>
         );
         const cls = "group absolute outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" + (hot ? " animate-pulse outline outline-4 outline-gold" : "");
-        if (p.href) return <Link key={p.id} href={p.href} className={cls} style={box} aria-label={p.group} onPointerDown={(e) => e.stopPropagation()}>{art}{tag}</Link>;
-        if (p.action) return <button key={p.id} type="button" className={cls} style={box} aria-label={p.group} onPointerDown={(e) => e.stopPropagation()} onClick={() => onAction(p.action!)}>{art}{tag}</button>;
+        const locked = !!isLocked?.(p.group);
+        if (p.href) {
+          return (
+            <Link
+              key={p.id}
+              href={p.href}
+              className={cls}
+              style={box}
+              aria-label={p.group}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { if (locked) { e.preventDefault(); onBlocked?.(p.group); } }}
+            >{art}{tag}</Link>
+          );
+        }
+        if (p.action) return <button key={p.id} type="button" className={cls} style={box} aria-label={p.group} onPointerDown={(e) => e.stopPropagation()} onClick={() => (locked ? onBlocked?.(p.group) : onAction(p.action!))}>{art}{tag}</button>;
         return <div key={p.id} className="pointer-events-none absolute" style={box}>{art}</div>;
       })}
 

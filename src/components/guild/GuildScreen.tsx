@@ -2,27 +2,40 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
 import { GuildHall } from "./GuildHall";
 import { InfoBox } from "./InfoBox";
 
-/** Tutorial job: win a practice battle (steps 6-8 of the tutorial); afterwards the board is "empty" until Step 3 lands. */
+/** Groups that stay open while the first job is unfinished: the job board itself and the adventure, where the job is done. */
+const OPEN_DURING_FIRST_JOB = ["jobs", "adventure"];
+const FIRST_JOB_NOTICE = "Complete your first quest on the job board first.";
+
+/** Tutorial job: kill a bat on Floor 1 (steps 6-8 of the tutorial); afterwards the board is "empty" until more jobs land. */
 export function GuildScreen({ username, coins, level, fighters, tutorialStep }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number }) {
   const router = useRouter();
   const [step, setStep] = useState(tutorialStep);
   const [panel, setPanel] = useState<"jobs" | "soon" | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, start] = useTransition();
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  const firstJobOpen = step < 9;
 
   const setTut = (n: number) => { setStep(n); void createClient().rpc("set_tutorial_step", { p_step: n }); };
   const claim = () =>
     start(async () => {
       setMsg(null);
       const { error } = await createClient().rpc("claim_first_job");
-      if (error) return setMsg(error.message.includes("job_not_done") ? "Win a battle in the arena first." : "That didn't work. Try again.");
+      if (error) return setMsg(error.message.includes("job_not_done") ? "Kill the bat on Floor 1 first." : "That didn't work. Try again.");
       setStep(9);
       router.refresh();
     });
@@ -46,10 +59,16 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep }: 
       </header>
 
       <div className="pixel-box relative overflow-hidden bg-night">
-        <GuildHall fighters={fighters} onAction={onAction} highlight={step === 6 ? "jobs" : undefined} />
+        <GuildHall
+          fighters={fighters}
+          onAction={onAction}
+          highlight={step === 6 ? "jobs" : undefined}
+          isLocked={(group) => firstJobOpen && !OPEN_DURING_FIRST_JOB.includes(group)}
+          onBlocked={() => { setPanel(null); setNotice(FIRST_JOB_NOTICE); }}
+        />
 
         {step === 6 && !panel && (
-          <div className="absolute inset-x-0 bottom-3 flex justify-center px-3">
+          <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
             <InfoBox step={0} total={1} title="Your guild" onNext={() => onAction("jobs")} nextLabel="Open job board">
               <p>This is home. Your fighters roam here. Tap one, then tap the floor to send it somewhere.</p>
               <p>Tap the glowing job board to find work.</p>
@@ -57,13 +76,22 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep }: 
           </div>
         )}
 
+        {notice && !panel && (
+          <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
+            <div role="alert" className="pixel-box card-reveal flex w-full max-w-xl items-center justify-between gap-3 bg-night p-4 text-xl text-paper">
+              <p>{notice}</p>
+              <PixelButton variant="ghost" className="shrink-0 text-base" onClick={() => setNotice(null)}>OK</PixelButton>
+            </div>
+          </div>
+        )}
+
         {panel && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-ink/70 p-3">
+          <div className="absolute inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3">
             <div className="pixel-box card-reveal w-full max-w-lg bg-night p-5">
               {panel === "soon" ? (
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Coming soon</h2>
-                  <p className="text-xl text-paper">The adventure floors open soon.</p>
+                  <p className="text-xl text-paper">The adventure floors open soon.{step < 9 && " Floor 1 has a bat waiting for you."}</p>
                 </>
               ) : step >= 9 || step < 7 ? (
                 <>
@@ -75,7 +103,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep }: 
                   <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
                   <div className="pixel-box bg-panel p-3 text-xl text-paper">
                     <p className="uppercase text-leaf">First job · Guild</p>
-                    <p>Win a practice battle in the arena.</p>
+                    <p>Kill a bat on Floor 1.</p>
                     <p className="text-steel">Reward: 100 coins and 60 XP for each fighter on your team.</p>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -83,7 +111,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep }: 
                       <PixelButton onClick={() => setTut(8)}>Take job</PixelButton>
                     ) : (
                       <>
-                        <Link href="/arena" className="pixel-btn bg-leaf px-4 py-2 text-lg uppercase text-ink">Go to arena</Link>
+                        <PixelButton onClick={() => setPanel("soon")}>Go to adventure</PixelButton>
                         <PixelButton variant="ghost" disabled={busy} onClick={claim}>Claim reward</PixelButton>
                       </>
                     )}
