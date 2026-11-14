@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { FighterCard } from "@/components/pack/FighterCard";
+import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { GAME_NAME } from "@/lib/brand";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import type { StarterFighter } from "@/lib/starter-pack";
@@ -10,7 +10,9 @@ import { createClient } from "@/lib/supabase/client";
 import { InfoBox } from "./InfoBox";
 import { TutorialFight } from "./TutorialFight";
 
-const TOTAL = 6; // welcome, guild, what you'll do, recruits, fight 1, fight 2
+const TOTAL = 6; // welcome, guild, what you'll do, starters, fight 1, fight 2
+
+const ROLE_LABEL = { tank: "Tank", healer: "Healer", dps: "Damage" } as const;
 
 /** Steps 0-5. Progress is saved after each step so a refresh resumes where the player was. */
 export function Tutorial({ username, initialStep, fighters: existing }: { username: string; initialStep: number; fighters: GuildFighter[] }) {
@@ -74,19 +76,21 @@ export function Tutorial({ username, initialStep, fighters: existing }: { userna
         );
       default:
         return (
-          <div className="flex w-full flex-col items-center gap-4">
-            <div className="grid w-full max-w-4xl gap-4 sm:grid-cols-3">
-              {fighters.slice(0, 3).map((f, i) => (
-                <FighterCard key={f.id} fighter={f} delayMs={i * 350} />
+          <InfoBox step={3} total={TOTAL} title="Meet your Starters" onBack={() => go(2)} onNext={() => go(4)} nextLabel="First fight" busy={fighters.length === 0}>
+            <p>Each Starter has a role, stats and skills. Every one starts as a <span className="text-gold">Novice</span>.</p>
+            <p>At level 10 a Novice becomes a Recruit, and later a full class that climbs the ranks.</p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {fighters.slice(0, 3).map((f) => (
+                <div key={f.id} className="flex min-w-0 flex-col items-center text-center text-base">
+                  <FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} />
+                  <span className="truncate text-gold">{f.template.name}</span>
+                  <span className="text-steel">{ROLE_LABEL[f.template.role]} · Lv {f.level}</span>
+                </div>
               ))}
-              {fighters.length === 0 && !error && [0, 1, 2].map((i) => <div key={i} className="h-72 animate-pulse bg-panel" aria-busy="true" />)}
+              {fighters.length === 0 && !error && [0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse bg-panel" aria-busy="true" />)}
             </div>
             {error && <p role="alert" className="text-xl text-ember">{error}</p>}
-            <InfoBox step={3} total={TOTAL} title="Meet your recruits" onBack={() => go(2)} onNext={() => go(4)} nextLabel="First fight" busy={fighters.length === 0}>
-              <p>Three Novices have joined your guild. Each has a role, stats and skills.</p>
-              <p>At level 10 a Novice becomes a Recruit, and later a full class that climbs the ranks.</p>
-            </InfoBox>
-          </div>
+          </InfoBox>
         );
     }
   })();
