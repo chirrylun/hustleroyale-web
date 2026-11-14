@@ -24,7 +24,7 @@ interface Props {
 const DIFFICULTIES: Difficulty[] = ["rookie", "hustler", "boss"];
 
 export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }: Props) {
-  const { phase, view, error, lastReward, start, cast, focus, move, auto, setStance, reset } = useSoloBattle();
+  const { phase, view, error, lastReward, start, focus, move, auto, setStance, reset } = useSoloBattle();
   const [difficulty, setDifficulty] = useState<Difficulty>("hustler");
   const [controlledId, setControlledId] = useState<string | null>(null);
   const [muted, setMutedState] = useState(() => isMuted());
@@ -35,7 +35,7 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
   const earnedToday = lastReward?.earnedToday ?? startToday;
 
   const controlledUnit = view?.controlledUnitId ?? null;
-  // Keyboard: 1-3 use moves, WASD or the arrow keys walk, Space hands the fighter back to its AI.
+  // Keyboard: WASD or the arrow keys walk, Space hands the fighter back to its AI.
   const liveRef = useRef(view);
   useEffect(() => {
     liveRef.current = view;
@@ -58,9 +58,6 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
         auto();
         return;
       }
-      const index = Number(e.key);
-      const meta = liveRef.current?.metas.find((m) => m.id === controlledUnit);
-      if (Number.isInteger(index) && index >= 1 && meta?.skills[index]) cast(index);
     };
     const onUp = (e: KeyboardEvent) => void keys.delete(e.key.toLowerCase());
     const walk = setInterval(() => {
@@ -86,7 +83,7 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
       window.removeEventListener("keyup", onUp);
       keys.clear();
     };
-  }, [phase, controlledUnit, cast, move, auto]);
+  }, [phase, controlledUnit, move, auto]);
 
   if (team.length === 0) {
     return (
@@ -124,7 +121,7 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
               Sound: {muted ? "off" : "on"}
             </button>
           </div>
-          {phase === "fighting" && (controlledUnit ? <SkillBar view={view} onCast={cast} onAuto={auto} /> : <StanceBar current={view.stances[1]} onPick={setStance} />)}
+          {phase === "fighting" && (controlledUnit ? <SkillBar view={view} onAuto={auto} /> : <StanceBar current={view.stances[1]} onPick={setStance} />)}
           {phase === "ended" && view.end && <ResultPanel end={view.end} coins={coins} earnedToday={earnedToday} onAgain={reset} />}
         </>
       ) : (
@@ -187,7 +184,7 @@ function Lobby({
                 selected={controlledId === f.id}
                 onClick={() => onControlled(f.id)}
                 title={f.template.name}
-                hint="You walk it, dodge danger circles and choose its moves."
+                hint="You walk it and dodge danger circles. Its skills fire on their own."
               />
             ))}
           </div>
@@ -254,53 +251,14 @@ function Choice({ selected, onClick, title, hint }: { selected: boolean; onClick
 
 /* ------------------------------------------------------------------ in the fight */
 
-type MoveMeta = NonNullable<BattleView["metas"][number]["skills"]>[number];
-
-/** One line saying what a move does beyond damage, so players can pick the right tool. */
-function skillHint(s: MoveMeta): string {
-  const bits: string[] = [];
-  if (s.telegraphMs) bits.push("Big hit: shows a danger zone first");
-  if (s.stunMs) bits.push(`stuns ${(s.stunMs / 1000).toFixed(1)}s`);
-  if (s.knockback) bits.push("knocks back");
-  if (s.pull) bits.push("pulls in");
-  if (s.kind === "heal") bits.push("heals an ally");
-  if (s.kind === "shield") bits.push("shields you");
-  if (s.damageType === "magical") bits.push("magic");
-  return bits.join(" · ");
-}
-
-function SkillBar({ view, onCast, onAuto }: { view: BattleView; onCast: (index: number) => void; onAuto: () => void }) {
+function SkillBar({ view, onAuto }: { view: BattleView; onAuto: () => void }) {
   const meta = view.metas.find((m) => m.id === view.controlledUnitId);
   const live = meta ? view.units[meta.id] : undefined;
   if (!meta || !live) return null;
-  const specials = meta.skills.filter((s) => s.index >= 1);
 
   return (
-    <PixelPanel title={`${meta.name}'s moves`}>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {specials.map((s) => {
-          const wait = Math.max(0, (live.cooldownEnds[s.index] ?? 0) - view.timeMs);
-          const tired = live.energy < s.staminaCost;
-          return (
-            <button
-              key={s.index}
-              type="button"
-              disabled={!live.alive}
-              onClick={() => onCast(s.index)}
-              title="If it isn't ready yet, it fires as soon as it is."
-              className={clsx("pixel-btn flex cursor-pointer flex-col items-start px-3 py-2 text-left text-paper", wait > 0 || tired ? "bg-panel opacity-70" : "bg-leaf text-ink")}
-            >
-              <span className="text-xl uppercase leading-tight">
-                {s.index}. {s.name}
-              </span>
-              <span className="text-base leading-tight">
-                {wait > 0 ? `Ready in ${(wait / 1000).toFixed(1)}s` : tired ? "Not enough energy" : "Ready"} · Energy {s.staminaCost}
-              </span>
-              <span className="text-sm leading-tight opacity-80">{skillHint(s)}</span>
-            </button>
-          );
-        })}
-      </div>
+    <PixelPanel title={`Steering ${meta.name}`}>
+      <p className="text-lg text-paper">Skills fire on their own when they're ready. You decide where your fighter stands.</p>
       <div className="mt-3 flex items-center gap-2">
         <span className="text-base uppercase text-steel">Energy</span>
         <div className="pixel-bar h-3 flex-1 bg-ink">
@@ -308,7 +266,7 @@ function SkillBar({ view, onCast, onAuto }: { view: BattleView; onCast: (index: 
         </div>
       </div>
       <p className="mt-2 text-base text-steel">
-        Tap the ground or use WASD to walk. Press 1, 2 or 3 to use a move. Tap a rival to focus on it. Big attacks show a red circle: step out of it before it fills!
+        Tap the ground or use WASD to walk. Tap a rival to focus on it. Big attacks show a red circle: step out of it before it fills!
       </p>
       <button type="button" onClick={onAuto} className="pixel-btn mt-2 bg-panel px-3 py-1 text-base uppercase text-paper">
         Let the AI move me (Space)

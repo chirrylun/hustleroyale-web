@@ -162,6 +162,8 @@ export interface LiveUnit {
   stunUntil: number;
   windupUntil: number;
   walkUntil: number;
+  /** Battle-clock time until which the fighter is slipping out of sight (Vanish, Shadow Step, Dodge). */
+  hiddenUntil: number;
   /** `n` changes on every effect so the CSS animation restarts. */
   fx: { kind: FxKind; n: number };
 }
@@ -262,6 +264,7 @@ function applySnapshot(units: Record<string, LiveUnit>, snap: BattleSnapshot): R
       stunUntil: snap.timeMs + s.stunMs,
       windupUntil: s.windup ? snap.timeMs + s.windup.remainingMs : 0,
       walkUntil: prev?.walkUntil ?? 0,
+      hiddenUntil: prev?.hiddenUntil ?? 0,
       fx: prev?.fx ?? { kind: s.alive ? null : "dead", n: 0 },
     };
   }
@@ -269,6 +272,11 @@ function applySnapshot(units: Record<string, LiveUnit>, snap: BattleSnapshot): R
 }
 
 /** Which projectile a skill throws. Named skills have their own art; the rest go by role and damage type. */
+/** Evasive moves: how long the fighter fades from view, matching the dodge window. */
+export const HIDE_MS: Record<string, number | undefined> = { Vanish: 2500, "Shadow Step": 700, Dodge: 2000 };
+/** After hiding, the fighter blinks back into focus over this long. */
+export const BLINK_MS = 450;
+
 function shotArt(name: string, role: string, kind: string, damageType: string): NonNullable<Effect["fx"]> {
   switch (name) {
     case "Sonic Note": return { sheet: "shot2", row: 0 };
@@ -336,7 +344,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         const melee = skill.range <= MELEE_RANGE;
         touch(
           e.actorId,
-          { cooldownEnds, energy: Math.max(0, u.energy - skill.staminaCost), windupUntil: 0 },
+          { cooldownEnds, energy: Math.max(0, u.energy - skill.staminaCost), windupUntil: 0, ...(HIDE_MS[skill.name] ? { hiddenUntil: e.t + HIDE_MS[skill.name]! } : {}) },
           skill.kind === "damage" && melee ? "lunge" : skill.kind === "damage" || skill.kind === "heal" ? "cast" : undefined,
         );
         // Ranged hits and heals fly across the arena. Telegraphed attacks get their own zone effect instead.

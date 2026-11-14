@@ -32,7 +32,7 @@ async function Fighters() {
   if (fighters.length === 0) {
     return (
       <PixelPanel title="No fighters yet">
-        <p className="text-xl text-paper">Open your starter pack on the home page to get your first three fighters.</p>
+        <p className="text-xl text-paper">Finish the tutorial on the home page to get your first three fighters.</p>
         <Link href="/home" className="pixel-btn mt-4 inline-block bg-leaf px-4 py-2 text-xl uppercase text-ink">
           Go to home
         </Link>
@@ -49,6 +49,7 @@ async function Fighters() {
         {fighters.map((f, i) => (
           <div key={f.id} className="flex flex-col gap-3">
             <FighterCard fighter={f} delayMs={i * 120} />
+            <Link href={`/team/${f.id}`} className="pixel-btn bg-panel px-3 py-1 text-center text-lg uppercase text-paper">Skills ({f.skill_points ?? 0} points)</Link>
             <ClassActions id={f.id} level={f.level} role={f.template.role} archetype={f.template.archetype} rarity={f.template.rarity} />
           </div>
         ))}

@@ -184,21 +184,21 @@ if __name__ == "__main__":
         for rar, f in src.items():
             character(f"{root}/Mage/{f}", f"{out}/magical_dps_{rar}.png", f"magical_dps_{rar}", fit=True)
 
-    if mode == "novice":  # Novice/male.png + female.png, pre-keyed onto magenta
-        for g in ("male", "female"):
-            character(f"{root}/{g}.png", f"{out}/novice_{g}.png", f"novice_{g}", fit=True, six=True)
+    if mode == "novice":  # Novice/: two gendered novices + the three recruit classes
+        N = "GPT Image 2 1"
+        for dst, src in (("novice_female", f"{N} (3)"), ("novice_male", f"{N} (4)"), ("recruit_acolyte", "acolyte"), ("recruit_fighter", "fighter"), ("recruit_thief", "dps")):
+            character(f"{root}/Novice/Novice/{src}.png", f"{out}/{dst}.png", dst, fit=True, six=True)
 
-    if mode == "mobs":  # slime/bat/direwolf/goblin/golem/mushroom folders -> mob_<name>_<rarity>.png
+    if mode == "mobs":  # <mob>/<mob>/ folders -> mob_<name>_<rarity>.png (file names are whatever the art tool called them)
+        G = "GPT Image 2 1"
         F = {
-            "slime": ["(3)", "(4)", "(5)", "(6)"],
-            "bat": ["(14)", "(17)", "(16)", "(19)"],
-            "direwolf": ["(11)", "(3)", "(13)", "(12)"],
-            "goblin": ["(7)", "(8)", "(10)", "(9)"],
-            "mushroom": ["(18)", "(20)", "(21)", "(22)"],
+            "slime": [f"{G} (4)", f"{G} (5)", f"{G} (6)", f"{G} (3)"],
+            "bat": [f"{G} (3)", f"{G} (4)", f"{G} (5)", "legendary"],
+            "direwolf": ["common", "GPT Image 2.5 Flare 1", "rare", "legendary"],
+            "goblin": [f"{G} (3)", "uncommon", f"{G} (4)", "legendary"],
+            "golem": ["common", "uncommon", "rare", "legendary"],
+            "mushroom": ["common", "uncommon", "rare", "legendary"],
         }
-        R = ["common", "uncommon", "rare", "legendary"]
         for mob, files in F.items():
-            for rar, f in zip(R, files):
-                character(f"{root}/{mob}/{mob}/GPT Image 2 1 {f}.png".replace("/slime/slime", "/slime"), f"{out}/mob_{mob}_{rar}.png", f"{mob}_{rar}", fit=True, six=True)
-        for rar in R:
-            character(f"{root}/golem/golem/{rar}.png", f"{out}/mob_golem_{rar}.png", f"golem_{rar}", fit=True, six=True)
+            for rar, f in zip(["common", "uncommon", "rare", "legendary"], files):
+                character(f"{root}/{mob}/{mob}/{f}.png", f"{out}/mob_{mob}_{rar}.png", f"{mob}_{rar}", fit=True, six=True)

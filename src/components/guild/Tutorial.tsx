@@ -84,7 +84,7 @@ export function Tutorial({ username, initialStep, fighters: existing }: { userna
             {error && <p role="alert" className="text-xl text-ember">{error}</p>}
             <InfoBox step={3} total={TOTAL} title="Meet your recruits" onBack={() => go(2)} onNext={() => go(4)} nextLabel="First fight" busy={fighters.length === 0}>
               <p>Three Novices have joined your guild. Each has a role, stats and skills.</p>
-              <p>At level 10 a Novice can choose a class and start climbing the ranks.</p>
+              <p>At level 10 a Novice becomes a Recruit, and later a full class that climbs the ranks.</p>
             </InfoBox>
           </div>
         );

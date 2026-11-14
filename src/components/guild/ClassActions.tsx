@@ -3,14 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
-import { ARCHETYPE_LABEL, CLASSES, NEXT_RANK, RANK_LABEL, RANK_LEVEL } from "@/lib/guild";
+import { ARCHETYPE_LABEL, CLASSES, NEXT_RANK, RANK_LABEL, RANK_LEVEL, RECRUITS, RECRUIT_ADVANCE_LEVEL, isRecruit } from "@/lib/guild";
 import type { Rarity, Role } from "@/lib/starter-pack";
 import { createClient } from "@/lib/supabase/client";
 
 const ERRORS: Record<string, string> = {
   level_too_low: "Not high enough level yet.",
   sold_out: "That rank is sold out right now.",
-  already_has_class: "This fighter already has a class.",
+  already_has_class: "This fighter already has a class.", recruit_first: "Novices become Recruits first.", class_not_available: "That class isn't available.",
 };
 
 /** Under a fighter card: pick a class at level 10, then climb the job ranks. */
@@ -35,10 +35,28 @@ export function ClassActions({ id, level, role, archetype, rarity }: { id: strin
 
   if (isNovice) {
     const ready = level >= RANK_LEVEL.common;
+    const rec = RECRUITS[role];
     return (
       <div className="flex flex-col gap-2">
         {!ready ? (
-          <p className="text-base text-steel">Reach level {RANK_LEVEL.common} to choose a class ({RANK_LEVEL.common - level} to go).</p>
+          <p className="text-base text-steel">Reach level {RANK_LEVEL.common} to become a Recruit ({RANK_LEVEL.common - level} to go).</p>
+        ) : (
+          <PixelButton className="text-lg" disabled={busy} onClick={() => run(() => supabase.rpc("choose_class", { p_fighter: id, p_archetype: rec.id }))}>
+            Become {ARCHETYPE_LABEL[rec.id]}
+          </PixelButton>
+        )}
+        {ready && <p className="text-base text-steel">{rec.blurb}</p>}
+        {error && <p role="alert" className="text-base text-ember">{error}</p>}
+      </div>
+    );
+  }
+
+  if (isRecruit(archetype)) {
+    const ready = level >= RECRUIT_ADVANCE_LEVEL;
+    return (
+      <div className="flex flex-col gap-2">
+        {!ready ? (
+          <p className="text-base text-steel">Reach level {RECRUIT_ADVANCE_LEVEL} to choose a class ({RECRUIT_ADVANCE_LEVEL - level} to go).</p>
         ) : !open ? (
           <PixelButton className="text-lg" onClick={() => setOpen(true)}>Choose a class</PixelButton>
         ) : (
@@ -47,12 +65,7 @@ export function ClassActions({ id, level, role, archetype, rarity }: { id: strin
             <ul className="flex flex-col gap-2">
               {CLASSES[role].map((c) => (
                 <li key={c.id}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => run(() => supabase.rpc("choose_class", { p_fighter: id, p_archetype: c.id }))}
-                    className="pixel-btn w-full bg-panel px-3 py-2 text-left text-paper"
-                  >
+                  <button type="button" disabled={busy} onClick={() => run(() => supabase.rpc("choose_class", { p_fighter: id, p_archetype: c.id }))} className="pixel-btn w-full bg-panel px-3 py-2 text-left text-paper">
                     <span className="block text-lg uppercase">{ARCHETYPE_LABEL[c.id]}</span>
                     <span className="block text-base text-steel">{c.blurb}</span>
                   </button>

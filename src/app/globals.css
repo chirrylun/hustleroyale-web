@@ -455,3 +455,23 @@ canvas,
     animation: none;
   }
 }
+
+/* Slipping out of sight (Vanish, Shadow Step, Dodge): ghostly while hidden, then a quick blink back into focus. */
+.sprite-hidden {
+  opacity: 0.3;
+  filter: saturate(0.5) brightness(0.9);
+  transition: opacity 180ms ease-out;
+}
+.sprite-blink {
+  animation: sprite-blink 450ms steps(1, end);
+}
+@keyframes sprite-blink {
+  0% { opacity: 0.3; }
+  25% { opacity: 1; filter: brightness(1.8); }
+  50% { opacity: 0.45; }
+  75% { opacity: 1; filter: brightness(1.4); }
+  100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sprite-blink { animation: none; }
+}
