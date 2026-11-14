@@ -6,6 +6,7 @@ import { loadFighters } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/server";
 import { connection } from "next/server";
 
+
 /**
  * With `cacheComponents` on, anything that reads the request (cookies -> Supabase session)
  * must render inside a <Suspense> boundary, otherwise Next tries to prerender it and fails
