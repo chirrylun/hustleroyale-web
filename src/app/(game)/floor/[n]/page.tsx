@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { FloorScreen } from "@/components/floor/FloorScreen";
 import { loadFighters } from "@/lib/guild";
+import { loadFloorQuests } from "@/lib/quests";
 import { createClient } from "@/lib/supabase/server";
 import { MAX_FLOOR } from "@/lib/world/floor";
 
@@ -23,9 +24,15 @@ async function Content({ params }: { params: Promise<{ n: string }> }) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("profiles").select("floor_cleared, tutorial_step").eq("id", user.id).single();
-  // Floors unlock one at a time.
-  if (n > (profile?.floor_cleared ?? 0) + 1) redirect("/home");
-  const fighters = await loadFighters(supabase, user.id);
-  return <FloorScreen floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} />;
+  const { data: profile } = await supabase.from("profiles").select("floor_unlocked, tutorial_step").eq("id", user.id).single();
+  // Floors open through quests on the job board, not by walking past them.
+  const floorUnlocked = profile?.floor_unlocked ?? 1;
+  if (n > floorUnlocked) redirect("/home");
+  const [fighters, tracker] = await Promise.all([loadFighters(supabase, user.id), loadFloorQuests(supabase, user.id, n)]);
+  return (
+    <FloorScreen
+      floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0}
+      floorUnlocked={floorUnlocked} quests={tracker.quests} pack={tracker.pack}
+    />
+  );
 }

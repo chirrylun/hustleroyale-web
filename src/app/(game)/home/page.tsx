@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { GuildScreen } from "@/components/guild/GuildScreen";
 import { Tutorial } from "@/components/guild/Tutorial";
 import { loadFighters } from "@/lib/guild";
+import { loadBoard } from "@/lib/quests";
 import { createClient } from "@/lib/supabase/server";
 import { connection } from "next/server";
 
@@ -32,7 +33,7 @@ async function HomeContent() {
   // RLS lets a player read only their own row, so this cannot leak anyone else's data.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username, level, coins, starter_pack_opened, tutorial_step, floor_cleared")
+    .select("username, level, coins, starter_pack_opened, tutorial_step, floor_cleared, floor_unlocked")
     .eq("id", user.id)
     .single();
 
@@ -44,7 +45,14 @@ async function HomeContent() {
   if (step < 6) {
     return <Tutorial username={username} initialStep={step} fighters={fighters} />;
   }
-  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} />;
+  const floorUnlocked = profile?.floor_unlocked ?? 1;
+  const board = await loadBoard(supabase, user.id, floorUnlocked);
+  return (
+    <GuildScreen
+      username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step}
+      floorCleared={profile?.floor_cleared ?? 0} floorUnlocked={floorUnlocked} quests={board.quests} pack={board.pack}
+    />
+  );
 }
 
 function HomeFallback() {

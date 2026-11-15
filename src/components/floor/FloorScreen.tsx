@@ -6,8 +6,10 @@ import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import type { GuildFighter } from "@/lib/guild";
 import { findPath, buildNav, nearestWalkable, type Pt } from "@/lib/guild-nav";
+import type { ActiveQuest, PackItem } from "@/lib/quests";
 import { createClient } from "@/lib/supabase/client";
-import { MAX_FLOOR, TILE_SRC, generateFloor, isBossFloor, type Floor } from "@/lib/world/floor";
+import { HEAL_FX, SHOT_MS, kitOf, modFx, playBurst, playShot, playVfx, shotFor, type FloorSkill, type Mod, type Stat } from "./floorSkills";
+import { MAX_FLOOR, TILE_SRC, generateFloor, isBossFloor, mobScale, type Floor } from "@/lib/world/floor";
 
 const T = 48; // one tile on screen, in px
 const FRAME = 2.7; // a sprite frame, in tiles
@@ -26,6 +28,21 @@ interface Ag {
   level: number;
   x: number; y: number;
   hp: number; max: number; atk: number; def: number;
+  magic: number; spd: number;
+  /** Seconds on the fight clock until which this unit is stunned. */
+  stunUntil: number;
+  shield: number; shieldUntil: number;
+  mods: (Mod & { until: number; src: string })[];
+  /** Damage and healing over time. */
+  over: { kind: "dot" | "hot"; src: Ag; sk: FloorSkill; power: number; every: number; next: number; until: number }[];
+  /** Fighters: the basic attack, the skills that can run on a floor, and when each is ready again. */
+  basic: FloorSkill | null;
+  specials: FloorSkill[];
+  cds: number[];
+  /** Busy casting until this time. */
+  lock: number;
+  /** How close this unit stands to a target to use its basic attack, in tiles. */
+  reach: number;
   path: Pt[];
   target: Ag | null;
   cd: number;
@@ -33,9 +50,11 @@ interface Ag {
   dead: boolean;
   boss: boolean;
   kind: string;
+  /** Sprite frame size next to a fighter's (1). Mobs are smaller or bigger depending on what they are. */
+  scale: number;
   /** Allies: walking where the player told them, ignoring foes until they arrive. */
   held: boolean;
-  look: { rest: "idle" | "walk" | "stun"; flip: boolean; act: "attack" | "hurt" | null; n: number };
+  look: { rest: "idle" | "walk" | "stun"; flip: boolean; act: "attack" | "cast" | "hurt" | null; fx: Fx; n: number };
   key?: string;
   setLook?: (l: Ag["look"]) => void;
   el?: HTMLDivElement | null;
@@ -43,24 +62,32 @@ interface Ag {
   hpEl?: HTMLDivElement | null;
 }
 
+/** Whole-unit effect played on top of the sprite, the same ones the arena uses. */
+type Fx = "" | "lunge" | "hurt" | "heal" | "shield" | "cast";
+const fxClass = (fx: Fx, flip: boolean) => (fx === "lunge" ? (flip ? "fx-lunge-l" : "fx-lunge-r") : fx ? `fx-${fx}` : "");
+
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function Unit({ a }: { a: Ag }) {
   const [look, setLook] = useState(a.look);
-  const size = FRAME * T * (a.boss ? 1.5 : 1);
+  const size = FRAME * T * a.scale;
+  const foe = a.side === "foe";
   return (
     <div
       ref={(el) => { a.el = el; a.setLook = setLook; }}
       className="absolute left-0 top-0 will-change-transform"
-      style={{ width: size, height: size, marginLeft: -size / 2, marginTop: -size * 0.86 }}
+      // Every sheet draws its creature with the feet at about 90% of the frame and the head at about 31%.
+      style={{ width: size, height: size, marginLeft: -size / 2, marginTop: -size * (foe ? 0.9 : 0.86) }}
     >
-      <div className="absolute left-1/4 top-0 h-1.5 w-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
+      <div className="absolute left-1/4 h-1.5 w-1/2 -translate-y-1 bg-ink/80" style={{ top: foe ? "28%" : 0 }} ref={(el) => { a.bar = el; }}>
         <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
       </div>
-      <FighterSprite
-        spriteKey={a.sprite} role={a.role} flip={look.flip} rest={look.rest}
-        action={look.act} actionKey={look.n}
-      />
+      <div key={look.n} className={`h-full w-full ${fxClass(look.fx, look.flip)}`}>
+        <FighterSprite
+          spriteKey={a.sprite} role={a.role} flip={look.flip} rest={look.rest}
+          action={look.act} actionKey={look.n}
+        />
+      </div>
     </div>
   );
 }
@@ -73,13 +100,29 @@ function Unit({ a }: { a: Ag }) {
  * Combat here runs in the browser and reports kills to the server, which checks the floor is unlocked and
  * pays XP. A fully server-run version comes with shared rooms.
  */
-export function FloorScreen({ floorNo, fighters, tutorialStep }: { floorNo: number; fighters: GuildFighter[]; tutorialStep: number }) {
-  const floor = useMemo(() => generateFloor(floorNo), [floorNo]);
-  const [run, setRun] = useState(0); // bump to retry
-  return <FloorMap key={run} floor={floor} fighters={fighters} tutorialStep={tutorialStep} retry={() => setRun((r) => r + 1)} />;
+interface KillResult {
+  drops: { slug: string; name: string; qty: number }[];
+  quests: { slug: string; progress: number; qty: number }[];
 }
 
-function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; retry: () => void }) {
+interface FloorProps {
+  fighters: GuildFighter[];
+  tutorialStep: number;
+  /** Highest floor the player may enter. Floors open through the job board, so clearing one does not open the next. */
+  floorUnlocked: number;
+  /** The player's active quests for this floor, for the tracker. */
+  quests: ActiveQuest[];
+  /** Items the player already holds, so fetch quests count what they carried in. */
+  pack: PackItem[];
+}
+
+export function FloorScreen({ floorNo, ...rest }: { floorNo: number } & FloorProps) {
+  const floor = useMemo(() => generateFloor(floorNo), [floorNo]);
+  const [run, setRun] = useState(0); // bump to retry
+  return <FloorMap key={run} floor={floor} {...rest} retry={() => setRun((r) => r + 1)} />;
+}
+
+function FloorMap({ floor, fighters, tutorialStep, floorUnlocked, quests, pack, retry }: FloorProps & { floor: Floor; retry: () => void }) {
   const nav = useMemo(() => buildNav(floor.nav), [floor]);
   const squad = useMemo(() => {
     const team = fighters.filter((f) => f.team_slot != null).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
@@ -92,6 +135,11 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
   const [state, setState] = useState<"play" | "won" | "lost">("play");
   const [left, setLeft] = useState(floor.mobs.length);
   const [free, setFree] = useState(false); // camera detached from the party
+  /** Everything dropped during this run, by item slug. */
+  const [loot, setLoot] = useState<Record<string, { name: string; qty: number }>>({});
+  /** Kill quest progress, kept in step with the server's answer to each kill report. */
+  const [killProgress, setKillProgress] = useState<Record<string, number>>(() => Object.fromEntries(quests.filter((q) => q.kind === "kill").map((q) => [q.slug, q.progress])));
+  const held = useMemo(() => Object.fromEntries(pack.map((i) => [i.slug, i.qty])), [pack]);
 
   const view = useRef<HTMLDivElement>(null);
   const world = useRef<HTMLDivElement>(null);
@@ -105,17 +153,22 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
   // Build the two sides once.
   useEffect(() => {
     const mk = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "name" | "level" | "x" | "y" | "hp" | "atk" | "def" | "kind">): Ag => ({
-      role: "dps", max: p.hp, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false,
-      look: { rest: "idle", flip: false, act: null, n: 0 }, side, ...p,
+      role: "dps", max: p.hp, magic: p.atk, spd: 0, stunUntil: 0, shield: 0, shieldUntil: 0, mods: [], over: [],
+      basic: null, specials: [], cds: [], lock: 0, reach: 1.2,
+      path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false, scale: 1,
+      look: { rest: "idle", flip: false, act: null, fx: "", n: 0 }, side, ...p,
     });
-    allies.current = squad.map((f, i) =>
-      mk("ally", {
+    allies.current = squad.map((f, i) => {
+      const kit = kitOf(f.skills);
+      return mk("ally", {
         id: f.id, sprite: f.template.sprite_key, role: f.template.role, name: f.template.name, level: f.level,
         x: floor.start[0] + 1.6 + (i % 2) * 0.9, y: floor.start[1] + (i - 1) * 1.0, hp: f.hp, atk: f.atk, def: f.def, kind: "fighter",
-      }),
-    );
+        magic: f.magic, spd: f.spd, basic: kit.basic, specials: kit.specials, cds: kit.specials.map(() => 0),
+        reach: kit.basic && kit.basic.reach > 0 ? kit.basic.reach : 1.2,
+      });
+    });
     foes.current = floor.mobs.map((m) =>
-      mk("foe", { id: `m${m.id}`, sprite: m.sprite, name: m.kind, level: m.level, x: m.x, y: m.y, hp: m.hp, atk: m.atk, def: m.def, boss: m.boss, kind: m.kind }),
+      mk("foe", { id: `m${m.id}`, sprite: m.sprite, name: m.kind, level: m.level, x: m.x, y: m.y, hp: m.hp, atk: m.atk, def: m.def, boss: m.boss, kind: m.kind, scale: mobScale(m.kind, m.boss) }),
     );
     setReady(true);
   }, [floor, squad]);
@@ -160,18 +213,34 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
     };
   }, [floor]);
 
-  const spawnText = (x: number, y: number, text: string, cls: string) => {
+  /** Floating text above a unit; `h` is how far above its feet, in tiles, so small mobs get text close to their heads. */
+  const spawnText = (x: number, y: number, text: string, cls: string, h = 1.6, ms = 700) => {
     const d = document.createElement("div");
     d.textContent = text;
-    d.className = `pointer-events-none absolute z-[9000] text-xl font-bold ${cls}`;
-    d.style.cssText += `;left:${x * T}px;top:${(y - 1.6) * T}px;animation:dmg 700ms ease-out forwards`;
+    d.className = `pointer-events-none absolute z-[9000] -translate-x-1/2 whitespace-nowrap text-xl font-bold ${cls}`;
+    d.style.cssText += `;left:${x * T}px;top:${(y - h) * T}px;animation:dmg ${ms}ms ease-out forwards`;
     world.current?.appendChild(d);
-    setTimeout(() => d.remove(), 720);
+    setTimeout(() => d.remove(), ms + 20);
   };
 
   const killReport = (m: Ag) => {
     const spec = floor.mobs[Number(m.id.slice(1))];
-    void createClient().rpc("report_floor_kill", { p_floor: floor.n, p_kind: spec.kind, p_level: spec.level, p_boss: spec.boss });
+    const head = 0.5 + 1.1 * m.scale;
+    void createClient()
+      .rpc("report_floor_kill", { p_floor: floor.n, p_kind: spec.kind, p_level: spec.level, p_boss: spec.boss })
+      .then(({ data }) => {
+        const res = data as KillResult | null;
+        if (!res) return;
+        if (res.drops.length) {
+          setLoot((prev) => {
+            const next = { ...prev };
+            for (const d of res.drops) next[d.slug] = { name: d.name, qty: (next[d.slug]?.qty ?? 0) + d.qty };
+            return next;
+          });
+          res.drops.forEach((d, i) => setTimeout(() => spawnText(m.x, m.y, `+${d.qty} ${d.name}`, "text-leaf", head + 0.5 + i * 0.5, 1100), i * 200));
+        }
+        if (res.quests.length) setKillProgress((prev) => ({ ...prev, ...Object.fromEntries(res.quests.map((q) => [q.slug, q.progress])) }));
+      });
   };
 
   // The loop: movement, fighting, camera.
@@ -186,13 +255,45 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
       if (d <= m) { a.x = p[0]; a.y = p[1]; a.path.shift(); } else { a.x += (dx / d) * m; a.y += (dy / d) * m; }
       return true;
     };
-    const hurt = (from: Ag, to: Ag) => {
-      const raw = from.side === "ally" ? from.atk - to.def * 0.5 : from.atk - to.def * 0.45;
-      const dmg = Math.max(2, Math.round(raw * (0.9 + Math.random() * 0.2)));
-      to.hp = Math.max(0, to.hp - dmg);
-      to.look.act = "hurt"; to.look.n++;
-      from.look.act = "attack"; from.look.n++;
-      spawnText(to.x, to.y, String(dmg), from.side === "ally" ? "text-gold" : "text-ember");
+    // ---- Fight clock, delayed effects and skills ----
+    let clk = 0;
+    const later: { at: number; fn: () => void }[] = [];
+    const after = (ms: number, fn: () => void) => later.push({ at: clk + ms / 1000, fn });
+    const mid = (u: Ag) => ({ x: u.x, y: u.y - 0.8 * u.scale });
+    const headH = (u: Ag) => (u.side === "foe" ? 0.5 + 1.1 * u.scale : 1.6);
+    const modPct = (u: Ag, stat: Stat) => u.mods.reduce((s, m) => (m.stat === stat && m.until > clk ? s + m.pct : s), 0);
+    const eff = (u: Ag, stat: "atk" | "def") => Math.max(0, u[stat] * (1 + modPct(u, stat) / 100));
+    const moveMul = (u: Ag) => Math.min(1.8, Math.max(0.4, 1 + modPct(u, "spd") / 100));
+    const poke = (u: Ag, act: Ag["look"]["act"], fx: Fx) => { u.look.act = act; u.look.fx = fx; u.look.n++; };
+    const stunned = (u: Ag) => u.stunUntil > clk;
+
+    const calc = (from: Ag, to: Ag, sk: FloorSkill | null, pow: number) => {
+      const magic = !!sk?.magical;
+      const off = magic ? from.magic : eff(from, "atk");
+      const guard = eff(to, "def") * (from.side === "ally" ? 0.5 : 0.45) * (magic ? 0.5 : 1);
+      let dmg = Math.max(0, off - guard) * pow * (0.9 + Math.random() * 0.2);
+      if (sk?.bonusLowHp && to.hp / to.max < sk.bonusLowHp.below) dmg *= 1 + sk.bonusLowHp.pct / 100;
+      return Math.max(2, Math.round(dmg));
+    };
+    const heal = (to: Ag, amount: number, vfx = true) => {
+      if (to.dead || amount <= 0) return;
+      to.hp = Math.min(to.max, to.hp + amount);
+      spawnText(to.x, to.y, `+${amount}`, "text-leaf", headH(to));
+      if (vfx) { const p = mid(to); playVfx(world.current, T, p.x, p.y, HEAL_FX, 2.2 * to.scale); poke(to, null, "heal"); }
+    };
+    const land = (from: Ag, to: Ag, dmg: number, steal = 0, dot = false) => {
+      if (to.dead) return;
+      if (to.shield > 0 && to.shieldUntil > clk) {
+        const soaked = Math.min(to.shield, dmg);
+        to.shield -= soaked; dmg -= soaked;
+        if (soaked) spawnText(to.x, to.y, String(soaked), "text-steel", headH(to));
+      }
+      if (dmg > 0) {
+        to.hp = Math.max(0, to.hp - dmg);
+        spawnText(to.x, to.y, String(dmg), from.side === "ally" ? "text-gold" : "text-ember", headH(to));
+        if (!dot) poke(to, "hurt", "hurt");
+        if (steal > 0) heal(from, Math.max(1, Math.round(dmg * steal)), false);
+      }
       if (to.hp <= 0) {
         to.dead = true; to.path = [];
         if (to.side === "foe") {
@@ -201,20 +302,142 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
         }
       }
     };
+    const stun = (to: Ag, ms: number) => {
+      to.stunUntil = Math.max(to.stunUntil, clk + (to.boss ? ms / 2 : ms) / 1000);
+      to.path = [];
+      spawnText(to.x, to.y, "stun", "text-ice", headH(to) + 0.4);
+    };
+
+    /** One skill landing on one target. */
+    const effect = (a: Ag, sk: FloorSkill, t: Ag) => {
+      if (t.dead) return;
+      const p = mid(t);
+      if (sk.kind === "damage") {
+        land(a, t, calc(a, t, sk, sk.power), sk.lifesteal);
+        if (sk.dot && !t.dead) {
+          t.over = t.over.filter((o) => !(o.sk === sk && o.src === a));
+          t.over.push({ kind: "dot", src: a, sk, power: sk.dot.power, every: sk.dot.intervalMs / 1000, next: clk + sk.dot.intervalMs / 1000, until: clk + sk.dot.durationMs / 1000 });
+        }
+      } else if (sk.kind === "heal") {
+        if (sk.power > 0) heal(t, Math.max(1, Math.round(a.magic * sk.power * 0.5)));
+        if (sk.hot) {
+          t.over = t.over.filter((o) => !(o.sk === sk && o.src === a));
+          t.over.push({ kind: "hot", src: a, sk, power: sk.hot.power, every: sk.hot.intervalMs / 1000, next: clk + sk.hot.intervalMs / 1000, until: clk + sk.hot.durationMs / 1000 });
+        }
+      } else if (sk.kind === "shield") {
+        const amount = Math.max(5, Math.round(eff(a, "def") * sk.power * 0.5));
+        t.shield = Math.max(t.shield, amount); t.shieldUntil = clk + sk.durationMs / 1000;
+        spawnText(t.x, t.y, `+${amount} shield`, "text-sky", headH(t));
+        poke(t, null, "shield");
+        playVfx(world.current, T, p.x, p.y, { sheet: "support", row: 1 }, 2.2 * t.scale);
+      } else {
+        sk.mods.forEach((m, i) => {
+          t.mods = t.mods.filter((x) => !(x.src === sk.name && x.stat === m.stat));
+          t.mods.push({ ...m, until: clk + sk.durationMs / 1000, src: sk.name });
+          spawnText(t.x, t.y, `${m.stat} ${m.pct > 0 ? "+" : ""}${m.pct}%`, "text-gold", headH(t) + i * 0.4);
+        });
+        if (sk.mods[0]) playVfx(world.current, T, p.x, p.y, modFx(sk.mods[0]), 2 * t.scale);
+      }
+      if (sk.cleanse && !t.dead) {
+        t.mods = t.mods.filter((m) => m.pct >= 0);
+        t.over = t.over.filter((o) => o.kind !== "dot");
+        t.stunUntil = 0;
+      }
+      if (sk.stunMs && a.side !== t.side && !t.dead) stun(t, sk.stunMs);
+    };
+
+    const worth = (sk: FloorSkill, t: Ag) => {
+      if (sk.kind === "heal") return t.hp / t.max < 0.75;
+      if (sk.kind === "shield") return !(t.shield > 0 && t.shieldUntil > clk);
+      if (sk.kind === "buff" || sk.kind === "debuff") return !t.mods.some((m) => m.src === sk.name && m.until > clk + 1);
+      return true;
+    };
+    /** Who a skill would hit right now, or null if it should wait. */
+    const choose = (a: Ag, sk: FloorSkill, mine: Ag[], theirs: Ag[]): Ag[] | null => {
+      const lim = sk.reach > 0 ? sk.reach : 8;
+      const inReach = (l: Ag[]) => l.filter((u) => dist(a, u) <= lim);
+      let pool: Ag[];
+      switch (sk.target) {
+        case "self": return worth(sk, a) ? [a] : null;
+        case "all_allies": pool = mine.filter((u) => dist(a, u) <= 9 && worth(sk, u)); return pool.length ? pool : null;
+        case "ally_lowest_hp": pool = inReach(mine).filter((u) => worth(sk, u)).sort((x, y) => x.hp / x.max - y.hp / y.max); return pool.length ? [pool[0]] : null;
+        case "all_enemies": pool = inReach(theirs).filter((u) => worth(sk, u)); return pool.length ? pool : null;
+        case "enemy_lowest_hp": pool = inReach(theirs).filter((u) => worth(sk, u)).sort((x, y) => x.hp - y.hp); break;
+        default: pool = inReach(theirs).filter((u) => worth(sk, u)).sort((x, y) => dist(a, x) - dist(a, y));
+          if (a.target && !a.target.dead && pool.includes(a.target)) pool = [a.target];
+      }
+      if (!pool.length) return null;
+      const first = pool[0];
+      return sk.kind === "damage" && sk.radius > 0 ? theirs.filter((u) => dist(u, first) <= sk.radius) : [first];
+    };
+    const cast = (a: Ag, i: number, sk: FloorSkill, targets: Ag[]) => {
+      a.cds[i] = clk + (sk.cooldown * 50) / (50 + Math.max(0, a.spd));
+      a.lock = clk + 0.4;
+      a.cd = Math.max(a.cd, 0.5);
+      a.path = [];
+      const first = targets[0];
+      if (first !== a) a.look.flip = first.x < a.x;
+      const shot = sk.kind === "damage" && !sk.melee;
+      poke(a, sk.kind === "damage" && sk.melee ? "attack" : "cast", sk.kind === "damage" && sk.melee ? "lunge" : "cast");
+      const from = mid(a);
+      if (shot) {
+        // The arena sends one projectile at the first target; area attacks then burst around it.
+        const to = mid(first);
+        playShot(world.current, T, from.x, from.y, to.x, to.y, shotFor(sk, a.role));
+        if (sk.radius > 0) after(SHOT_MS, () => playBurst(world.current, T, first.x, first.y - 0.2, sk.radius));
+        targets.forEach((t) => after(SHOT_MS, () => effect(a, sk, t)));
+      } else {
+        if (sk.kind === "damage" && sk.radius > 0) after(140, () => playBurst(world.current, T, first.x, first.y - 0.2, sk.radius));
+        targets.forEach((t) => after(sk.kind === "damage" ? 140 : 120, () => effect(a, sk, t)));
+      }
+    };
+
+    const basicAttack = (from: Ag, to: Ag) => {
+      from.cd = from.side === "ally" ? 0.9 : 1.3;
+      from.look.flip = to.x < from.x;
+      const sk = from.side === "ally" ? from.basic : null;
+      if (sk && !sk.melee) {
+        poke(from, "attack", "");
+        const p0 = mid(from), p1 = mid(to);
+        playShot(world.current, T, p0.x, p0.y, p1.x, p1.y, shotFor(sk, from.role));
+        after(SHOT_MS, () => land(from, to, calc(from, to, sk, 1)));
+      } else {
+        poke(from, "attack", "lunge");
+        land(from, to, calc(from, to, sk, 1));
+      }
+    };
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const A = allies.current, F = foes.current;
       const live = stateRef.current === "play";
+      if (live) {
+        clk += dt;
+        const due = later.filter((q) => q.at <= clk);
+        if (due.length) { later.splice(0, later.length, ...later.filter((q) => q.at > clk)); due.forEach((q) => q.fn()); }
+        for (const u of [...A, ...F]) {
+          if (u.dead) continue;
+          if (u.mods.length) u.mods = u.mods.filter((m) => m.until > clk);
+          for (const o of u.over) {
+            while (!u.dead && o.next <= clk && o.next <= o.until) {
+              o.next += o.every;
+              if (o.kind === "dot") land(o.src, u, calc(o.src, u, o.sk, o.power), 0, true);
+              else heal(u, Math.max(1, Math.round(o.src.magic * o.power * 0.5)), false);
+            }
+          }
+          if (u.over.length) u.over = u.over.filter((o) => o.until > clk);
+        }
+      }
       const aliveA = A.filter((a) => !a.dead), aliveF = F.filter((f) => !f.dead);
 
       if (live) {
         for (const a of aliveA) {
           a.cd = Math.max(0, a.cd - dt);
           a.repath -= dt;
+          if (stunned(a) || a.lock > clk) continue;
           if (a.held) {
-            if (!step(a, dt, SPEED)) a.held = false;
+            if (!step(a, dt, SPEED * moveMul(a))) a.held = false;
             continue;
           }
           if (!a.target || a.target.dead) {
@@ -222,28 +445,49 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
             let best = 7;
             for (const f of aliveF) { const d = dist(a, f); if (d < best) { best = d; a.target = f; } }
           }
+          // Skills first: anything off cooldown that has someone worth using it on.
+          if (aliveF.some((f) => dist(a, f) < 8)) {
+            let cast1 = false;
+            for (let i = 0; i < a.specials.length && !cast1; i++) {
+              if (a.cds[i] > clk) continue;
+              const t = choose(a, a.specials[i], aliveA, aliveF);
+              if (t) { cast(a, i, a.specials[i], t); cast1 = true; }
+            }
+            if (cast1) continue;
+          } else {
+            // Out of combat the healers still top people up.
+            let cast1 = false;
+            for (let i = 0; i < a.specials.length && !cast1; i++) {
+              const sk = a.specials[i];
+              if (sk.kind !== "heal" || a.cds[i] > clk) continue;
+              const t = choose(a, sk, aliveA, aliveF);
+              if (t) { cast(a, i, sk, t); cast1 = true; }
+            }
+            if (cast1) continue;
+          }
           if (a.target) {
             const d = dist(a, a.target);
-            if (d > 1.2) {
+            if (d > a.reach) {
               if (a.repath <= 0 || !a.path.length) { a.path = findPath(nav, [a.x, a.y], [a.target.x, a.target.y]); a.repath = 0.6; }
-              step(a, dt, SPEED);
+              step(a, dt, SPEED * moveMul(a));
             } else {
               a.path = [];
               a.look.flip = a.target.x < a.x;
-              if (a.cd <= 0) { a.cd = 0.9; hurt(a, a.target); }
+              if (a.cd <= 0) basicAttack(a, a.target);
             }
           } else {
             // No foe near: stay with the group.
             const lead = aliveA[0];
             if (lead !== a && dist(a, lead) > 2.4) {
               if (a.repath <= 0 || !a.path.length) { a.path = findPath(nav, [a.x, a.y], [lead.x, lead.y]); a.repath = 0.8; }
-              step(a, dt, SPEED);
+              step(a, dt, SPEED * moveMul(a));
             }
           }
         }
         for (const f of aliveF) {
           f.cd = Math.max(0, f.cd - dt);
           f.repath -= dt;
+          if (stunned(f)) continue;
           if (!f.target || f.target.dead) {
             f.target = null;
             let best = f.boss ? 7 : 4.6;
@@ -252,11 +496,11 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
           if (!f.target) continue;
           if (dist(f, f.target) > 1.15) {
             if (f.repath <= 0 || !f.path.length) { f.path = findPath(nav, [f.x, f.y], [f.target.x, f.target.y]); f.repath = 0.6; }
-            step(f, dt, MOB_SPEED);
+            step(f, dt, MOB_SPEED * moveMul(f));
           } else {
             f.path = [];
             f.look.flip = f.target.x < f.x;
-            if (f.cd <= 0) { f.cd = 1.3; hurt(f, f.target); }
+            if (f.cd <= 0) basicAttack(f, f.target);
           }
         }
         if (!A.some((a) => !a.dead)) setState("lost");
@@ -278,7 +522,7 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
         u.el.style.transition = u.dead ? "opacity .6s" : "";
         if (u.hpEl) u.hpEl.style.width = `${(u.hp / u.max) * 100}%`;
         const moving = u.path.length > 0 && !u.dead;
-        const rest = u.dead ? "stun" : moving ? "walk" : "idle";
+        const rest = u.dead || stunned(u) ? "stun" : moving ? "walk" : "idle";
         const l = u.look;
         if (l.rest !== rest) l.rest = rest;
         const key = `${l.rest}${l.flip}${l.n}`;
@@ -351,7 +595,8 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
     if (Math.hypot(p.x - d.x, p.y - d.y) > 10 || performance.now() - d.t > 500) return;
     if (p.x < EDGE || p.y < EDGE || p.x > c.vw - EDGE || p.y > c.vh - EDGE) return;
     const wx = (p.x + c.x) / T, wy = (p.y + c.y) / T;
-    const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 - wy) < 0.9);
+    // Tap target follows the sprite: a slime is a small target, a golem a big one.
+    const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 * f.scale - wy) < Math.max(0.55, 0.9 * f.scale));
     const live = allies.current.filter((a) => !a.dead);
     if (foe) { for (const a of live) { a.target = foe; a.held = false; a.path = []; } return; }
     const goal = nearestWalkable(nav, wx, wy);
@@ -369,7 +614,16 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
   const boss = isBossFloor(floor.n);
   const quest = tutorialStep === 8 && floor.n === 1;
   const next = floor.n < MAX_FLOOR;
+  const nextOpen = next && floor.n + 1 <= floorUnlocked;
   const alive = left;
+  const lootList = Object.values(loot);
+  const tracker = quests.map((q) => {
+    const have = q.kind === "kill" ? killProgress[q.slug] ?? q.progress : Math.min(q.qty, (held[q.itemSlug ?? ""] ?? 0) + (loot[q.itemSlug ?? ""]?.qty ?? 0));
+    return { ...q, have };
+  });
+  const lootLine = lootList.length ? (
+    <p className="mb-3 text-lg text-leaf">Loot: {lootList.map((l) => `${l.qty}× ${l.name}`).join(", ")}</p>
+  ) : null;
 
   return (
     <div className="relative flex h-dvh w-full flex-col bg-ink">
@@ -382,6 +636,15 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
         <p className="text-lg">Foes <span className="text-ember">{alive}</span>/{floor.mobs.length}</p>
       </div>
       {quest && state === "play" && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">First job: defeat a bat on this floor.</p>}
+      {tracker.length > 0 && (
+        <div className="z-[9400] flex flex-wrap justify-center gap-x-4 gap-y-0.5 bg-night/80 px-3 py-1 text-base text-paper">
+          {tracker.map((q) => (
+            <span key={q.slug} className={q.have >= q.qty ? "text-leaf" : undefined}>
+              {q.title} <span className="text-gold">{q.have}/{q.qty}</span>{q.have >= q.qty && " ✓ hand in at the job board"}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div
         ref={view}
@@ -426,16 +689,24 @@ function FloorMap({ floor, fighters, tutorialStep, retry }: { floor: Floor; figh
               {state === "won" ? (
                 <>
                   <h2 className="mb-2 text-3xl uppercase text-gold">Floor {floor.n} cleared</h2>
-                  <p className="mb-4 text-xl text-paper">{floor.n >= MAX_FLOOR ? "You reached the top of the tower." : boss ? "The boss is down. A new region opens." : "The portal leads deeper."}</p>
+                  <p className="mb-3 text-xl text-paper">
+                    {floor.n >= MAX_FLOOR
+                      ? "You reached the top of the tower."
+                      : nextOpen
+                        ? boss ? "The boss is down. A new region opens." : "The portal leads deeper."
+                        : `The portal is sealed. Hand in this floor's quests at the job board to open Floor ${floor.n + 1}.`}
+                  </p>
+                  {lootLine}
                   <div className="flex flex-col gap-2">
-                    {next && <Link href={`/floor/${floor.n + 1}`}><PixelButton className="w-full">Floor {floor.n + 1}</PixelButton></Link>}
+                    {nextOpen &&<Link href={`/floor/${floor.n + 1}`}><PixelButton className="w-full">Floor {floor.n + 1}</PixelButton></Link>}
                     <Link href="/home"><PixelButton variant="ghost" className="w-full">Back to the guild</PixelButton></Link>
                   </div>
                 </>
               ) : (
                 <>
                   <h2 className="mb-2 text-3xl uppercase text-ember">Party down</h2>
-                  <p className="mb-4 text-xl text-paper">Your fighters were beaten. Rest up and try again.</p>
+                  <p className="mb-3 text-xl text-paper">Your fighters were beaten. Rest up and try again.</p>
+                  {lootLine}
                   <div className="flex flex-col gap-2">
                     <PixelButton className="w-full" onClick={retry}>Try again</PixelButton>
                     <Link href="/home"><PixelButton variant="ghost" className="w-full">Back to the guild</PixelButton></Link>

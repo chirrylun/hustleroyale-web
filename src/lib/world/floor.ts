@@ -110,6 +110,15 @@ function rng(seed: number) {
   };
 }
 
+/**
+ * How big a mob is next to a fighter (1 = a fighter's sprite frame). Every mob sheet draws its creature to fill
+ * the same share of its frame as a fighter does, so the size comes from scaling the frame: a slime is a small
+ * blob, a bat is bat-sized, a golem looms over the party. Bosses are always big, whatever they are.
+ */
+export const MOB_SCALE: Record<string, number> = { slime: 0.45, bat: 0.42, mushroom: 0.55, goblin: 0.8, direwolf: 0.75, golem: 1.3 };
+export const BOSS_SCALE = 1.5;
+export const mobScale = (kind: string, boss: boolean) => (boss ? BOSS_SCALE : MOB_SCALE[kind] ?? 0.8);
+
 /** Mob numbers by level. Placeholder balance: tune with play. */
 export const mobStats = (level: number, boss: boolean) => ({
   hp: Math.round((40 + 22 * level) * (boss ? 6 : 1)),

@@ -280,7 +280,7 @@ export const HIDE_MS: Record<string, number | undefined> = { Vanish: 2500, "Shad
 /** After hiding, the fighter blinks back into focus over this long. */
 export const BLINK_MS = 450;
 
-function shotArt(name: string, role: string, kind: string, damageType: string): NonNullable<Effect["fx"]> {
+export function shotArt(name: string, role: string, kind: string, damageType: string): NonNullable<Effect["fx"]> {
   switch (name) {
     case "Sonic Note": return { sheet: "shot2", row: 0 };
     case "Aimed Shot": case "Pin Shot": case "Poison Arrow": return { sheet: "shot2", row: 1 };
@@ -291,7 +291,7 @@ function shotArt(name: string, role: string, kind: string, damageType: string): 
 }
 
 /** Buff and debuff art by what changed. */
-function modArt(stat: string, pct: number): NonNullable<Effect["fx"]> {
+export function modArt(stat: string, pct: number): NonNullable<Effect["fx"]> {
   if (stat === "spd") return { sheet: "support2", row: pct > 0 ? 1 : 2 };
   if (stat === "atk" && pct > 0) return { sheet: "support2", row: 0 };
   if (stat === "def" && pct < 0) return { sheet: "support2", row: 3 };

@@ -16,7 +16,24 @@ export interface StarterFighter {
   stamina: number;
   magic: number;
   template: { name: string; role: Role; archetype: string; rarity: Rarity; sprite_key: string };
-  skills: { slot: number; name: string }[];
+  skills: SkillRef[];
+}
+
+/**
+ * An equipped skill. The slot and name are always there; the rest is only loaded where it is needed (the
+ * adventure floors, which run skills in the browser), so screens that just list names don't depend on it.
+ */
+export interface SkillRef {
+  slot: number;
+  name: string;
+  kind?: "damage" | "heal" | "shield" | "buff" | "debuff";
+  damageType?: "physical" | "magical" | "none";
+  power?: number;
+  cooldownMs?: number;
+  range?: number;
+  target?: string;
+  effect?: Record<string, unknown>;
+  basic?: boolean;
 }
 
 export class StarterPackError extends Error {
