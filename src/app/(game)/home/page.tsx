@@ -13,16 +13,17 @@ import { connection } from "next/server";
  * with "unstable value Date.now()" from the auth client. The static shell renders instantly
  * and the player's data streams in.
  */
-export default function HomePage() {
+export default function HomePage({ searchParams }: { searchParams: Promise<{ enter?: string }> }) {
   return (
     <Suspense fallback={<HomeFallback />}>
-      <HomeContent />
+      <HomeContent searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function HomeContent() {
+async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: string }> }) {
   await connection();
+  const enter = Number((await searchParams).enter) || 0;
   const supabase = await createClient();
   const {
     data: { user },
@@ -44,7 +45,7 @@ async function HomeContent() {
   if (step < 6) {
     return <Tutorial username={username} initialStep={step} fighters={fighters} />;
   }
-  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} />;
+  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} enterFloor={enter} />;
 }
 
 function HomeFallback() {

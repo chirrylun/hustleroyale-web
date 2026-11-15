@@ -9,16 +9,18 @@ import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, themeOf } from "@/lib/world/floor";
 import { GuildHall } from "./GuildHall";
 import { InfoBox } from "./InfoBox";
+import { PartyPanel } from "./PartyPanel";
 
 /** Groups that stay open while the first job is unfinished: the job board itself and the adventure, where the job is done. */
 const OPEN_DURING_FIRST_JOB = ["jobs", "adventure"];
 const FIRST_JOB_NOTICE = "Complete your first quest on the job board first.";
 
 /** Tutorial job: kill a bat on Floor 1 (steps 6-8 of the tutorial); afterwards the board is "empty" until more jobs land. */
-export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0, floorUnlocked = 1 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number }) {
+export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number }) {
   const router = useRouter();
   const [step, setStep] = useState(tutorialStep);
-  const [panel, setPanel] = useState<"jobs" | "adventure" | null>(null);
+  const [panel, setPanel] = useState<"jobs" | "adventure" | "party" | null>(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
+  const [floorSel, setFloorSel] = useState(enterFloor >= 1 ? enterFloor : 1);
   const [msg, setMsg] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, start] = useTransition();
@@ -107,7 +109,9 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         {panel && (
           <div className="absolute inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3">
             <div className="pixel-box card-reveal w-full max-w-lg bg-night p-5">
-              {panel === "adventure" ? (
+              {panel === "party" ? (
+                <PartyPanel floorNo={floorSel} fighters={fighters} onBack={() => setPanel("adventure")} onGo={() => router.push(`/floor/${floorSel}`)} />
+              ) : panel === "adventure" ? (
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Adventure</h2>
                   {step < 9 && <p className="mb-2 text-xl text-paper">Floor 1 has a bat waiting for you.</p>}
@@ -117,7 +121,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
                         <p className="mb-1 text-base uppercase text-steel">{themeOf(t * 10 + 1).name}</p>
                         <div className="grid grid-cols-5 gap-1.5">
                           {Array.from({ length: 10 }, (_, i) => t * 10 + i + 1).filter((n) => n <= unlocked).map((n) => (
-                            <Link key={n} href={`/floor/${n}`} className={`pixel-box py-1.5 text-center text-xl ${n <= floorCleared ? "bg-panel text-leaf" : "bg-gold text-ink"}`}>{n}</Link>
+                            <button key={n} type="button" onClick={() => { setFloorSel(n); setPanel("party"); }} className={`pixel-box py-1.5 text-center text-xl ${n <= floorCleared ? "bg-panel text-leaf" : "bg-gold text-ink"}`}>{n}</button>
                           ))}
                         </div>
                       </div>
@@ -150,9 +154,9 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
                   {msg && <p role="alert" className="mt-2 text-base text-ember">{msg}</p>}
                 </>
               )}
-              <div className="mt-4 text-right">
+              {panel !== "party" && <div className="mt-4 text-right">
                 <PixelButton variant="ghost" className="text-base" onClick={() => setPanel(null)}>Close</PixelButton>
-              </div>
+              </div>}
             </div>
           </div>
         )}

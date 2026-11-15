@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useReducer, useRef, useState, type PointerEvent } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
@@ -134,9 +135,10 @@ export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floo
 }
 
 function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; retry: () => void }) {
+  const router = useRouter();
   const nav = useMemo(() => buildNav(floor.nav), [floor]);
   const squad = useMemo(() => {
-    const team = fighters.filter((f) => f.team_slot != null).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
+    const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
     return (team.length ? team : fighters).slice(0, 3);
   }, [fighters]);
 
@@ -147,11 +149,11 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
   const goal = baseMobCount(floor.n); // kills that open the portal (boss floors also need the boss down)
   const [kills, setKills] = useState(0);
   /** The party's best level, which colours the level tags over monsters; rises when someone levels up. */
-  const [partyLvl, setPartyLvl] = useState(() => Math.max(1, ...fighters.filter((f) => f.team_slot != null).map((f) => f.level)));
+  const [partyLvl, setPartyLvl] = useState(() => Math.max(1, ...fighters.filter((f) => f.team_slot > 0).map((f) => f.level)));
   const [bossDown, setBossDown] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
-  const progress = useRef({ kills: 0, boss: false, unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false });
+  const progress = useRef({ kills: 0, boss: false, gate: false, unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false });
   const [stance, setStanceState] = useState<Stance>("neutral");
   const stanceRef = useRef<Stance>("neutral");
   const [free, setFree] = useState(false); // camera detached from the party
@@ -501,6 +503,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
         else {
           const goalMet = pr.kills >= goal && (!isBossFloor(floor.n) || pr.boss);
           if (goalMet && !pr.unlocked) { pr.unlocked = true; setUnlocked(true); }
+          if (pr.gate && dist(A.find((x) => !x.dead)!, { x: floor.start[0], y: floor.start[1] + 0.9 }) < 2.3) {
+            pr.gate = false;
+            router.push(floor.n > 1 ? `/home?enter=${floor.n - 1}` : "/home");
+          }
           const lead2 = A.find((a) => !a.dead)!;
           if (goalMet && dist(lead2, { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 }) < 2.4) {
             setState("won");
@@ -600,6 +606,19 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
     const wx = (p.x + c.x) / T, wy = (p.y + c.y) / T;
     const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 - wy) < 0.9);
     const live = allies.current.filter((a) => !a.dead);
+    progress.current.gate = false;
+    // Tapping the white pillar walks the party into it; arriving there leads back out of the floor.
+    const bx = floor.start[0], by = floor.start[1] + 0.9;
+    if (!foe && Math.abs(wx - bx) < 0.9 && wy > by - 3.6 && wy < by + 0.5) {
+      progress.current.gate = true;
+      const heading = Math.atan2(by - (live[0]?.y ?? by), bx - (live[0]?.x ?? bx));
+      live.forEach((a, i) => {
+        const to: Pt = nearestWalkable(nav, bx + formationOffset(i, live.length, heading)[0] * 0.5, by + 0.9);
+        a.path = findPath(nav, [a.x, a.y], to);
+        a.held = a.path.length > 0; a.target = null; a.delay = i * 0.1;
+      });
+      return;
+    }
     if (foe) {
       live.forEach((a, i) => {
         a.target = foe; a.held = false; a.path = [];
@@ -649,7 +668,6 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
           <p className="truncate text-lg uppercase text-gold">Floor {floor.n}{boss && " · Boss"}</p>
           <p className="truncate text-sm text-steel">{floor.theme.name}</p>
         </div>
-        <p className="text-lg">Defeated <span className="text-ember">{kills}</span>/{goal}{boss && <span className={bossDown ? "text-leaf" : "text-gold"}> · Boss{bossDown && " ✓"}</span>}</p>
       </div>
       {quest && state === "play" && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">First job: defeat a bat on this floor.</p>}
 
@@ -723,7 +741,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
                   <h2 className="mb-2 text-3xl uppercase text-gold">Floor {floor.n} cleared</h2>
                   <p className="mb-4 text-xl text-paper">{floor.n >= MAX_FLOOR ? "You reached the top of the tower." : !next ? `Finish the Floor ${floor.n} quests on the job board to open Floor ${floor.n + 1}.` : boss ? "The boss is down. A new region opens." : "The portal leads deeper."}</p>
                   <div className="flex flex-col gap-2">
-                    {next && <Link href={`/floor/${floor.n + 1}`}><PixelButton className="w-full">Floor {floor.n + 1}</PixelButton></Link>}
+                    {next && <Link href={`/home?enter=${floor.n + 1}`}><PixelButton className="w-full">Floor {floor.n + 1}</PixelButton></Link>}
                     <Link href="/home"><PixelButton variant="ghost" className="w-full">Back to the guild</PixelButton></Link>
                   </div>
                 </>

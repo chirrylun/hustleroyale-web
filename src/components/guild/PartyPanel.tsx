@@ -1,25 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import type { GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
 import { isBossFloor, themeOf } from "@/lib/world/floor";
-import { FloorScreen } from "./FloorScreen";
 
 const PARTY_MAX = 3;
 const ROLE_LABEL = { tank: "Tank", healer: "Healer", dps: "Damage" } as const;
 
-/** Pick who goes out, then walk onto the floor. The chosen party is saved as the player's team, so XP goes to them. */
-export function FloorEntry({ floorNo, fighters, tutorialStep, floorUnlocked }: { floorNo: number; fighters: GuildFighter[]; tutorialStep: number; floorUnlocked: number }) {
-  const [party, setParty] = useState<GuildFighter[] | null>(null);
-  if (party) return <FloorScreen floorNo={floorNo} fighters={party} tutorialStep={tutorialStep} floorUnlocked={floorUnlocked} />;
-  return <PartySelect floorNo={floorNo} fighters={fighters} onGo={setParty} />;
-}
-
-function PartySelect({ floorNo, fighters, onGo }: { floorNo: number; fighters: GuildFighter[]; onGo: (p: GuildFighter[]) => void }) {
+/** Pick who goes out, right in the guild. Heading out saves the party as the player's team (XP goes to them), then the floor loads. */
+export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: number; fighters: GuildFighter[]; onBack: () => void; onGo: () => void }) {
   // Start from the current team (or the strongest fighters if none is set).
   const [ids, setIds] = useState<string[]>(() => {
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => a.team_slot - b.team_slot).map((f) => f.id);
@@ -41,12 +33,12 @@ function PartySelect({ floorNo, fighters, onGo }: { floorNo: number; fighters: G
     setBusy(true); setError(null);
     const { error: e } = await createClient().rpc("set_party", { p_ids: ids });
     if (e) { setError("Couldn't set your party. Try again."); setBusy(false); return; }
-    onGo(chosen.map((f, i) => ({ ...f, team_slot: i + 1 })));
+    onGo();
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-3 p-3 sm:p-6">
-      <section className="pixel-box card-reveal bg-night p-4 sm:p-5">
+    <div className="flex flex-col gap-3">
+      <section>
         <p className="text-base uppercase text-steel">{theme.name}</p>
         <h1 className="mb-1 text-3xl uppercase text-gold">Floor {floorNo}{isBossFloor(floorNo) && " · Boss"}</h1>
         <p className="mb-3 text-xl text-paper">Choose who goes out. Send one fighter or the whole party.</p>
@@ -84,7 +76,7 @@ function PartySelect({ floorNo, fighters, onGo }: { floorNo: number; fighters: G
         </div>
       </section>
 
-      <section className="pixel-box bg-night p-4" aria-label="Your fighters">
+      <section aria-label="Your fighters">
         <h2 className="mb-2 text-xl uppercase text-gold">Your fighters</h2>
         <div className="grid max-h-[34vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4">
           {fighters.map((f) => {
@@ -107,9 +99,9 @@ function PartySelect({ floorNo, fighters, onGo }: { floorNo: number; fighters: G
       </section>
 
       <div className="flex gap-2">
-        <Link href="/home" className="flex-none"><PixelButton variant="ghost" className="h-full">Back</PixelButton></Link>
-        <PixelButton className="flex-1 text-xl" disabled={!chosen.length || busy} onClick={go}>{busy ? "…" : `Enter Floor ${floorNo}`}</PixelButton>
+        <PixelButton variant="ghost" className="flex-none" onClick={onBack}>Back</PixelButton>
+        <PixelButton className="flex-1 text-xl" disabled={!chosen.length || busy} onClick={go}>{busy ? "…" : `Head out to Floor ${floorNo}`}</PixelButton>
       </div>
-    </main>
+    </div>
   );
 }
