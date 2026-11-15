@@ -7,6 +7,7 @@ import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { mobScale } from "@/lib/sprites/designs";
 import type { GuildFighter } from "@/lib/guild";
+import type { EquippedSkill } from "@/lib/starter-pack";
 import { findPath, buildNav, clearLine, nearestWalkable, walkable, type Pt } from "@/lib/guild-nav";
 import type { Stance } from "@/lib/battle";
 import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal, sway } from "@/lib/world/stance";
@@ -42,8 +43,18 @@ const chaseRange = (floor: number, boss: boolean) => (boss ? LEASH : Math.min(LE
 const loseRange = (floor: number, boss: boolean) => (boss ? 14 : 4 + 0.2 * floor);
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
+/** A special skill a fighter fires on its own whenever it is ready, has the energy and the moment is right. */
+interface FSkill { name: string; kind: string; type: string; power: number; cd: number; cost: number; all: boolean; weakest: boolean; area: boolean; ready: number }
+const toFSkill = (s: EquippedSkill): FSkill => {
+  const d = (s.description ?? "").toLowerCase();
+  return {
+    name: s.name, kind: s.kind ?? "damage", type: s.damage_type ?? "physical", power: s.power ?? 1, cd: s.cooldown_ms ?? 8000, cost: s.stamina_cost ?? 10, ready: 0,
+    all: /every ally|all allies|every enemy|all enemies|earshot/.test(d), weakest: /weakest|most (hurt|wounded)/.test(d), area: /area|rain of|every enemy/.test(d),
+  };
+};
+
 const makeAg = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "name" | "level" | "x" | "y" | "hp" | "atk" | "def" | "kind">): Ag => ({
-  role: "dps", max: p.hp, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false, provoked: false,
+  role: "dps", max: p.hp, magic: 0, skills: [], en: 0, maxEn: 0, regen: 0, gcd: 0, shield: 0, shieldUntil: 0, buffUntil: 0, weakUntil: 0, dodge: 0, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false, provoked: false,
   look: { rest: "idle", flip: false, act: null, n: 0 }, side,
   slot: 0, speedMul: 1, delay: 0, sway: [0, 0], swayAt: 0, angle: Math.random() * Math.PI * 2, home: [p.x, p.y, 2], wanderAt: 0, born: -1e9, deadAt: 0,
   movedAt: 0, skipId: "", skipUntil: 0,
@@ -62,6 +73,10 @@ interface Ag {
   level: number;
   x: number; y: number;
   hp: number; max: number; atk: number; def: number;
+  /** Fighters only: the magic stat, the equipped skills (slots 2-5), and the energy they spend. */
+  magic: number; skills: FSkill[]; en: number; maxEn: number; regen: number; gcd: number;
+  /** Temporary effects (times are in ms on the loop clock). */
+  shield: number; shieldUntil: number; buffUntil: number; weakUntil: number; dodge: number;
   path: Pt[];
   target: Ag | null;
   cd: number;
@@ -145,13 +160,13 @@ function Unit({ a, party }: { a: Ag; party: number }) {
  * Combat here runs in the browser and reports kills to the server, which checks the floor is unlocked and
  * pays XP. A fully server-run version comes with shared rooms.
  */
-export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floorUnlocked = 1 }: { floorNo: number; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number }) {
+export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floorUnlocked = 1, arriveFromAbove = false }: { floorNo: number; /** Came down from the floor above: the party appears beside the way up instead of by the way in. */ arriveFromAbove?: boolean; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number }) {
   const floor = useMemo(() => generateFloor(floorNo), [floorNo]);
   const [run, setRun] = useState(0); // bump to retry
-  return <FloorMap key={run} floor={floor} fighters={fighters} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} retry={() => setRun((r) => r + 1)} />;
+  return <FloorMap key={run} floor={floor} fighters={fighters} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} retry={() => setRun((r) => r + 1)} />;
 }
 
-function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; retry: () => void }) {
+function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromAbove, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
   const router = useRouter();
   const [askBack, setAskBack] = useState(false);
   const [askNext, setAskNext] = useState(false);
@@ -172,7 +187,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
   const [bossDown, setBossDown] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
-  const progress = useRef({ kills: 0, boss: false, gate: false as false | "back" | "next", unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false });
+  const progress = useRef({ kills: 0, boss: false, gate: false as false | "back" | "next", unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false, left: false });
   const [stance, setStanceState] = useState<Stance>("neutral");
   const stanceRef = useRef<Stance>("neutral");
   const [free, setFree] = useState(false); // camera detached from the party
@@ -195,10 +210,15 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
     const order = squad.map((f, i) => ({ f, i })).sort((p, q) => ROLE_RANK[p.f.template.role] - ROLE_RANK[q.f.template.role] || p.i - q.i);
     allies.current = order.map(({ f }, slot) => {
       const off = formationOffset(slot, order.length, 0);
-      const at = nearestWalkable(nav, floor.start[0] + 1.6 + off[0], floor.start[1] + off[1]);
+      // Beside the light, never inside it: by the white pillar when coming up, by the golden one when coming back down.
+      const at = fromAbove
+        ? nearestWalkable(nav, floor.exit[0] - 3.2 + off[0], floor.exit[1] + 1.8 + off[1])
+        : nearestWalkable(nav, floor.start[0] + 3 + off[0], floor.start[1] + 1 + off[1]);
       return makeAg("ally", {
         id: f.id, sprite: f.template.sprite_key, role: f.template.role, name: f.template.name, level: f.level,
         x: at[0], y: at[1], hp: f.hp, atk: f.atk, def: f.def, kind: "fighter", slot, speedMul: rnd(0.93, 1.07),
+        magic: f.magic, maxEn: f.stamina * 5, en: f.stamina * 5, regen: 2 + f.stamina * 0.2,
+        skills: (f.skills ?? []).filter((s) => s.slot >= 2 && s.name && s.kind).sort((x, y) => x.slot - y.slot).map(toFSkill),
       });
     });
     const zoneOf = (x: number, y: number): [number, number, number] => {
@@ -340,9 +360,12 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
       return true;
     };
     let spawnId = 0;
-    const hurt = (from: Ag, to: Ag, now: number) => {
-      const raw = from.side === "ally" ? from.atk - to.def * 0.5 : from.atk - to.def * 0.45;
-      const dmg = Math.max(2, Math.round(raw * (0.9 + Math.random() * 0.2)));
+    const hurt = (from: Ag, to: Ag, now: number, mult = 1, magical = false) => {
+      if (to.dodge > 0) { to.dodge--; spawnText(to.x, to.y, "Dodge", "text-steel"); return; }
+      const power = from.side === "ally" ? (magical && from.magic ? from.magic : from.atk) * (now < from.buffUntil ? 1.25 : 1) : from.atk;
+      const raw = (from.side === "ally" ? power - to.def * 0.5 : power * (now < from.weakUntil ? 0.7 : 1) - to.def * 0.45) * mult;
+      let dmg = Math.max(2, Math.round(raw * (0.9 + Math.random() * 0.2)));
+      if (to.shield > 0 && now < to.shieldUntil) { const soak = Math.min(to.shield, dmg); to.shield -= soak; dmg -= soak; }
       to.hp = Math.max(0, to.hp - dmg);
       if (from.side === "ally" && to.side === "foe") {
         to.provoked = true;
@@ -350,7 +373,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
       }
       to.look.act = "hurt"; to.look.n++;
       from.look.act = "attack"; from.look.n++;
-      spawnText(to.x, to.y, String(dmg), from.side === "ally" ? "text-gold" : "text-ember");
+      spawnText(to.x, to.y, dmg > 0 ? String(dmg) : "Blocked", from.side === "ally" ? "text-gold" : "text-ember");
       if (to.hp <= 0) {
         to.dead = true; to.path = []; to.deadAt = now;
         if (to.side === "foe") {
@@ -361,6 +384,68 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
           const plan = spawnPlan(baseMobCount(floor.n), players);
           pr.next = Math.max(pr.next, now + rnd(plan.afterKillMs[0], plan.afterKillMs[1]));
         }
+      }
+    };
+
+    /**
+     * A fighter's equipped skills. Each one fires on its own when it is off cooldown, there is energy for it and the moment
+     * is right: heals when someone is hurt, shields when a fight is on, attacks and debuffs when a foe is in reach.
+     */
+    const cast = (a: Ag, now: number, A: Ag[], F: Ag[]) => {
+      if (now < a.gcd) return;
+      const friends = A.filter((u) => !u.dead && dist(a, u) < 10);
+      const foesNear = F.filter((f) => !f.dead && dist(a, f) < 8);
+      const fighting = foesNear.some((f) => f.target || f.provoked) || !!a.target;
+      const hurtRatio = (u: Ag) => u.hp / u.max;
+      for (const sk of a.skills) {
+        if (now < sk.ready || a.en < sk.cost) continue;
+        let done = false;
+        const say = (text: string, cls: string) => spawnText(a.x, a.y - 0.4, text, cls, 1100, "dmg");
+        if (sk.kind === "heal") {
+          const wounded = friends.filter((u) => hurtRatio(u) < (sk.all ? 0.8 : 0.65)).sort((p, q) => hurtRatio(p) - hurtRatio(q));
+          if (!wounded.length) continue;
+          const targets = sk.all ? wounded : [wounded[0]];
+          for (const u of targets) {
+            const amt = Math.max(1, Math.round(Math.max(a.magic * sk.power * 0.5, u.max * 0.15 * sk.power) * (sk.all ? 0.8 : 1)));
+            u.hp = Math.min(u.max, u.hp + amt);
+            spawnText(u.x, u.y, `+${amt}`, "text-leaf");
+          }
+          done = true;
+        } else if (sk.kind === "shield") {
+          if (!fighting) continue;
+          const pool = sk.all ? friends : [sk.weakest ? [...friends].sort((p, q) => hurtRatio(p) - hurtRatio(q))[0] : a];
+          for (const u of pool) {
+            u.shield = Math.max(u.shield, Math.max(5, Math.round(Math.max(a.def * sk.power * 0.5, u.max * 0.12 * sk.power))));
+            u.shieldUntil = now + 6000;
+            spawnText(u.x, u.y, "Shield", "text-steel");
+          }
+          done = true;
+        } else if (sk.kind === "damage") {
+          const t = a.target;
+          if (!t || t.dead || dist(a, t) > 1.7) continue;
+          const hit = sk.area ? F.filter((f) => !f.dead && Math.hypot(f.x - t.x, f.y - t.y) < 3) : [t];
+          hit.forEach((f) => hurt(a, f, now, sk.power, sk.type === "magical"));
+          a.cd = Math.max(a.cd, 0.7);
+          done = true;
+        } else if (sk.kind === "buff") {
+          if (!fighting) continue;
+          if (/dodge|vanish|step/i.test(sk.name)) a.dodge = /vanish/i.test(sk.name) ? 2 : 1;
+          else friends.forEach((u) => { u.buffUntil = now + 8000; });
+          done = true;
+        } else if (sk.kind === "debuff") {
+          const t = a.target;
+          if (!t || t.dead || dist(a, t) > 5) continue;
+          const victims = sk.all ? foesNear : [t];
+          victims.forEach((f) => { f.weakUntil = now + 8000; if (/taunt/i.test(sk.name)) { f.target = a; f.path = []; } });
+          done = true;
+        }
+        if (!done) continue;
+        a.en -= sk.cost;
+        sk.ready = now + sk.cd;
+        a.gcd = now + 700;
+        a.look.act = "attack"; a.look.n++;
+        say(sk.name, sk.kind === "heal" ? "text-leaf" : sk.kind === "damage" ? "text-gold" : "text-steel");
+        return;
       }
     };
 
@@ -410,6 +495,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
         aliveA.forEach((a, i) => {
           a.cd = Math.max(0, a.cd - dt);
           a.repath -= dt;
+          a.en = Math.min(a.maxEn, a.en + a.regen * dt);
           const spd = SPEED * a.speedMul;
           if (a.held) {
             if (a.delay > 0) { a.delay -= dt; return; } // each one sets off a beat apart
@@ -430,6 +516,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
             // Each fighter takes its own side of the foe instead of piling onto one point.
             if (a.target) a.angle = Math.atan2(a.y - a.target.y, a.x - a.target.x) + (i === 0 ? 0 : i % 2 ? 0.9 : -0.9);
           }
+          if (a.skills.length) cast(a, now, A, F);
           if (a.target) {
             const t = a.target, d = dist(a, t);
             if (d > 1.35) {
@@ -532,7 +619,9 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
             pr.gate = false;
           }
           const lead2 = A.find((a) => !a.dead)!;
-          if (goalMet && dist(lead2, { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 }) < 2.4) {
+          const exitAt = { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 };
+          if (!pr.left && dist(lead2, exitAt) > 4) pr.left = true; // arriving beside the light doesn't count as walking into it
+          if (goalMet && pr.left && dist(lead2, exitAt) < 2.4) {
             setState("won");
             send("clear_floor", { p_floor: floor.n });
           }
@@ -712,7 +801,17 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
           {floor.props.map((p) => {
             // The two gates are pillars of light: white leads back, green leads on (dim until the floor is clear).
             if (p.kind === "entry" || p.kind === "exit") {
-              return <div key={p.id} className={`pillar ${p.kind === "entry" ? "pillar-back" : nextOpen ? "pillar-next" : "pillar-next pillar-off"}`} style={{ left: p.x * T, top: p.y * T, zIndex: depth(p.y) }} />;
+              const label = p.kind === "entry" ? (floor.n > 1 ? `Floor ${floor.n - 1}` : "Guild") : floor.n >= MAX_FLOOR ? "Summit" : `Floor ${floor.n + 1}`;
+              const off = p.kind === "exit" && !nextOpen;
+              return (
+                <div key={p.id}>
+                  <div className={`pillar ${p.kind === "entry" ? "pillar-back" : nextOpen ? "pillar-next" : "pillar-next pillar-off"}`} style={{ left: p.x * T, top: p.y * T, zIndex: depth(p.y) }} />
+                  <span
+                    className={`pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-xl font-bold leading-none ${p.kind === "entry" ? "text-paper" : "text-gold"} ${off ? "opacity-50" : ""}`}
+                    style={{ left: p.x * T, top: p.y * T - 238, zIndex: 9000, textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}
+                  >{label}</span>
+                </div>
+              );
             }
             const r = A.rects[p.idx];
             const k = (p.w * T) / ((r.w * (p.crop ?? 1)));
@@ -782,7 +881,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
               <h2 className="mb-2 text-3xl uppercase text-paper">{floor.n > 1 ? `Back to Floor ${floor.n - 1}?` : "Return to the guild?"}</h2>
               <p className="mb-4 text-xl text-paper">{floor.n > 1 ? "Your party will take the white light back down." : "This ends the expedition."}</p>
               <div className="flex flex-col gap-2">
-                <PixelButton className="w-full" onClick={() => router.push(floor.n > 1 ? `/floor/${floor.n - 1}` : "/home")}>{floor.n > 1 ? `Go to Floor ${floor.n - 1}` : "Return"}</PixelButton>
+                <PixelButton className="w-full" onClick={() => router.push(floor.n > 1 ? `/floor/${floor.n - 1}?from=above` : "/home")}>{floor.n > 1 ? `Go to Floor ${floor.n - 1}` : "Return"}</PixelButton>
                 <PixelButton variant="ghost" className="w-full" onClick={() => setAskBack(false)}>Stay here</PixelButton>
               </div>
             </div>

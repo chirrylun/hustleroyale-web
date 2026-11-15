@@ -16,7 +16,19 @@ export interface StarterFighter {
   stamina: number;
   magic: number;
   template: { name: string; role: Role; archetype: string; rarity: Rarity; sprite_key: string };
-  skills: { slot: number; name: string }[];
+  skills: EquippedSkill[];
+}
+
+/** A skill in a fighter's loadout. Slot 1 is the basic attack; the rest fire on their own when ready. */
+export interface EquippedSkill {
+  slot: number;
+  name: string;
+  kind?: string;
+  damage_type?: string;
+  power?: number;
+  cooldown_ms?: number;
+  stamina_cost?: number;
+  description?: string | null;
 }
 
 export class StarterPackError extends Error {
