@@ -137,6 +137,7 @@ export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floo
 function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; retry: () => void }) {
   const router = useRouter();
   const [askBack, setAskBack] = useState(false);
+  const [askNext, setAskNext] = useState(false);
   const nav = useMemo(() => buildNav(floor.nav), [floor]);
   const squad = useMemo(() => {
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
@@ -154,7 +155,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
   const [bossDown, setBossDown] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
-  const progress = useRef({ kills: 0, boss: false, gate: false, unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false });
+  const progress = useRef({ kills: 0, boss: false, gate: false as false | "back" | "next", unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false });
   const [stance, setStanceState] = useState<Stance>("neutral");
   const stanceRef = useRef<Stance>("neutral");
   const [free, setFree] = useState(false); // camera detached from the party
@@ -504,9 +505,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
         else {
           const goalMet = pr.kills >= goal && (!isBossFloor(floor.n) || pr.boss);
           if (goalMet && !pr.unlocked) { pr.unlocked = true; setUnlocked(true); }
-          if (pr.gate && dist(A.find((x) => !x.dead)!, { x: floor.start[0], y: floor.start[1] + 0.9 }) < 2.3) {
+          const gateAt = pr.gate === "next" ? { x: floor.exit[0], y: floor.exit[1] + 0.9 } : { x: floor.start[0], y: floor.start[1] + 0.9 };
+          if (pr.gate && dist(A.find((x) => !x.dead)!, gateAt) < 2.3) {
+            if (pr.gate === "back") setAskBack(true); else if (!goalMet) setAskNext(true);
             pr.gate = false;
-            setAskBack(true);
           }
           const lead2 = A.find((a) => !a.dead)!;
           if (goalMet && dist(lead2, { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 }) < 2.4) {
@@ -610,11 +612,16 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
     progress.current.gate = false;
     // Tapping the white pillar walks the party into it; arriving there leads back out of the floor.
     const bx = floor.start[0], by = floor.start[1] + 0.9;
-    if (!foe && Math.abs(wx - bx) < 0.9 && wy > by - 3.6 && wy < by + 0.5) {
-      progress.current.gate = true;
-      const heading = Math.atan2(by - (live[0]?.y ?? by), bx - (live[0]?.x ?? bx));
+    // The gold pillar works the same way once its floor is open (Floors 2 and 3 need no unlock, so it is open from the start).
+    const nx = floor.exit[0], ny = floor.exit[1] + 0.9;
+    const onBack = Math.abs(wx - bx) < 0.9 && wy > by - 3.6 && wy < by + 0.5;
+    const onNext = nextOpen && Math.abs(wx - nx) < 0.9 && wy > ny - 3.6 && wy < ny + 0.5;
+    if (!foe && (onBack || onNext)) {
+      const [gx, gy] = onNext ? [nx, ny] : [bx, by];
+      progress.current.gate = onNext ? "next" : "back";
+      const heading = Math.atan2(gy - (live[0]?.y ?? gy), gx - (live[0]?.x ?? gx));
       live.forEach((a, i) => {
-        const to: Pt = nearestWalkable(nav, bx + formationOffset(i, live.length, heading)[0] * 0.5, by + 0.9);
+        const to: Pt = nearestWalkable(nav, gx + formationOffset(i, live.length, heading)[0] * 0.5, gy + 0.9);
         a.path = findPath(nav, [a.x, a.y], to);
         a.held = a.path.length > 0; a.target = null; a.delay = i * 0.1;
       });
@@ -659,6 +666,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
   const boss = isBossFloor(floor.n);
   const quest = tutorialStep === 8 && floor.n === 1;
   // Floors 1 to 3 open one by one as you clear them; from Floor 3 on, the job-board quests open the next floor.
+  const nextOpen = unlocked || (floor.n < 3 && !isBossFloor(floor.n));
   const next = floor.n < MAX_FLOOR && (floor.n < 3 || floor.n + 1 <= floorUnlocked);
 
   return (
@@ -683,7 +691,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
           {floor.props.map((p) => {
             // The two gates are pillars of light: white leads back, green leads on (dim until the floor is clear).
             if (p.kind === "entry" || p.kind === "exit") {
-              return <div key={p.id} className={`pillar ${p.kind === "entry" ? "pillar-back" : unlocked ? "pillar-next" : "pillar-next pillar-off"}`} style={{ left: p.x * T, top: p.y * T, zIndex: depth(p.y) }} />;
+              return <div key={p.id} className={`pillar ${p.kind === "entry" ? "pillar-back" : nextOpen ? "pillar-next" : "pillar-next pillar-off"}`} style={{ left: p.x * T, top: p.y * T, zIndex: depth(p.y) }} />;
             }
             const r = A.rects[p.idx];
             const k = (p.w * T) / ((r.w * (p.crop ?? 1)));
@@ -733,6 +741,19 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
         {free && <button type="button" onClick={recenter} className="pixel-box absolute bottom-3 right-3 z-[9600] bg-night/90 px-3 py-1 text-lg uppercase text-paper">Follow party</button>}
 
         {state === "play" && unlocked && <p className="pointer-events-none absolute inset-x-0 top-3 z-[9600] text-center text-2xl uppercase text-gold drop-shadow">Floor clear! Head to the next floor.</p>}
+
+        {askNext && state === "play" && (
+          <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
+            <div className="pixel-box card-reveal w-full max-w-sm bg-night p-5 text-center">
+              <h2 className="mb-2 text-3xl uppercase text-gold">Go to Floor {floor.n + 1}?</h2>
+              <p className="mb-4 text-xl text-paper">Your party will take the golden light up.</p>
+              <div className="flex flex-col gap-2">
+                <PixelButton className="w-full" onClick={() => router.push(`/floor/${floor.n + 1}`)}>Go to Floor {floor.n + 1}</PixelButton>
+                <PixelButton variant="ghost" className="w-full" onClick={() => setAskNext(false)}>Stay here</PixelButton>
+              </div>
+            </div>
+          </div>
+        )}
 
         {askBack && state === "play" && (
           <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
