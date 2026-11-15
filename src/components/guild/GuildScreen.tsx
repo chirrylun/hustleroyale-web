@@ -127,7 +127,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
               ) : step >= 9 || step < 7 ? (
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
-                  <p className="text-xl text-paper">{step >= 9 ? "First job done! More jobs are posted here soon." : "No jobs yet."}</p>
+                  <p className="text-xl text-paper">{step >= 9 ? "You completed your first job! More jobs are posted here by other players and NPCs that need your help. You can also post jobs on the board for other players to complete." : "No jobs yet."}</p>
                 </>
               ) : (
                 <>
