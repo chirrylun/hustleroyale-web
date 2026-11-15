@@ -10,12 +10,16 @@ export interface NavLayout {
   rows: number;
   floor: { x0: number; x1: number; y0: number; y1: number };
   props: { foot: number[] | null }[];
+  /** Optional: one byte per tile, 1 where the ground can't be walked on (walls, dense woods). */
+  solid?: Uint8Array;
 }
 
 export type Pt = [number, number];
 
 export interface Nav {
   floor: NavLayout["floor"];
+  solid?: Uint8Array;
+  cols: number;
   feet: number[][]; // footprints, already grown by the fighter's body
   res: number; // grid cells per tile
   w: number;
@@ -32,7 +36,7 @@ export function buildNav(layout: NavLayout, res = 2): Nav {
   const feet = layout.props.flatMap((p) => (p.foot ? [[p.foot[0] - BODY, p.foot[1] - BODY, p.foot[2] + BODY, p.foot[3] + BODY]] : []));
   const w = layout.cols * res;
   const h = layout.rows * res;
-  const nav: Nav = { floor: layout.floor, feet, res, w, h, blocked: new Uint8Array(w * h), main: new Uint8Array(w * h) };
+  const nav: Nav = { floor: layout.floor, solid: layout.solid, cols: layout.cols, feet, res, w, h, blocked: new Uint8Array(w * h), main: new Uint8Array(w * h) };
   for (let j = 0; j < h; j++) {
     for (let i = 0; i < w; i++) nav.blocked[j * w + i] = walkable(nav, (i + 0.5) / res, (j + 0.5) / res) ? 0 : 1;
   }
@@ -71,6 +75,7 @@ function markMainArea(nav: Nav) {
 export function walkable(nav: Nav, x: number, y: number): boolean {
   const f = nav.floor;
   if (x < f.x0 || x > f.x1 || y < f.y0 || y > f.y1) return false;
+  if (nav.solid && nav.solid[Math.floor(y) * nav.cols + Math.floor(x)]) return false;
   for (const r of nav.feet) if (x > r[0] && x < r[2] && y > r[1] && y < r[3]) return false;
   return true;
 }

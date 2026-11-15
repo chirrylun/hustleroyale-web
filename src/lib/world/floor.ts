@@ -11,8 +11,8 @@ import type { NavLayout } from "../guild-nav";
  */
 
 export const TILE_SRC = 64; // tile size in the atlas images
-export const MAP_W = 40;
-export const MAP_H = 28;
+export const MAP_W = 64;
+export const MAP_H = 44;
 export const MAX_FLOOR = 40;
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -144,46 +144,85 @@ export function generateFloor(n: number): Floor {
   for (let i = 0; i < variant.length; i++) variant[i] = theme.ground[Math.floor(rand() * 4)];
 
   const boss = isBossFloor(n);
-  const start: [number, number] = [4, H / 2];
-  const exit: [number, number] = [W - 5, r(9, H - 9)];
+  const start: [number, number] = [5, H / 2 + r(-4, 4)];
+  const exit: [number, number] = [W - 6, r(11, H - 11)];
 
-  // A winding road from the entry to the exit, with a clearing at each bend.
-  const way: [number, number][] = [start];
-  const bends = 5;
-  for (let i = 1; i <= bends; i++) way.push([start[0] + ((exit[0] - start[0]) * i) / (bends + 1), r(6, H - 7)]);
-  way.push(exit);
-  const clearings: [number, number, number][] = [];
-  way.forEach((p, i) => { if (i > 0 && i < way.length - 1) clearings.push([p[0], p[1], r(2.6, 3.6)]); });
-  const dist = new Float32Array(W * H).fill(99); // distance to the road
-  const road = (x: number, y: number, rad: number) => {
-    for (let j = Math.max(0, Math.floor(y - rad - 1)); j < Math.min(H, Math.ceil(y + rad + 1)); j++)
-      for (let i = Math.max(0, Math.floor(x - rad - 1)); i < Math.min(W, Math.ceil(x + rad + 1)); i++) {
+  // Walkable ground is a network: a main road from entry to exit, side roads that end in dead-end glades, and
+  // clearings where roads bend. Everything else is wall (dense trees or rocks), so the map is paths to follow, not open field.
+  const HALF = 2; // half-width of the walkable corridor, in tiles
+  const clr = new Float32Array(W * H).fill(99); // distance to the walkable network's edge (<= 0 is walkable)
+  const stamp = (x: number, y: number, rad: number, paint: boolean) => {
+    const reach = rad + 2;
+    for (let j = Math.max(0, Math.floor(y - reach)); j < Math.min(H, Math.ceil(y + reach)); j++)
+      for (let i = Math.max(0, Math.floor(x - reach)); i < Math.min(W, Math.ceil(x + reach)); i++) {
         const d = Math.hypot(i + 0.5 - x, j + 0.5 - y);
-        if (d < dist[j * W + i]) dist[j * W + i] = d;
-        if (d < rad) cells[j * W + i] = 1;
+        if (d - rad < clr[j * W + i]) clr[j * W + i] = d - rad;
+        if (paint && d < rad * 0.62) cells[j * W + i] = 1;
       }
   };
-  for (let s = 0; s < way.length - 1; s++) {
-    const [ax, ay] = way[s], [bx, by] = way[s + 1];
-    const steps = Math.ceil(Math.hypot(bx - ax, by - ay) * 2);
-    for (let k = 0; k <= steps; k++) road(ax + ((bx - ax) * k) / steps, ay + ((by - ay) * k) / steps + Math.sin(k / 5 + s) * 0.8, 1.15);
-  }
-  for (const [x, y, rad] of clearings) road(x, y, rad);
-  road(start[0], start[1], 2.4);
-  road(exit[0], exit[1], boss ? 4 : 2.4);
+  const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+  const lay = (pts: [number, number][], phase: number) => {
+    for (let s = 0; s < pts.length - 1; s++) {
+      const [ax, ay] = pts[s], [bx, by] = pts[s + 1];
+      const len = Math.hypot(bx - ax, by - ay);
+      const nx = len ? -(by - ay) / len : 0, ny = len ? (bx - ax) / len : 0;
+      const steps = Math.ceil(len * 2);
+      for (let k = 0; k <= steps; k++) {
+        const t = k / steps, w = Math.sin(t * Math.PI) * Math.sin(k / 6 + phase + s) * 1.1;
+        stamp(ax + (bx - ax) * t + nx * w, ay + (by - ay) * t + ny * w, HALF, true);
+      }
+    }
+  };
+  /** A bending route between two points. */
+  const route = (a: [number, number], b: [number, number], bends: number, jitter: number): [number, number][] => {
+    const pts: [number, number][] = [a];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const nx = -(b[1] - a[1]) / len, ny = (b[0] - a[0]) / len;
+    for (let i = 1; i <= bends; i++) {
+      const t = i / (bends + 1), off = r(-jitter, jitter);
+      pts.push([clamp(a[0] + (b[0] - a[0]) * t + nx * off, 6, W - 6), clamp(a[1] + (b[1] - a[1]) * t + ny * off, 7, H - 7)]);
+    }
+    pts.push(b);
+    return pts;
+  };
 
-  // Lakes, kept off the road.
-  for (let k = 0, lakes = 1 + Math.floor(rand() * 2); k < lakes; k++) {
-    const cx = r(10, W - 10), cy = r(5, H - 5), rx = r(2, 3.5), ry = r(1.5, 2.6);
-    let ok = true;
-    for (let j = 0; j < H && ok; j++) for (let i = 0; i < W; i++) {
-      if (((i + 0.5 - cx) / (rx + 1.5)) ** 2 + ((j + 0.5 - cy) / (ry + 1.5)) ** 2 < 1 && dist[j * W + i] < 2.2) { ok = false; break; }
-    }
-    if (!ok) continue;
-    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-      if (((i + 0.5 - cx) / rx) ** 2 + ((j + 0.5 - cy) / ry) ** 2 < 1) cells[j * W + i] = 2;
-    }
+  const zones: [number, number, number][] = []; // clearings: where mobs live
+  const main = route(start, exit, 6, 9);
+  lay(main, r(0, 6));
+  for (let i = 1; i < main.length - 1; i++) {
+    const rad = r(3.2, 4);
+    zones.push([main[i][0], main[i][1], rad]);
+    stamp(main[i][0], main[i][1], rad, false);
   }
+  // Side roads, each ending in a glade worth finding.
+  const glades: [number, number, number][] = [];
+  const sides = 4 + Math.floor(rand() * 2);
+  for (let k = 0, tries = 0; k < sides && tries < 80; tries++) {
+    const from = main[1 + Math.floor(rand() * (main.length - 2))];
+    const up = from[1] > H / 2 ? -1 : 1;
+    const to: [number, number] = [clamp(from[0] + r(-8, 8), 8, W - 9), clamp(from[1] + up * r(12, 18), 8, H - 8)];
+    if (glades.some((g) => Math.hypot(g[0] - to[0], g[1] - to[1]) < 13) || Math.hypot(to[0] - exit[0], to[1] - exit[1]) < 10) continue;
+    const rad = r(4, 5);
+    glades.push([to[0], to[1], rad]);
+    lay(route(from, to, 2, 4), r(0, 6));
+    stamp(to[0], to[1], rad, false);
+    zones.push([to[0], to[1], rad]);
+    k++;
+  }
+  stamp(start[0], start[1], 3.2, false);
+  stamp(exit[0], exit[1], boss ? 5 : 3.4, false);
+
+  // A pond in some of the glades, off to the side so the way around stays open.
+  glades.forEach((g, gi) => {
+    if (gi > 1 && rand() < 0.5) return;
+    const a = r(0, Math.PI * 2), ox = g[0] + Math.cos(a) * 2.3, oy = g[1] + Math.sin(a) * 2.3;
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      if (((i + 0.5 - ox) / 1.5) ** 2 + ((j + 0.5 - oy) / 1.1) ** 2 < 1) cells[j * W + i] = 2;
+    }
+  });
+
+  const solid = new Uint8Array(W * H);
+  for (let i = 0; i < solid.length; i++) solid[i] = clr[i] > 0 ? 1 : 0;
 
   const props: PropSpec[] = [];
   const feet: { foot: number[] | null }[] = [];
@@ -200,40 +239,53 @@ export function generateFloor(n: number): Floor {
     flat: () => null,
   };
   const SIZE: Record<Cat, number> = { big: 0.78, mid: 0.62, flat: 0.5 };
-  const scatter = (cat: Cat, x: number, y: number) => {
+  const scatter = (cat: Cat, x: number, y: number, scale = 1, withFoot = false) => {
     const idx = pick(theme[cat]);
-    put(idx, x, y, rw(idx) * SIZE[cat] * r(0.9, 1.1), cat === "big" ? "tree" : cat === "mid" ? "prop" : "decor", undefined, FOOT[cat](x, y));
+    put(idx, x, y, rw(idx) * SIZE[cat] * r(0.9, 1.1) * scale, cat === "big" ? "tree" : cat === "mid" ? "prop" : "decor", undefined, withFoot ? FOOT[cat](x, y) : null);
   };
 
-  // Dense border so nobody sees past the edge of the map.
-  const edge = 1.7;
-  for (let x = 0.4; x < W; x += r(0.9, 1.3)) { scatter("big", x, r(0.8, edge)); scatter("big", x, H - r(0.1, edge - 0.9)); }
-  for (let y = 1.8; y < H - 0.4; y += r(0.9, 1.3)) { scatter("big", r(0.2, edge - 0.5), y); scatter("big", W - r(0.2, edge - 0.5), y); }
+  // The wall: thick right beside the roads, thinner and bigger further in. Patches of rock-or-tree come from a smooth wave,
+  // so it reads as forest groves and rocky stretches instead of random noise. Walls need no footprints: the solid mask blocks them.
+  const px = r(0, 9), py = r(0, 9);
+  for (let gj = 0; gj < H / 1.1; gj++) {
+    for (let gi = 0; gi < W / 1.1; gi++) {
+      const x = gi * 1.1 + r(0, 0.9), y = 1.2 + gj * 1.1 + r(0, 0.9);
+      if (x > W - 0.3 || y > H) continue;
+      const c = clr[Math.min(H - 1, Math.floor(y)) * W + Math.min(W - 1, Math.floor(x))];
+      if (c < 0.7) continue;
+      const deep = c > 6;
+      if (deep && (gi % 2 || gj % 2)) continue;
+      if (!deep && c > 3 && rand() > 0.6) continue;
+      const grove = Math.sin(x * 0.32 + px) * Math.sin(y * 0.36 + py);
+      scatter(grove > 0.25 && rand() < 0.7 ? "mid" : "big", x, y, deep ? 1.25 : 1);
+    }
+  }
 
-  // Scenery in the open ground.
-  const open = (x: number, y: number, gap: number) => {
-    const i = Math.floor(x), j = Math.floor(y);
-    return i > 1 && j > 2 && i < W - 2 && j < H - 1 && cells[j * W + i] === 0 && dist[j * W + i] > gap;
-  };
-  for (let k = 0, tries = 0; k < 85 && tries < 600; tries++) {
+  // Inside the glades and clearings: small clusters that make you walk around them, plus ground clutter.
+  for (const z of zones) {
+    const clusters = 2 + Math.floor(rand() * 3);
+    for (let k = 0; k < clusters; k++) {
+      const a = r(0, Math.PI * 2), d = z[2] * r(0.55, 0.8), cx = z[0] + Math.cos(a) * d, cy = z[1] + Math.sin(a) * d * 0.8;
+      if (cx < 3 || cy < 4 || cx > W - 3 || cy > H - 2 || Math.hypot(cx - start[0], cy - start[1]) < 5 || Math.hypot(cx - exit[0], cy - exit[1]) < 6) continue;
+      if (cells[Math.floor(cy) * W + Math.floor(cx)] === 2) continue;
+      const cat: Cat = rand() < 0.5 ? "big" : "mid";
+      for (let m = 0, cnt = 1 + Math.floor(rand() * 3); m < cnt; m++) scatter(cat, cx + r(-0.8, 0.8), cy + r(-0.5, 0.5), 1, true);
+    }
+  }
+  for (let k = 0, tries = 0; k < 120 && tries < 800; tries++) {
     const x = r(2, W - 2), y = r(3, H - 1);
-    const roll = rand();
-    const cat: Cat = roll < 0.32 ? "big" : roll < 0.6 ? "mid" : "flat";
-    if (!open(x, y, cat === "flat" ? 1.2 : 2.2)) continue;
-    scatter(cat, x, y);
+    const c = clr[Math.floor(y) * W + Math.floor(x)];
+    if (c > -0.3 || c < -1.9 || cells[Math.floor(y) * W + Math.floor(x)] !== 0) continue;
+    scatter("flat", x, y);
     k++;
   }
 
-  // Portals, boss ring, a chest off the beaten track.
+  // Portals and the boss ring.
   put(theme.entry, start[0], start[1] + 0.9, rw(theme.entry) * 0.7, "entry", undefined, [start[0] - 0.5, start[1] + 0.3, start[0] + 0.5, start[1] + 0.9]);
   if (boss) put(theme.boss, exit[0] - 2.5, exit[1] + 1.2, rw(theme.boss) * 0.95, "boss");
   put(theme.exit, exit[0] + (boss ? 2.6 : 0), exit[1] + 0.9, rw(theme.exit) * (theme.exitCrop ?? 1) * 0.7, "exit", theme.exitCrop, [exit[0] + (boss ? 2.1 : -0.5), exit[1] + 0.3, exit[0] + (boss ? 3.1 : 0.5), exit[1] + 0.9]);
-  for (let t = 0; t < 40; t++) {
-    const x = r(4, W - 4), y = r(5, H - 3);
-    if (open(x, y, 3)) { put(theme.chest + 0, x, y, rw(theme.chest) * 0.45, "chest", undefined, [x - 0.3, y - 0.2, x + 0.3, y + 0.05]); break; }
-  }
 
-  // Mobs live in the clearings; the tenth floor of a theme has its boss in the ring by the exit.
+  // Mobs live in the clearings and glades (never the one by the entry); the tenth floor has its boss in the ring by the exit.
   const f = ((n - 1) % 10) + 1;
   const tier = f <= 3 ? 0 : f <= 6 ? 1 : 2;
   const mobs: MobSpec[] = [];
@@ -241,19 +293,25 @@ export function generateFloor(n: number): Floor {
     const s = mobStats(level, isBoss);
     mobs.push({ id: mobs.length, kind, rarity, sprite: `mob_${kind}_${rarity}`, level, boss: isBoss, x, y, ...s });
   };
-  const count = baseMobCount(n);
+  const homes = zones.filter((z) => Math.hypot(z[0] - start[0], z[1] - start[1]) > 12);
+  const count = Math.max(baseMobCount(n), Math.round(homes.length * 1.2));
   for (let i = 0; i < count; i++) {
-    const c = clearings[i % clearings.length];
-    const a = rand() * Math.PI * 2, d = r(0.4, Math.max(0.6, c[2] - 1.1));
+    const c = homes[i % homes.length];
+    let x = c[0], y = c[1];
+    for (let t = 0; t < 12; t++) {
+      const a = rand() * Math.PI * 2, d = r(0.4, Math.max(0.6, c[2] - 1.1));
+      x = c[0] + Math.cos(a) * d; y = c[1] + Math.sin(a) * d * 0.7;
+      if (clr[Math.floor(y) * W + Math.floor(x)] <= -0.5 && cells[Math.floor(y) * W + Math.floor(x)] !== 2) break;
+    }
     // Floor 1 always has a bat, so the first job can be done there.
     const kind = n === 1 && i === 0 ? "bat" : pick(theme.mobs);
-    spawn(kind, RARITY[tier], Math.max(1, n + (i % 3 === 2 ? 1 : 0)), false, c[0] + Math.cos(a) * d, c[1] + Math.sin(a) * d * 0.7);
+    spawn(kind, RARITY[tier], Math.max(1, n + (i % 3 === 2 ? 1 : 0)), false, x, y);
   }
   if (boss) spawn(theme.boss_mob, "legendary", n + 2, true, exit[0] - 2.5, exit[1] - 0.2);
 
   return {
-    n, theme, w: W, h: H, cells, variant, props, mobs, zones: clearings, start, exit,
-    nav: { cols: W, rows: H, floor: { x0: 1.2, x1: W - 1.2, y0: 2.4, y1: H - 1 }, props: [...feet, ...liquidFeet(cells, W, H)] },
+    n, theme, w: W, h: H, cells, variant, props, mobs, zones, start, exit,
+    nav: { cols: W, rows: H, floor: { x0: 1.2, x1: W - 1.2, y0: 2.4, y1: H - 1 }, props: [...feet, ...liquidFeet(cells, W, H)], solid },
   };
 }
 

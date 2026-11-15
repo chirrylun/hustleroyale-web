@@ -13,7 +13,7 @@ import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan }
 import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
 
-const T = 48; // one tile on screen, in px
+const T = 34; // one tile on screen, in px (smaller = more of the map in view)
 const FRAME = 2.7; // a sprite frame, in tiles
 const EDGE = 44; // px from the screen edge where the camera starts to scroll
 const SPEED = 3.1;
@@ -23,7 +23,7 @@ const WANDER: Record<string, { speed: number; rest: [number, number] }> = {
   slime: { speed: 0.7, rest: [2, 6] }, bat: { speed: 1.7, rest: [0.4, 1.6] }, mushroom: { speed: 0.6, rest: [3, 7] },
   goblin: { speed: 1.1, rest: [1.5, 5] }, direwolf: { speed: 1.5, rest: [1, 4] }, golem: { speed: 0.5, rest: [3, 8] },
 };
-const LEASH = 11; // a mob gives up the chase this far from home
+const LEASH = 14; // a mob gives up the chase this far from home
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
 const makeAg = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "name" | "level" | "x" | "y" | "hp" | "atk" | "def" | "kind">): Ag => ({
@@ -177,12 +177,13 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
       for (const z of floor.zones) { const d = Math.hypot(z[0] - x, z[1] - y); if (d < bd) { bd = d; best = z; } }
       return best;
     };
-    foes.current = floor.mobs.map((m) =>
-      makeAg("foe", {
-        id: `m${m.id}`, sprite: m.sprite, name: m.kind, level: m.level, x: m.x, y: m.y, hp: m.hp, atk: m.atk, def: m.def, boss: m.boss, kind: m.kind,
-        home: m.boss ? [m.x, m.y, 1.5] : zoneOf(m.x, m.y), wanderAt: rnd(0, 3000), speedMul: rnd(0.9, 1.1),
-      }),
-    );
+    foes.current = floor.mobs.map((m) => {
+      const [mx, my] = nearestWalkable(nav, m.x, m.y);
+      return makeAg("foe", {
+        id: `m${m.id}`, sprite: m.sprite, name: m.kind, level: m.level, x: mx, y: my, hp: m.hp, atk: m.atk, def: m.def, boss: m.boss, kind: m.kind,
+        home: m.boss ? [mx, my, 1.5] : zoneOf(mx, my), wanderAt: rnd(0, 3000), speedMul: rnd(0.9, 1.1),
+      });
+    });
     progress.current.next = performance.now() + 8000;
     progress.current.strollAt = performance.now() + 3500;
     const lead0 = allies.current[0];
