@@ -16,7 +16,7 @@ const HEROES: [string, Role][] = [
   ["marksman_common", "dps"], ["marksman_rare", "dps"], ["rogue_uncommon", "dps"], ["magical_dps_rare", "dps"], ["necromancer_common", "dps"],
   ["novice_male", "dps"], ["novice_female", "dps"], ["dps_rare", "dps"],
 ];
-const NAMES = ["Tunde", "Ada", "Kemi", "Bayo", "Ngozi", "Femi", "Zainab", "Chidi", "Sade", "Emeka", "Tola", "Dayo", "Amaka", "Segun"];
+const NAMES = ["Aldric", "Mira", "Kael", "Sera", "Thorn", "Lyra", "Bram", "Isolde", "Finn", "Rowan", "Elara", "Garrick", "Nyx", "Dorian", "Wren", "Cassian"];
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <X,>(a: X[]) => a[Math.floor(Math.random() * a.length)];
 
