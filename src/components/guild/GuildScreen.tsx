@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, themeOf } from "@/lib/world/floor";
 import { GuildHall } from "./GuildHall";
 import { InfoBox } from "./InfoBox";
+import { JobBoard } from "./JobBoard";
 import { PartyPanel } from "./PartyPanel";
 
 /** Groups that stay open while the first job is unfinished: the job board itself and the adventure, where the job is done. */
@@ -24,6 +25,13 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
   const [msg, setMsg] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, start] = useTransition();
+
+  // Coming back to the guild always starts at the hall, not on whatever panel was open when you left.
+  useEffect(() => {
+    setPanel(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
+    setNotice(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!notice) return;
@@ -128,10 +136,18 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
                     ))}
                   </div>
                 </>
-              ) : step >= 9 || step < 7 ? (
+              ) : step >= 10 ? (
+                <JobBoard onChanged={() => router.refresh()} />
+              ) : step === 9 ? (
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
-                  <p className="text-xl text-paper">{step >= 9 ? "You completed your first job! More jobs are posted here by other players and NPCs that need your help. You can also post jobs on the board for other players to complete." : "No jobs yet."}</p>
+                  <p className="text-xl text-paper">You completed your first job! More jobs are posted here by other players and NPCs that need your help. You can also post jobs on the board for other players to complete.</p>
+                  <div className="mt-4"><PixelButton onClick={() => setTut(10)}>Open the job board</PixelButton></div>
+                </>
+              ) : step < 7 ? (
+                <>
+                  <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
+                  <p className="text-xl text-paper">No jobs yet.</p>
                 </>
               ) : (
                 <>
