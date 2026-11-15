@@ -8,6 +8,7 @@ import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, themeOf } from "@/lib/world/floor";
 import { GuildHall } from "./GuildHall";
+import { clearExpedition } from "@/lib/world/expedition";
 import { InfoBox } from "./InfoBox";
 import { JobBoard } from "./JobBoard";
 import { PartyPanel } from "./PartyPanel";
@@ -30,6 +31,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
   useEffect(() => {
     setPanel(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
     setNotice(null);
+    clearExpedition(); // resting at the guild heals everyone
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

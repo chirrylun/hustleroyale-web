@@ -10,6 +10,7 @@ import type { GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
 import { findPath, buildNav, clearLine, nearestWalkable, walkable, type Pt } from "@/lib/guild-nav";
 import type { Stance } from "@/lib/battle";
+import { clearExpedition, partySig, readExpedition, writeExpedition } from "@/lib/world/expedition";
 import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal, sway } from "@/lib/world/stance";
 import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
 import { createClient } from "@/lib/supabase/client";
@@ -41,6 +42,20 @@ const aggroRange = (floor: number, kind: string, boss: boolean) => {
 /** How far from home it will chase, and how far its target can get before it gives up. */
 const chaseRange = (floor: number, boss: boolean) => (boss ? LEASH : Math.min(LEASH, 3 + 0.3 * floor));
 const loseRange = (floor: number, boss: boolean) => (boss ? 14 : 4 + 0.2 * floor);
+/** A walkable spot at least four tiles from a pillar, on the side facing into the map, so nobody arrives standing in the light. */
+function clearOfLight(nav: Parameters<typeof nearestWalkable>[0], gate: [number, number], dir: 1 | -1, off: [number, number]): Pt {
+  let best: Pt = nearestWalkable(nav, gate[0] + dir * 5 + off[0], gate[1] + off[1]);
+  let bd = Math.hypot(best[0] - gate[0], best[1] - gate[1]);
+  for (const r of [4.6, 5.2, 5.8, 6.4, 7]) {
+    for (const a of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
+      const to = nearestWalkable(nav, gate[0] + dir * Math.cos(a) * r + off[0], gate[1] + Math.sin(a) * r * 0.8 + off[1]);
+      const d = Math.hypot(to[0] - gate[0], to[1] - gate[1]);
+      if (d >= 4) return to;
+      if (d > bd) { best = to; bd = d; }
+    }
+  }
+  return best;
+}
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
 /** A special skill a fighter fires on its own whenever it is ready, has the energy and the moment is right. */
@@ -261,6 +276,16 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     return () => { live = false; };
   }, [floor.n]);
 
+  const sig = useMemo(() => partySig(squad.map((f) => f.id)), [squad]);
+  // Keep the expedition's health up to date, and start fresh after a defeat.
+  useEffect(() => {
+    const save = () => { if (allies.current.length) writeExpedition(sig, allies.current); };
+    const t = setInterval(save, 1000);
+    window.addEventListener("pagehide", save);
+    return () => { clearInterval(t); window.removeEventListener("pagehide", save); save(); };
+  }, [sig]);
+  useEffect(() => { if (state === "lost") clearExpedition(); }, [state]);
+
   // Build the two sides once.
   useEffect(() => {
     // Tanks lead, healers trail: that is the order they take in the formation.
@@ -268,9 +293,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     allies.current = order.map(({ f }, slot) => {
       const off = formationOffset(slot, order.length, 0);
       // Beside the light, never inside it: by the white pillar when coming up, by the golden one when coming back down.
-      const at = fromAbove
-        ? nearestWalkable(nav, floor.exit[0] - 3.2 + off[0], floor.exit[1] + 1.8 + off[1])
-        : nearestWalkable(nav, floor.start[0] + 3 + off[0], floor.start[1] + 1 + off[1]);
+      const at = clearOfLight(nav, fromAbove ? [floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), floor.exit[1] + 0.9] : [floor.start[0], floor.start[1] + 0.9], fromAbove ? -1 : 1, off);
       return makeAg("ally", {
         id: f.id, sprite: f.template.sprite_key, role: f.template.role, name: f.template.name, level: f.level,
         x: at[0], y: at[1], hp: f.hp, atk: f.atk, def: f.def, kind: "fighter", slot, speedMul: rnd(0.93, 1.07),
@@ -278,6 +301,16 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         skills: (f.skills ?? []).filter((s) => s.slot >= 2 && s.name && s.kind).sort((x, y) => x.slot - y.slot).map(toFSkill),
       });
     });
+    // Health and who is still up carry over from the last floor of this expedition.
+    const saved = readExpedition(sig);
+    if (saved && allies.current.some((a) => (saved[a.id]?.[0] ?? 1) > 0)) {
+      for (const a of allies.current) {
+        const sv = saved[a.id];
+        if (!sv) continue;
+        if (sv[0] <= 0) { a.dead = true; a.hp = 0; a.deadAt = -1e9; a.path = []; }
+        else { a.hp = Math.max(1, Math.round(a.max * sv[0])); a.en = Math.round(a.maxEn * sv[1]); }
+      }
+    }
     const zoneOf = (x: number, y: number): [number, number, number] => {
       let best = floor.zones[0] ?? [x, y, 2], bd = Infinity;
       for (const z of floor.zones) { const d = Math.hypot(z[0] - x, z[1] - y); if (d < bd) { bd = d; best = z; } }
