@@ -1,0 +1,62 @@
+# Guild NPC sprite sheet prompts
+
+Four idle-animation sheets for the guild hall and the tutorial. Same pixel-art look as the fighter sheets (see Paladin/Mage).
+
+## Shared format (paste at the top of every prompt)
+
+> 2D pixel-art sprite sheet in the style of Chained Echoes and 16-bit JRPGs (SNES era, modern polish). One character, **facing the camera (front view, centred)**, standing idle. **One horizontal row of 6 animation frames**, evenly spaced in equal square cells, total canvas 1254 x 209 px (each cell 209 x 209). The character is the **same size in every frame** (about 150 px tall), **feet on the same baseline in every frame**, and the same horizontal centre in every frame, so the loop does not jitter. Plain flat **magenta (#FF00FF) background**, no shadows, no ground, no text, no border, no frame numbers. Crisp hard pixel edges, no anti-aliasing, no blur, no gradients over the background. Limited rich palette, 1-pixel dark outline in a darker shade of each colour (not pure black), soft top-left lighting, gentle cel shading. Same proportions as a chunky 2.5-head-tall JRPG field sprite with a slightly oversized head. The six frames loop seamlessly (frame 6 flows back into frame 1).
+
+## 1. Guild Manager (tutorial guide, "Professor Oak" role)
+
+> [shared format] A veteran **guild manager** dressed like a paladin: polished silver plate armour with gold trim, a deep blue tabard with the guild crest (a small gold shield) on the chest, a short blue cape behind the shoulders, steel gauntlets and greaves, brown leather belt. Older, kind and confident: weathered friendly face, short grey-brown hair and a neat grey beard, no helmet (helmet clipped to the belt). He stands **front-facing, relaxed upright posture**, holding a **large flanged mace in both hands in front of him with the mace head resting on the ground** between his boots, hands stacked on top of the handle, like a knight leaning on his weapon.
+>
+> Animation, 6 frames, gentle teaching gestures:
+> 1. Rest pose, both hands on the handle, mace head on the ground.
+> 2. Chest rises slightly, head tilts a touch to his left, eyebrows up (about to speak).
+> 3. Right hand lifts off the handle and opens, palm up, as if explaining; the other hand keeps the mace upright.
+> 4. Hand held out, mace tilts about 10 degrees, small nod, mouth slightly open.
+> 5. Hand returns to the handle, mace settles back.
+> 6. Exhale, shoulders drop a pixel, cape sways a pixel, head returns to centre (matches frame 1).
+> The mace head never leaves the ground.
+
+## 2. Merchant (beside the market)
+
+> [shared format] A cheerful **travelling merchant** in a green and tan layered outfit: a wide-brimmed brown felt hat with a feather, a dark green vest over a cream shirt with rolled sleeves, a brown apron with pockets, leather gloves, a big brown backpack stuffed with a rolled map, a bundle of cloth and hanging pots, a coin pouch on the belt. Round friendly face, a short moustache, rosy cheeks. Stands **front-facing**, one hand holding a small **glass potion bottle** up at chest height, the other hand resting on his hip.
+>
+> Animation, 6 frames, salesman idle:
+> 1. Rest pose, potion at chest height.
+> 2. Lifts the potion slightly, a small sparkle on the glass (1 pixel highlight).
+> 3. Potion at shoulder height, a wink (one eye closed), smile widens.
+> 4. Holds it up, other hand taps the coin pouch, backpack pots swing 1 pixel.
+> 5. Lowers the potion back, hat tips forward 1 pixel.
+> 6. Settles, feather sways, back to the rest pose.
+
+## 3. Guild Secretary (beside the job board)
+
+> [shared format] A neat, bright **guild secretary** (woman): a navy blue guild uniform jacket with gold buttons and a white collar, a long dark skirt, brown boots, a small blue ribbon in her hair, pinned brown hair in a bun, round glasses. A leather satchel on her hip and a **quill pen behind her ear**. Stands **front-facing**, holding a **clipboard with parchment** (visible lines of writing) in one arm against her chest, a **quill pen in the other hand**.
+>
+> Animation, 6 frames, busy-but-welcoming idle:
+> 1. Rest pose, quill raised near the page.
+> 2. Looks down at the clipboard, quill touches the parchment.
+> 3. Writes, quill moves 2 pixels, small head tilt.
+> 4. Looks up and gives a small smile, quill lifted.
+> 5. Pushes her glasses up with the free hand (or taps the quill on the clipboard).
+> 6. Hand returns, blinks once, back to the rest pose.
+
+## 4. Gladiator (beside the arena)
+
+> [shared format] A tough **arena gladiator**: muscular, tanned skin, a shaved head with a short dark beard and a scar over one eye. Bronze **segmentata shoulder guard on one shoulder only**, a leather harness across the chest, a red sash and red waist cloth over a leather skirt (pteruges), bronze greaves and wrapped leather sandals, a bronze arm guard, a dented bronze round shield strapped to his back. Stands **front-facing, wide stance, arms crossed** on his chest, a short **gladius sword hanging at his belt** and a small red plume on the shoulder guard.
+>
+> Animation, 6 frames, proud and restless idle:
+> 1. Rest pose, arms crossed, wide stance.
+> 2. Chest swells, chin lifts a pixel.
+> 3. One hand uncrosses and cracks the knuckles / rolls the shoulder, the other stays on the sash.
+> 4. Rolls the neck to the side, plume sways.
+> 5. Smirks, one eyebrow up, weight shifts to the other foot.
+> 6. Arms re-cross, exhale, back to the rest pose.
+
+## Export notes
+
+- Deliver as one PNG per character, transparent background if possible, otherwise the magenta (#FF00FF) background above and I will key it out.
+- If the generator cannot do exactly 6 frames, 4 frames is fine; I can use any count from 4 to 8 in a single row.
+- If it keeps adding a ground shadow or a different background, tell it: "no shadow, no floor, flat solid magenta only".
