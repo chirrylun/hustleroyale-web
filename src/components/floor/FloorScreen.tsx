@@ -57,6 +57,7 @@ interface Ag {
   held: boolean;
   look: { rest: "idle" | "walk" | "stun"; flip: boolean; act: "attack" | "hurt" | null; n: number };
   key?: string;
+  lvEl?: HTMLElement | null;
   setLook?: (l: Ag["look"]) => void;
   el?: HTMLDivElement | null;
   bar?: HTMLDivElement | null;
@@ -97,11 +98,13 @@ function Unit({ a, party }: { a: Ag; party: number }) {
     >
       <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
         <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
-        {a.side === "foe" && (
-          <span className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-bold leading-none ${levelTone(a.level - party)}`} style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}>
-            Lv {a.level}
-          </span>
-        )}
+        <span
+          ref={(el) => { a.lvEl = el; }}
+          className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-bold leading-none ${a.side === "foe" ? levelTone(a.level - party) : "text-steel"}`}
+          style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}
+        >
+          Lv {a.level}
+        </span>
       </div>
       <FighterSprite
         spriteKey={a.sprite} role={a.role} flip={look.flip} rest={look.rest}
@@ -288,7 +291,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
       const a = allies.current.find((u) => u.id === w.id);
       if (!a || w.gained <= 0) continue;
       overHead(a, `+${w.gained} XP`, "text-leaf", 1200);
-      if (w.levels_gained > 0) { a.level += w.levels_gained; setPartyLvl((p) => Math.max(p, a.level)); setTimeout(() => celebrate(a), 250); }
+      if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); setTimeout(() => celebrate(a), 250); }
     }
   };
   const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => showXp(data));
@@ -663,6 +666,28 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
           {ready && [...allies.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} />)}
         </div>
 
+        {state === "play" && (
+          <div
+            role="group" aria-label="Party behaviour"
+            className="absolute left-2 top-1/2 z-[9600] flex -translate-y-1/2 flex-col gap-2"
+            onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
+          >
+            {STANCES.map((o) => (
+              <button
+                key={o.id} type="button" aria-pressed={stance === o.id} aria-label={o.label} onClick={() => pickStance(o.id)}
+                className={`group relative flex h-12 w-12 items-center justify-center pixel-box ${stance === o.id ? "bg-gold" : "bg-night/90"}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/ui/stance-${{ offensive: "attack", neutral: "balanced", defensive: "defend" }[o.id]}.png`} alt="" className="h-8 w-8 [image-rendering:pixelated]" draggable={false} />
+                <span className="pointer-events-none absolute left-full top-1/2 ml-2 hidden -translate-y-1/2 whitespace-nowrap bg-night px-2 py-1 text-base uppercase text-paper group-hover:block group-focus-visible:block">
+                  {o.label}
+                  <span className="block text-sm normal-case opacity-80">{o.hint}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <button ref={arrow} type="button" onClick={recenter} aria-label="Back to your fighters" className="pixel-box absolute left-0 top-0 z-[9600] hidden h-12 w-12 bg-night/90" style={{ display: "none" }}>
           <span className="block text-2xl leading-[3rem] text-gold">➤</span>
         </button>
@@ -697,19 +722,6 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
         )}
       </div>
 
-      {state === "play" && (
-        <div role="group" aria-label="Party behaviour" className="z-[9500] grid grid-cols-3 gap-2 bg-night/90 px-3 py-2">
-          {STANCES.map((o) => (
-            <button
-              key={o.id} type="button" aria-pressed={stance === o.id} onClick={() => pickStance(o.id)}
-              className={`pixel-box px-2 py-1.5 text-center leading-tight ${stance === o.id ? "bg-gold text-ink" : "bg-panel text-paper"}`}
-            >
-              <span className="block text-xl uppercase">{o.label}</span>
-              <span className="block truncate text-sm opacity-80">{o.hint}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
