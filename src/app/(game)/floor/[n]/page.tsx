@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { FloorScreen } from "@/components/floor/FloorScreen";
+import { FloorEntry } from "@/components/floor/FloorEntry";
 import { loadFighters } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/server";
 import { MAX_FLOOR } from "@/lib/world/floor";
@@ -27,5 +27,5 @@ async function Content({ params }: { params: Promise<{ n: string }> }) {
   // Floors unlock one at a time.
   if (n > profile?.floor_unlocked ?? 1) redirect("/home");
   const fighters = await loadFighters(supabase, user.id);
-  return <FloorScreen floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} />;
+  return <FloorEntry floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} />;
 }
