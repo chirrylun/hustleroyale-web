@@ -1,6 +1,6 @@
 "use client";
 
-import { Music } from "@/components/Music";
+import { Music, floorTrack } from "@/components/Music";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useReducer, useRef, useState, type PointerEvent } from "react";
@@ -914,7 +914,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
 
   return (
     <div className="relative flex h-dvh w-full flex-col bg-ink">
-      {isBossFloor(floor.n) && state === "play" && <Music track="boss" />}
+      {state === "play" && <Music track={floorTrack(floor.n, isBossFloor(floor.n))} />}
       <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper">
         <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>
         <div className="min-w-0 flex-1 leading-tight">
