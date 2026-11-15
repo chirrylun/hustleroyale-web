@@ -513,13 +513,16 @@ canvas,
 .marker-ping { animation: marker-ping 600ms ease-out forwards; }
 
 /* Pillars of light for the floor gates. */
-.pillar { position: absolute; width: 56px; height: 190px; margin-left: -28px; margin-top: -190px; pointer-events: none;
-  background: linear-gradient(to top, var(--pc) 0%, color-mix(in srgb, var(--pc) 55%, transparent) 45%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(to right, transparent, #000 30%, #000 70%, transparent);
-  filter: drop-shadow(0 0 14px var(--pc)); animation: pillar-pulse 2.4s ease-in-out infinite; }
-.pillar::after { content: ""; position: absolute; left: -14px; right: -14px; bottom: -8px; height: 22px; border-radius: 50%;
-  background: radial-gradient(ellipse at center, var(--pc), transparent 70%); }
+.pillar { position: absolute; width: 104px; height: 230px; margin-left: -52px; margin-top: -230px; pointer-events: none;
+  background:
+    linear-gradient(to right, transparent 0%, color-mix(in srgb, var(--pc) 70%, transparent) 22%, #fff 50%, color-mix(in srgb, var(--pc) 70%, transparent) 78%, transparent 100%),
+    linear-gradient(to top, var(--pc), transparent);
+  background-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 55%, transparent 100%); mask-image: linear-gradient(to top, #000 0%, #000 55%, transparent 100%);
+  filter: drop-shadow(0 0 18px var(--pc)) drop-shadow(0 0 34px var(--pc)) brightness(1.25); animation: pillar-pulse 2.2s ease-in-out infinite; }
+.pillar::after { content: ""; position: absolute; left: -26px; right: -26px; bottom: -12px; height: 34px; border-radius: 50%;
+  background: radial-gradient(ellipse at center, #fff 0%, var(--pc) 35%, transparent 72%); }
 .pillar-back { --pc: #ffffff; }
-.pillar-next { --pc: #7dff9a; }
-.pillar-off { opacity: .28; animation: none; filter: none; }
-@keyframes pillar-pulse { 0%, 100% { opacity: .75; transform: scaleX(1); } 50% { opacity: 1; transform: scaleX(1.12); } }
+.pillar-next { --pc: #ffd34d; }
+.pillar-off { opacity: .3; animation: none; filter: none; }
+@keyframes pillar-pulse { 0%, 100% { opacity: .85; transform: scaleX(.96); } 50% { opacity: 1; transform: scaleX(1.1); } }
