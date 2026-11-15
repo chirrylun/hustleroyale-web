@@ -217,8 +217,8 @@ export function GuildHall({
         const art = <img src={`/guild/props/${p.id}.png`} alt="" draggable={false} className="pointer-events-none h-full w-full" />;
         const hot = highlight === p.group;
         const tag = (
-          <span className="pointer-events-none absolute -bottom-1 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap bg-ink px-1.5 text-[clamp(10px,1.6cqw,18px)] uppercase text-paper opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-            {p.group === "adventure" ? "Adventure (soon)" : p.group}
+          <span className="pointer-events-none absolute -bottom-1 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap bg-ink px-1.5 text-[clamp(10px,1.6cqw,18px)] uppercase text-paper">
+            {p.group}
           </span>
         );
         const cls = "group absolute outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" + (hot ? " animate-pulse outline outline-4 outline-gold" : "");
