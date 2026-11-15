@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import type { GuildFighter } from "@/lib/guild";
+import { restedFrac } from "@/lib/rest";
 import { createClient } from "@/lib/supabase/client";
 import { isBossFloor, themeOf } from "@/lib/world/floor";
 
@@ -23,6 +24,9 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
   const chosen = ids.map((id) => byId.get(id)!).filter(Boolean);
   const theme = themeOf(floorNo);
   const full = ids.length >= PARTY_MAX;
+  // Resting in the guild heals everyone, so the bars fill while you watch.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, []);
 
   const add = (id: string) => setIds((p) => (p.includes(id) || p.length >= PARTY_MAX ? p : [...p, id]));
   const remove = (id: string) => setIds((p) => p.filter((x) => x !== id));
@@ -52,6 +56,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
                 <div className="w-full max-w-24"><FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} /></div>
                 <span className="w-full truncate text-gold">{f.template.name}</span>
                 <span className="text-steel">{ROLE_LABEL[f.template.role]} · Lv {f.level}</span>
+                <HpBar f={f} now={now} />
               </div>
             ) : (
               <button
@@ -90,6 +95,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
                 <div className="w-full max-w-16"><FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} still /></div>
                 <span className="w-full truncate text-paper">{f.template.name}</span>
                 <span className="text-steel">{ROLE_LABEL[f.template.role]} · Lv {f.level}</span>
+                <HpBar f={f} now={now} />
                 {on ? <span className="absolute left-1 top-1 bg-leaf px-1 text-ink">✓</span> : !full && <span className="absolute left-1 top-1 bg-gold px-1 text-ink">+</span>}
               </button>
             );
@@ -102,6 +108,15 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
         <PixelButton variant="ghost" className="flex-none" onClick={onBack}>Back</PixelButton>
         <PixelButton className="flex-1 text-xl" disabled={!chosen.length || busy} onClick={go}>{busy ? "…" : `Head out to Floor ${floorNo}`}</PixelButton>
       </div>
+    </div>
+  );
+}
+
+function HpBar({ f, now }: { f: GuildFighter; now: number }) {
+  const fr = restedFrac(f.hp_frac, f.hp_at, now);
+  return (
+    <div className="mt-0.5 h-1.5 w-full bg-ink/80" role="progressbar" aria-label="Health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fr * 100)}>
+      <div className={`h-full ${fr < 0.3 ? "bg-ember" : "bg-leaf"}`} style={{ width: `${fr * 100}%` }} />
     </div>
   );
 }

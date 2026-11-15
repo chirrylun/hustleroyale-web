@@ -15,6 +15,7 @@ import type { Stance } from "@/lib/battle";
 import { clearExpedition, partySig, readExpedition, writeExpedition } from "@/lib/world/expedition";
 import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal, sway } from "@/lib/world/stance";
 import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
+import { restedFrac } from "@/lib/rest";
 import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
 
@@ -180,7 +181,10 @@ function Unit({ a, party }: { a: Ag; party: number }) {
 export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floorUnlocked = 1, arriveFromAbove = false }: { floorNo: number; /** Came down from the floor above: the party appears beside the way up instead of by the way in. */ arriveFromAbove?: boolean; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number }) {
   const floor = useMemo(() => generateFloor(floorNo), [floorNo]);
   const [run, setRun] = useState(0); // bump to retry
-  return <FloorMap key={run} floor={floor} fighters={fighters} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} retry={() => setRun((r) => r + 1)} />;
+  const [revived, setRevived] = useState(false);
+  // After a defeat the party starts again at a quarter of its health.
+  const squadIn = useMemo(() => (revived ? fighters.map((f) => ({ ...f, hp_frac: 0.25, hp_at: undefined })) : fighters), [revived, fighters]);
+  return <FloorMap key={run} floor={floor} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} retry={() => { setRevived(true); setRun((r) => r + 1); }} />;
 }
 
 function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromAbove, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
@@ -283,12 +287,25 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
   const sig = useMemo(() => partySig(squad.map((f) => f.id)), [squad]);
   // Keep the expedition's health up to date, and start fresh after a defeat.
   useEffect(() => {
-    const save = () => { if (allies.current.length) writeExpedition(sig, allies.current); };
+    let lastDb = 0;
+    // Health is also kept on the server, so it is still there (and healing) when the player is back in the guild.
+    const saveDb = () => {
+      const A = allies.current;
+      if (!A.length) return;
+      void (async () => { try { await createClient().rpc("save_party_hp", { p_ids: A.map((a) => a.id), p_fracs: A.map((a) => (a.dead ? 0 : Math.max(0.01, a.hp / a.max))) }); } catch { /* the next save will catch up */ } })();
+    };
+    const save = () => { if (allies.current.length) { writeExpedition(sig, allies.current); const n = Date.now(); if (n - lastDb > 3000) { lastDb = n; saveDb(); } } };
     const t = setInterval(save, 1000);
-    window.addEventListener("pagehide", save);
-    return () => { clearInterval(t); window.removeEventListener("pagehide", save); save(); };
+    const flush = () => { lastDb = 0; save(); };
+    window.addEventListener("pagehide", flush);
+    return () => { clearInterval(t); window.removeEventListener("pagehide", flush); flush(); };
   }, [sig]);
-  useEffect(() => { if (state === "lost") clearExpedition(); }, [state]);
+  useEffect(() => {
+    if (state !== "lost") return;
+    clearExpedition();
+    // After a defeat the party limps home at a quarter of its health, so "Try again" is not an instant loss.
+    void (async () => { try { await createClient().rpc("save_party_hp", { p_ids: allies.current.map((a) => a.id), p_fracs: allies.current.map(() => 0.25) }); } catch { /* ignore */ } })();
+  }, [state]);
 
   // Build the two sides once.
   useEffect(() => {
@@ -306,6 +323,12 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       });
     });
     // Health and who is still up carry over from the last floor of this expedition.
+    for (const f of squad) {
+      const a = allies.current.find((x) => x.id === f.id);
+      if (!a || f.hp_frac === undefined) continue;
+      const fr = restedFrac(f.hp_frac, f.hp_at);
+      if (fr <= 0.001) { a.dead = true; a.hp = 0; a.deadAt = -1e9; a.path = []; } else a.hp = Math.max(1, Math.round(a.max * fr));
+    }
     const saved = readExpedition(sig);
     if (saved && allies.current.some((a) => (saved[a.id]?.[0] ?? 1) > 0)) {
       for (const a of allies.current) {

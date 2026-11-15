@@ -56,23 +56,23 @@ interface Row {
   gender: string;
   skill_points?: number;
   team_slot: number | null;
-  hp: number; atk: number; def: number; spd: number; stamina: number; magic: number;
+  hp: number; hp_frac?: number; hp_at?: string; atk: number; def: number; spd: number; stamina: number; magic: number;
   template: StarterFighter["template"];
   fighter_skills: { slot: number; skill: { name: string; kind: string; damage_type: string; power: number | string; cooldown_ms: number; stamina_cost: number; description: string | null } | null }[] | null;
 }
 
-export type GuildFighter = StarterFighter & { xp: number; skill_points?: number };
+export type GuildFighter = StarterFighter & { xp: number; skill_points?: number; hp_frac?: number; hp_at?: string };
 
 /** The signed-in player's fighters (RLS only returns their own). */
 export async function loadFighters(supabase: SupabaseClient, userId: string): Promise<GuildFighter[]> {
   const { data } = await supabase
     .from("fighters")
-    .select("id, grade, level, xp, gender, skill_points, team_slot, hp, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), fighter_skills(slot, skill:skills(name, kind, damage_type, power, cooldown_ms, stamina_cost, description))")
+    .select("id, grade, level, xp, gender, skill_points, team_slot, hp, hp_frac, hp_at, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), fighter_skills(slot, skill:skills(name, kind, damage_type, power, cooldown_ms, stamina_cost, description))")
     .eq("owner_id", userId)
     .order("team_slot", { ascending: true, nullsFirst: false });
   return ((data ?? []) as unknown as Row[]).map((f) => ({
     id: f.id, grade: f.grade, level: f.level, xp: f.xp, skill_points: f.skill_points, team_slot: f.team_slot ?? 0,
-    hp: f.hp, atk: f.atk, def: f.def, spd: f.spd, stamina: f.stamina, magic: f.magic, template: f.template.archetype === "novice" ? { ...f.template, sprite_key: `novice_${f.gender}` } : f.template,
+    hp: f.hp, hp_frac: f.hp_frac, hp_at: f.hp_at, atk: f.atk, def: f.def, spd: f.spd, stamina: f.stamina, magic: f.magic, template: f.template.archetype === "novice" ? { ...f.template, sprite_key: `novice_${f.gender}` } : f.template,
     skills: (f.fighter_skills ?? []).map((s) => ({ slot: s.slot, name: s.skill?.name ?? "", kind: s.skill?.kind, damage_type: s.skill?.damage_type, power: s.skill ? Number(s.skill.power) : undefined, cooldown_ms: s.skill?.cooldown_ms, stamina_cost: s.skill?.stamina_cost, description: s.skill?.description })).sort((a, b) => a.slot - b.slot),
   }));
 }
