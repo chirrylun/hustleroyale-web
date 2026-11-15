@@ -28,7 +28,7 @@ const fx = (sheet: FxSheet, row: number, size = 1, ground = false): FxArt => ({ 
 
 export const SKILL_ART: Record<string, SkillArt> = {
   // Weapon attacks
-  "Basic Strike": { icon: "crossed-swords", hit: fx("slash", 0, 0.9) },
+  "Basic Strike": { icon: "crossed-swords" },
   Stab: { icon: "stab", hit: fx("slash", 2, 0.9) },
   "Quick Stab": { icon: "quick-stab", hit: fx("slash", 2, 0.9) },
   Slash: { icon: "slash", hit: fx("slash", 1, 0.85) },
