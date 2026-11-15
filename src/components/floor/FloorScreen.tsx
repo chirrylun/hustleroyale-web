@@ -82,7 +82,10 @@ interface Ag {
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
-function Unit({ a }: { a: Ag }) {
+/** Colour of a monster's level tag, by how far it is above the party's best fighter: easy ones stay plain, tougher ones warn. */
+const levelTone = (gap: number) => (gap >= 5 ? "text-ember" : gap >= 2 ? "text-gold" : gap <= -3 ? "text-leaf" : "text-paper");
+
+function Unit({ a, party }: { a: Ag; party: number }) {
   const [look, setLook] = useState(a.look);
   // Bosses are drawn large on purpose; everything else is scaled to a realistic size next to a fighter.
   const size = FRAME * T * (a.boss ? 1.5 : mobScale(a.sprite));
@@ -94,6 +97,11 @@ function Unit({ a }: { a: Ag }) {
     >
       <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
         <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
+        {a.side === "foe" && (
+          <span className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-bold leading-none ${levelTone(a.level - party)}`} style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}>
+            Lv {a.level}
+          </span>
+        )}
       </div>
       <FighterSprite
         spriteKey={a.sprite} role={a.role} flip={look.flip} rest={look.rest}
@@ -130,6 +138,8 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
   const [state, setState] = useState<"play" | "won" | "lost">("play");
   const goal = baseMobCount(floor.n); // kills that open the portal (boss floors also need the boss down)
   const [kills, setKills] = useState(0);
+  /** The party's best level, which colours the level tags over monsters; rises when someone levels up. */
+  const [partyLvl, setPartyLvl] = useState(() => Math.max(1, ...fighters.filter((f) => f.team_slot != null).map((f) => f.level)));
   const [bossDown, setBossDown] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
@@ -262,8 +272,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
       const glow = document.createElement("div");
       glow.className = "levelup-glow";
       el.appendChild(glow);
+      sprite.style.transition = "filter 600ms ease-out";
       sprite.style.filter = "drop-shadow(0 0 3px #fff4b0) drop-shadow(0 0 10px #ffb82e)";
-      setTimeout(() => { glow.remove(); sprite.style.filter = ""; }, 2000);
+      setTimeout(() => { sprite.style.filter = ""; }, 1300); // eases away while the aura and banner fade
+      setTimeout(() => { glow.remove(); sprite.style.transition = ""; }, 2050);
     }
     overHead(a, "LEVEL UP!", "text-gold", 2000, "lvl-pop", "font-size:2rem;letter-spacing:.06em;white-space:nowrap;margin-bottom:1.6rem;text-shadow:0 0 10px #ffb82e,0 2px 0 #000;");
   };
@@ -276,7 +288,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
       const a = allies.current.find((u) => u.id === w.id);
       if (!a || w.gained <= 0) continue;
       overHead(a, `+${w.gained} XP`, "text-leaf", 1200);
-      if (w.levels_gained > 0) setTimeout(() => celebrate(a), 250);
+      if (w.levels_gained > 0) { a.level += w.levels_gained; setPartyLvl((p) => Math.max(p, a.level)); setTimeout(() => celebrate(a), 250); }
     }
   };
   const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => showXp(data));
@@ -648,7 +660,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
             );
           })}
           <div ref={marker} className="marker pointer-events-none absolute z-[5] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold opacity-0" />
-          {ready && [...allies.current, ...foes.current].map((u) => <Unit key={u.id} a={u} />)}
+          {ready && [...allies.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} />)}
         </div>
 
         <button ref={arrow} type="button" onClick={recenter} aria-label="Back to your fighters" className="pixel-box absolute left-0 top-0 z-[9600] hidden h-12 w-12 bg-night/90" style={{ display: "none" }}>
