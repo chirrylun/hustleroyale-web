@@ -274,7 +274,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
 
   // A level-up: a golden aura behind the fighter, a ring spreading on the ground, a glow around their outline, and a
   // big banner overhead. All of it is attached to the fighter, so it follows them if they keep moving.
-  const celebrate = (a: Ag) => {
+  const celebrate = (a: Ag, n = 0) => {
     const el = a.el, fx = a.fx;
     if (el && fx) {
       const sprite = (el.firstElementChild as HTMLElement | null) ?? el;
@@ -286,18 +286,19 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
       setTimeout(() => { sprite.style.filter = ""; }, 1300); // eases away while the aura and banner fade
       setTimeout(() => { glow.remove(); sprite.style.transition = ""; }, 2050);
     }
-    overHead(a, "LEVEL UP!", "text-gold", 2000, "lvl-pop", "font-size:2rem;letter-spacing:.06em;white-space:nowrap;margin-bottom:1.6rem;text-shadow:0 0 10px #ffb82e,0 2px 0 #000;");
+    overHead(a, "LEVEL UP!", "text-gold", 2000, "lvl-pop", `font-size:2rem;letter-spacing:.06em;white-space:nowrap;margin-bottom:${1.6 + n * 2.1}rem;text-shadow:0 0 10px #ffb82e,0 2px 0 #000;`);
   };
 
   // The server rolls the xp (a range, not a fixed amount) and says what each fighter got: show it over their heads.
   const showXp = (data: unknown) => {
     const res = data as { throttled?: boolean; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
     if (!res?.awards || res.throttled) return;
+    let ups = 0; // party members levelling on the same kill take turns, each banner a step higher than the last
     for (const w of res.awards) {
       const a = allies.current.find((u) => u.id === w.id);
       if (!a || w.gained <= 0) continue;
       overHead(a, `+${w.gained} XP`, "text-leaf", 1200);
-      if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); setTimeout(() => celebrate(a), 250); }
+      if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
     }
   };
   const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => showXp(data));
