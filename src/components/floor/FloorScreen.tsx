@@ -217,6 +217,8 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
   // Tell the server this floor has been reached (counts toward "Reach Floor N" quests).
 
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+  const firstDone = useRef(false);
+  const [firstJobDone, setFirstJobDone] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (text: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -454,7 +456,11 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
     }
   };
-  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => { showXp(data); noteKill(data as never); });
+  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => {
+    showXp(data); noteKill(data as never);
+    // The tutorial job is finished by the first bat; it gets the same banner as every other job.
+    if (tutorialStep === 8 && floor.n === 1 && m.kind === "bat" && !m.boss && !firstDone.current) { firstDone.current = true; setFirstJobDone(true); showToast("Job complete: First job. Hand it in at the job board."); }
+  });
 
   // The loop: movement, fighting, camera.
   useEffect(() => {
@@ -893,7 +899,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
           <p className="truncate text-sm text-steel">{floor.theme.name}</p>
         </div>
       </div>
-      {quest && state === "play" && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">First job: defeat a bat on this floor.</p>}
+      {quest && !firstJobDone && state === "play" && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">First job: defeat a bat on this floor.</p>}
 
       <div
         ref={view}
