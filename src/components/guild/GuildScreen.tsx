@@ -15,7 +15,7 @@ const OPEN_DURING_FIRST_JOB = ["jobs", "adventure"];
 const FIRST_JOB_NOTICE = "Complete your first quest on the job board first.";
 
 /** Tutorial job: kill a bat on Floor 1 (steps 6-8 of the tutorial); afterwards the board is "empty" until more jobs land. */
-export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number }) {
+export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0, floorUnlocked = 1 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number }) {
   const router = useRouter();
   const [step, setStep] = useState(tutorialStep);
   const [panel, setPanel] = useState<"jobs" | "adventure" | null>(null);
@@ -31,7 +31,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
   const firstJobOpen = step < 9;
   /** Floors open one at a time: every cleared floor plus the next one. Nothing beyond that is shown. */
-  const unlocked = Math.min(MAX_FLOOR, floorCleared + 1);
+  const unlocked = Math.min(MAX_FLOOR, floorUnlocked);
 
   // Supabase's rpc() only sends once it is awaited, so every call here is awaited inside an async function.
   const saveStep = async (n: number) => {

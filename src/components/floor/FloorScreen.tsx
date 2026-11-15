@@ -165,6 +165,9 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Tell the server this floor has been reached (counts toward "Reach Floor N" quests).
+  useEffect(() => { void createClient().rpc("enter_floor", { p_floor: floor.n }); }, [floor.n]);
+
   // Build the two sides once.
   useEffect(() => {
     // Tanks lead, healers trail: that is the order they take in the formation.

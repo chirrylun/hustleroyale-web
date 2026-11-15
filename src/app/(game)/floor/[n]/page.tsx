@@ -23,9 +23,9 @@ async function Content({ params }: { params: Promise<{ n: string }> }) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("profiles").select("floor_cleared, tutorial_step").eq("id", user.id).single();
+  const { data: profile } = await supabase.from("profiles").select("floor_unlocked, tutorial_step").eq("id", user.id).single();
   // Floors unlock one at a time.
-  if (n > (profile?.floor_cleared ?? 0) + 1) redirect("/home");
+  if (n > profile?.floor_unlocked ?? 1) redirect("/home");
   const fighters = await loadFighters(supabase, user.id);
   return <FloorScreen floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} />;
 }
