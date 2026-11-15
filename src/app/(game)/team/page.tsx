@@ -45,11 +45,11 @@ async function Fighters() {
       <p className="text-xl text-steel">
         Guild roster: <span className="text-gold">{fighters.length}</span> / {ROSTER_CAP} fighters
       </p>
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {fighters.map((f, i) => (
-          <div key={f.id} className="flex flex-col gap-3">
-            <FighterCard fighter={f} delayMs={i * 120} />
-            <Link href={`/team/${f.id}`} className="pixel-btn bg-panel px-3 py-1 text-center text-lg uppercase text-paper">Skills ({f.skill_points ?? 0} points)</Link>
+          <div key={f.id} className="flex flex-col gap-1.5">
+            <FighterCard fighter={f} delayMs={i * 120} compact />
+            <Link href={`/team/${f.id}`} className="pixel-btn bg-panel px-3 py-0.5 text-center text-base uppercase text-paper">Skills ({f.skill_points ?? 0} points)</Link>
             <ClassActions id={f.id} level={f.level} role={f.template.role} archetype={f.template.archetype} rarity={f.template.rarity} />
           </div>
         ))}
