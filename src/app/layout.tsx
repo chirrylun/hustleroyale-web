@@ -9,7 +9,7 @@ const pixel = Pixelify_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Hustle Royale",
+  title: "Pocket RPG",
   description: "Collect fighters, trade on the market and battle in the arena.",
 };
 

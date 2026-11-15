@@ -2,7 +2,7 @@ import { PageShell } from "@/components/layout/PageShell";
 import { PixelPanel } from "@/components/pixel/PixelPanel";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 
-export const metadata = { title: "How to Play | Hustle Royale" };
+export const metadata = { title: "How to Play | Pocket RPG" };
 
 const JOBS = [
   { sprite: "danfo_guard", role: "tank", name: "Tank", color: "bg-sky", text: "Big and tough. A tank stands in front and takes the hits so your team stays safe." },
