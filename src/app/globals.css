@@ -511,3 +511,15 @@ canvas,
 }
 @keyframes marker-ping { from { transform: translate(-50%, -50%) scale(.4); opacity: 1; } to { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } }
 .marker-ping { animation: marker-ping 600ms ease-out forwards; }
+
+/* Pillars of light for the floor gates. */
+.pillar { position: absolute; width: 56px; height: 190px; margin-left: -28px; margin-top: -190px; pointer-events: none;
+  background: linear-gradient(to top, var(--pc) 0%, color-mix(in srgb, var(--pc) 55%, transparent) 45%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(to right, transparent, #000 30%, #000 70%, transparent);
+  filter: drop-shadow(0 0 14px var(--pc)); animation: pillar-pulse 2.4s ease-in-out infinite; }
+.pillar::after { content: ""; position: absolute; left: -14px; right: -14px; bottom: -8px; height: 22px; border-radius: 50%;
+  background: radial-gradient(ellipse at center, var(--pc), transparent 70%); }
+.pillar-back { --pc: #ffffff; }
+.pillar-next { --pc: #7dff9a; }
+.pillar-off { opacity: .28; animation: none; filter: none; }
+@keyframes pillar-pulse { 0%, 100% { opacity: .75; transform: scaleX(1); } 50% { opacity: 1; transform: scaleX(1.12); } }

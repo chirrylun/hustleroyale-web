@@ -127,13 +127,13 @@ function Unit({ a, party }: { a: Ag; party: number }) {
  * Combat here runs in the browser and reports kills to the server, which checks the floor is unlocked and
  * pays XP. A fully server-run version comes with shared rooms.
  */
-export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1 }: { floorNo: number; fighters: GuildFighter[]; tutorialStep: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number }) {
+export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floorUnlocked = 1 }: { floorNo: number; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number }) {
   const floor = useMemo(() => generateFloor(floorNo), [floorNo]);
   const [run, setRun] = useState(0); // bump to retry
-  return <FloorMap key={run} floor={floor} fighters={fighters} tutorialStep={tutorialStep} players={players} retry={() => setRun((r) => r + 1)} />;
+  return <FloorMap key={run} floor={floor} fighters={fighters} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} retry={() => setRun((r) => r + 1)} />;
 }
 
-function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; retry: () => void }) {
+function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; retry: () => void }) {
   const nav = useMemo(() => buildNav(floor.nav), [floor]);
   const squad = useMemo(() => {
     const team = fighters.filter((f) => f.team_slot != null).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
@@ -638,7 +638,8 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
   const A = floor.theme.atlas;
   const boss = isBossFloor(floor.n);
   const quest = tutorialStep === 8 && floor.n === 1;
-  const next = floor.n < MAX_FLOOR;
+  // Floors 1 to 3 open one by one as you clear them; from Floor 3 on, the job-board quests open the next floor.
+  const next = floor.n < MAX_FLOOR && (floor.n < 3 || floor.n + 1 <= floorUnlocked);
 
   return (
     <div className="relative flex h-dvh w-full flex-col bg-ink">
@@ -661,6 +662,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
         <div ref={world} className="absolute left-0 top-0 will-change-transform" style={{ width: floor.w * T, height: floor.h * T }}>
           <canvas ref={ground} width={floor.w * T} height={floor.h * T} className="absolute inset-0" />
           {floor.props.map((p) => {
+            // The two gates are pillars of light: white leads back, green leads on (dim until the floor is clear).
+            if (p.kind === "entry" || p.kind === "exit") {
+              return <div key={p.id} className={`pillar ${p.kind === "entry" ? "pillar-back" : unlocked ? "pillar-next" : "pillar-next pillar-off"}`} style={{ left: p.x * T, top: p.y * T, zIndex: depth(p.y) }} />;
+            }
             const r = A.rects[p.idx];
             const k = (p.w * T) / ((r.w * (p.crop ?? 1)));
             return (
@@ -673,7 +678,6 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
                   backgroundImage: `url(${A.url})`, backgroundSize: `${A.w * k}px ${A.h * k}px`,
                   backgroundPosition: `${-r.x * k}px ${-r.y * k}px`, imageRendering: "auto",
                   zIndex: p.kind === "decor" ? 4 : depth(p.y),
-                  filter: p.kind === "exit" && !unlocked ? "grayscale(.85) brightness(.7)" : undefined,
                 }}
               />
             );
@@ -709,7 +713,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
         </button>
         {free && <button type="button" onClick={recenter} className="pixel-box absolute bottom-3 right-3 z-[9600] bg-night/90 px-3 py-1 text-lg uppercase text-paper">Follow party</button>}
 
-        {state === "play" && unlocked && <p className="pointer-events-none absolute inset-x-0 top-3 z-[9600] text-center text-2xl uppercase text-gold drop-shadow">Floor clear! Head for the portal.</p>}
+        {state === "play" && unlocked && <p className="pointer-events-none absolute inset-x-0 top-3 z-[9600] text-center text-2xl uppercase text-gold drop-shadow">Floor clear! Head for the green light.</p>}
 
         {state !== "play" && (
           <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
@@ -717,7 +721,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
               {state === "won" ? (
                 <>
                   <h2 className="mb-2 text-3xl uppercase text-gold">Floor {floor.n} cleared</h2>
-                  <p className="mb-4 text-xl text-paper">{floor.n >= MAX_FLOOR ? "You reached the top of the tower." : boss ? "The boss is down. A new region opens." : "The portal leads deeper."}</p>
+                  <p className="mb-4 text-xl text-paper">{floor.n >= MAX_FLOOR ? "You reached the top of the tower." : !next ? `Finish the Floor ${floor.n} quests on the job board to open Floor ${floor.n + 1}.` : boss ? "The boss is down. A new region opens." : "The portal leads deeper."}</p>
                   <div className="flex flex-col gap-2">
                     {next && <Link href={`/floor/${floor.n + 1}`}><PixelButton className="w-full">Floor {floor.n + 1}</PixelButton></Link>}
                     <Link href="/home"><PixelButton variant="ghost" className="w-full">Back to the guild</PixelButton></Link>

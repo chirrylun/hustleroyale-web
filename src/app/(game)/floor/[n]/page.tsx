@@ -27,5 +27,5 @@ async function Content({ params }: { params: Promise<{ n: string }> }) {
   // Floors unlock one at a time.
   if (n > profile?.floor_unlocked ?? 1) redirect("/home");
   const fighters = await loadFighters(supabase, user.id);
-  return <FloorScreen floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} />;
+  return <FloorScreen floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} />;
 }
