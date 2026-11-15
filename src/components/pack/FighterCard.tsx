@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
+import { SkillIcon } from "@/components/guild/SkillIcon";
 import { PortraitSprite } from "@/components/sprites/PortraitSprite";
 import { ARCHETYPE_LABEL, xpRequired } from "@/lib/guild";
 import type { Rarity, Role, StarterFighter } from "@/lib/starter-pack";
@@ -122,8 +123,9 @@ export function FighterCard({ fighter, delayMs, compact = false }: { fighter: St
       {fighter.skills.length > 0 && (
         <ul className="border-t-4 border-panel pt-2 text-sm text-steel">
           {fighter.skills.map((s) => (
-            <li key={s.slot}>
-              {s.slot}. {s.name}
+            <li key={s.slot} className="flex items-center gap-1.5">
+              <SkillIcon name={s.name} kind={s.kind} size={22} />
+              <span>{s.name}</span>
             </li>
           ))}
         </ul>

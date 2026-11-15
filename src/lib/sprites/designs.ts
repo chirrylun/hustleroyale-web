@@ -1,6 +1,8 @@
 export type Role = "tank" | "healer" | "dps";
 /** Effect sheets: 4 rows (one effect each) x 4 frames. hit: physical, heavy, magic, crit. support: heal, shield, buff, debuff. shot: dart, magic, fire, holy. status: stun, death, shield break, danger. */
-export type FxSheet = "hit" | "support" | "shot" | "status" | "shot2" | "support2" | "ground";
+export type FxSheet = "hit" | "support" | "shot" | "status" | "shot2" | "support2" | "ground"
+  // Skill art (see src/lib/skill-art.ts): slash/arrow/bolt/impact/dark/heal/guard/music/move/extra.
+  | "slash" | "arrow" | "bolt" | "impact" | "dark" | "heal" | "guard" | "music" | "move" | "extra";
 
 /** Sheet layout produced by tools/build_sprites.py: 6 columns, one row per animation. */
 export const ANIMS = [

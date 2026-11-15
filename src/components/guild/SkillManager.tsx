@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
+import { SkillIcon } from "./SkillIcon";
 import { ARCHETYPE_LABEL } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
 
@@ -144,6 +145,7 @@ export function SkillManager({ fighter, equipped, learned, nodes, ownedNodes, st
                   <li key={slot} className={clsx("pixel-box flex flex-col gap-1 p-3 text-lg", s ? "bg-night" : "bg-night/60")}>
                     <div className="flex items-start gap-2">
                       <span className="mt-0.5 shrink-0 bg-panel px-2 text-paper">{slot}</span>
+                      {s ? <SkillIcon name={s.name} kind={s.kind} size={52} /> : <SkillIcon name="" file="empty" size={52} dim />}
                       {s ? (
                         <div className="min-w-0 flex-1" title={effect(s)}>
                           <p className="flex justify-between gap-2 text-paper"><span>{s.name}</span><span className="text-gold">Lv {lv?.level ?? 1}</span></p>
@@ -182,8 +184,10 @@ export function SkillManager({ fighter, equipped, learned, nodes, ownedNodes, st
                                 onClick={() => run(() => sb.rpc("equip_skill", { p_fighter: fighter.id, p_slot: slot, p_skill: l.skill.id }))}
                                 className="pixel-btn w-full bg-panel px-2 py-1 text-left text-base text-paper disabled:opacity-50"
                               >
-                                <span className="text-lg">{l.skill.name}</span>{elsewhere !== undefined && <span className="text-gold"> · slot {elsewhere}</span>}
-                                <Tags s={l.skill} />
+                                <span className="flex items-center gap-2">
+                                  <SkillIcon name={l.skill.name} kind={l.skill.kind} size={36} dim={elsewhere !== undefined} />
+                                  <span className="min-w-0"><span className="text-lg">{l.skill.name}</span>{elsewhere !== undefined && <span className="text-gold"> · slot {elsewhere}</span>}<Tags s={l.skill} /></span>
+                                </span>
                               </button>
                             </li>
                           );
@@ -201,8 +205,13 @@ export function SkillManager({ fighter, equipped, learned, nodes, ownedNodes, st
               <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {unequipped.map((l) => (
                   <li key={l.skill.id} className="pixel-box bg-night p-2 text-lg text-paper" title={effect(l.skill)}>
-                    <p className="flex justify-between gap-2"><span>{l.skill.name}</span><span className="text-gold">Lv {l.level}</span></p>
-                    <Tags s={l.skill} />
+                    <div className="flex items-start gap-2">
+                      <SkillIcon name={l.skill.name} kind={l.skill.kind} size={40} />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex justify-between gap-2"><span>{l.skill.name}</span><span className="text-gold">Lv {l.level}</span></p>
+                        <Tags s={l.skill} />
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -231,8 +240,13 @@ export function SkillManager({ fighter, equipped, learned, nodes, ownedNodes, st
                       <div key={n.id} className="flex flex-col gap-1">
                         {idx > 0 && <span aria-hidden className="text-center text-steel">▼</span>}
                         <div className={clsx("pixel-box p-2 text-base", has ? "bg-leaf text-ink" : ready ? "bg-night text-paper ring-2 ring-gold" : "bg-night text-paper opacity-70")}>
-                          <p className="text-lg uppercase">{n.name}</p>
-                          <p className={has ? "" : "text-steel"}>{n.description || "A new skill."}</p>
+                          <div className="flex items-start gap-2">
+                            <SkillIcon name={n.name} kind={n.skill_id ? undefined : null} size={44} dim={!has && !ready} />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-lg uppercase">{n.name}</p>
+                              <p className={has ? "" : "text-steel"}>{n.description || "A new skill."}</p>
+                            </div>
+                          </div>
                           <p className="mt-1 text-sm uppercase">{has ? "✔ Learned" : why}</p>
                           {!has && (
                             <PixelButton className="mt-1 !px-3 !py-0.5 text-base" disabled={!ready || busy} onClick={() => run(() => sb.rpc("learn_node", { p_fighter: fighter.id, p_node: n.id }))}>
@@ -259,9 +273,14 @@ export function SkillManager({ fighter, equipped, learned, nodes, ownedNodes, st
               const known = learnedIds.has(s.id);
               return (
                 <li key={s.id} className="pixel-box bg-night p-2 text-lg text-paper">
-                  <div className="flex justify-between gap-2"><span>{s.name}</span><span className="text-gold">🪙 {s.price}</span></div>
-                  <p className="text-base text-steel">{effect(s)}</p>
-                  <Tags s={s} />
+                  <div className="flex items-start gap-2">
+                    <SkillIcon name={s.name} kind={s.kind} size={44} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex justify-between gap-2"><span>{s.name}</span><span className="text-gold">🪙 {s.price}</span></div>
+                      <p className="text-base text-steel">{effect(s)}</p>
+                      <Tags s={s} />
+                    </div>
+                  </div>
                   <p className="mt-1 text-sm text-steel">Needs level {s.min_level}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     {known ? <span className="text-base uppercase text-leaf">✔ Learned</span> : (

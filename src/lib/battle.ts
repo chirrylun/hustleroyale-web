@@ -1,5 +1,6 @@
 "use client";
 
+import { artOf } from "@/lib/skill-art";
 import type { FxSheet } from "@/lib/sprites/designs";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { getGameSocket } from "@/lib/socket";
@@ -168,6 +169,8 @@ export interface LiveUnit {
   hiddenUntil: number;
   /** `n` changes on every effect so the CSS animation restarts. */
   fx: { kind: FxKind; n: number };
+  /** The skill this fighter used last and when (battle clock), so heals, shields and buffs can show that skill's art. */
+  lastSkill?: { name: string; t: number };
 }
 
 export interface FloatText {
@@ -185,7 +188,11 @@ export interface Effect {
   id: number;
   kind: "zone" | "burst" | "shot" | "vfx";
   /** Skill-effect animation (sheet + row) for "vfx" impacts and for shot projectiles. */
-  fx?: { sheet: FxSheet; row: number };
+  fx?: { sheet: FxSheet; row: number; size?: number; ground?: boolean };
+  /** Wait this long before showing (a hit that lands when the shot arrives). */
+  delayMs?: number;
+  /** Mirror the art, so a swipe comes from the attacker's side. */
+  flip?: boolean;
   x: number;
   y: number;
   radius: number;
@@ -268,6 +275,7 @@ function applySnapshot(units: Record<string, LiveUnit>, snap: BattleSnapshot): R
       windupUntil: s.windup ? snap.timeMs + s.windup.remainingMs : 0,
       walkUntil: prev?.walkUntil ?? 0,
       hiddenUntil: prev?.hiddenUntil ?? 0,
+      lastSkill: prev?.lastSkill,
       fx: prev?.fx ?? { kind: s.alive ? null : "dead", n: 0 },
     };
   }
@@ -318,11 +326,16 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
     if (u) texts.push({ id: nextId++, x: u.x, y: u.y, text, kind, expires: now + TEXT_LIFETIME_MS });
   };
   const addEffect = (e: Omit<Effect, "id" | "expires" | "x2" | "y2" | "zoneId" | "radius" | "durationMs"> & Partial<Effect>) => {
-    effects.push({ id: nextId++, radius: 0, x2: e.x, y2: e.y, durationMs: 400, zoneId: -1, ...e, expires: now + (e.durationMs ?? 400) + 300 });
+    effects.push({ id: nextId++, radius: 0, x2: e.x, y2: e.y, durationMs: 400, zoneId: -1, ...e, expires: now + (e.delayMs ?? 0) + (e.durationMs ?? 400) + 300 });
   };
-  const vfx = (id: string, fx: NonNullable<Effect["fx"]>, durationMs = 560) => {
+  const vfx = (id: string, fx: NonNullable<Effect["fx"]>, durationMs = 560, extra: Partial<Effect> = {}) => {
     const u = units[id];
-    if (u) addEffect({ kind: "vfx", x: u.x, y: u.y, tone: "physical", side: meta(id)?.side ?? 1, fx, durationMs });
+    if (u) addEffect({ kind: "vfx", x: u.x, y: u.y, tone: "physical", side: meta(id)?.side ?? 1, fx, durationMs, ...extra });
+  };
+  /** Did this fighter use a skill with its own art a moment ago? Then that art replaces the generic effect. */
+  const recentArt = (id: string | undefined, t: number) => {
+    const last = id ? units[id]?.lastSkill : undefined;
+    return last && t - last.t < 900 ? artOf(last.name) : undefined;
   };
   const bigShake = (power: number) => {
     shake = { n: shake.n + 1, power: Math.max(power, shake.power > 0 && shake.n === view.shake.n ? shake.power : 0) };
@@ -347,12 +360,14 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         const melee = skill.range <= MELEE_RANGE;
         touch(
           e.actorId,
-          { cooldownEnds, energy: Math.max(0, u.energy - skill.staminaCost), windupUntil: 0, ...(HIDE_MS[skill.name] ? { hiddenUntil: e.t + HIDE_MS[skill.name]! } : {}) },
+          { cooldownEnds, energy: Math.max(0, u.energy - skill.staminaCost), windupUntil: 0, lastSkill: { name: skill.name, t: e.t }, ...(HIDE_MS[skill.name] ? { hiddenUntil: e.t + HIDE_MS[skill.name]! } : {}) },
           skill.kind === "damage" && melee ? "lunge" : skill.kind === "damage" || skill.kind === "heal" ? "cast" : undefined,
         );
         // Ranged hits and heals fly across the arena. Telegraphed attacks get their own zone effect instead.
         const target = units[e.targetIds[0] ?? ""];
-        if (!melee && !skill.telegraphMs && target && (skill.kind === "damage" || skill.kind === "heal")) {
+        const art = artOf(skill.name);
+        const shot = art?.shot !== undefined ? art.shot : shotArt(skill.name, actor.role, skill.kind, skill.damageType);
+        if (!melee && !skill.telegraphMs && target && shot && (skill.kind === "damage" || skill.kind === "heal")) {
           addEffect({
             kind: "shot",
             x: u.x,
@@ -362,10 +377,19 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
             durationMs: 260,
             tone: skill.kind === "heal" ? "heal" : skill.damageType === "magical" ? "magical" : "physical",
             side: actor.side,
-            fx: shotArt(skill.name, actor.role, skill.kind, skill.damageType),
+            fx: shot,
           });
         }
-        if (skill.name === "Vanish") vfx(e.actorId, { sheet: "ground", row: 1 }, 600);
+        // The skill's own animation: on the caster as it starts, and on each target when it lands
+        // (after the shot has flown, or as the swing connects).
+        if (art?.cast) vfx(e.actorId, art.cast, 640);
+        if (art?.hit && !skill.telegraphMs) {
+          const lands = skill.kind !== "damage" ? 0 : melee ? 180 : 260;
+          for (const id of e.targetIds.slice(0, 6)) {
+            const to = units[id];
+            vfx(id, art.hit, 560, { delayMs: lands, flip: !!to && u.x > to.x });
+          }
+        }
         log = e.skillIndex === 0 ? `${actor.name} attacks` : `${actor.name} uses ${skill.name}`;
         break;
       }
@@ -433,7 +457,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
       case "heal":
         touch(e.targetId, { hp: e.hp }, e.quiet ? undefined : "heal");
         if (e.amount > 0) say(e.targetId, `+${e.amount}`, "heal");
-        if (!e.quiet) vfx(e.targetId, { sheet: "support", row: 0 });
+        if (!e.quiet && !recentArt(e.sourceId, e.t)?.hit) vfx(e.targetId, { sheet: "support", row: 0 });
         break;
       case "shield":
         touch(e.targetId, { shield: e.amount }, "shield");
@@ -441,7 +465,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
         break;
       case "mod":
         say(e.targetId, `${e.pct > 0 ? "+" : ""}${e.pct}% ${e.stat.toUpperCase()}`, "mod");
-        vfx(e.targetId, modArt(e.stat, e.pct));
+        if (!recentArt(e.sourceId, e.t)?.hit) vfx(e.targetId, modArt(e.stat, e.pct));
         break;
       case "evade":
         say(e.targetId, "DODGE", "block");
@@ -453,7 +477,7 @@ function applyEvents(view: BattleView, events: BattleEvent[], now: number): Batt
       case "summon": {
         const u = units[e.unitId];
         if (u) units[e.unitId] = { ...u, x: e.x, y: e.y, alive: true, hp: Math.max(1, u.hp || 1), fx: { kind: null, n: u.fx.n + 1 } };
-        vfx(e.unitId, { sheet: "ground", row: 1 }, 600);
+        vfx(e.unitId, { sheet: "dark", row: 2, size: 1.4, ground: true }, 700);
         log = `${meta(e.ownerId)?.name ?? "A fighter"} raises a skeleton`;
         break;
       }
