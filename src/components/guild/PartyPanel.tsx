@@ -12,7 +12,7 @@ const PARTY_MAX = 3;
 const ROLE_LABEL = { tank: "Tank", healer: "Healer", dps: "Damage" } as const;
 
 /** Pick who goes out, right in the guild. Heading out saves the party as the player's team (XP goes to them), then the floor loads. */
-export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: number; fighters: GuildFighter[]; onBack: () => void; onGo: () => void }) {
+export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: number; fighters: GuildFighter[]; onBack: () => void; onGo: (roomCode?: string) => void }) {
   // Start from the current team (or the strongest fighters if none is set).
   const [ids, setIds] = useState<string[]>(() => {
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => a.team_slot - b.team_slot).map((f) => f.id);
@@ -30,6 +30,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
 
   const add = (id: string) => setIds((p) => (p.includes(id) || p.length >= PARTY_MAX ? p : [...p, id]));
   const remove = (id: string) => setIds((p) => p.filter((x) => x !== id));
+  const [code, setCode] = useState("");
   const sendAll = () => setIds([...fighters].sort((a, b) => b.level - a.level).slice(0, PARTY_MAX).map((f) => f.id));
 
   const go = async () => {
@@ -37,7 +38,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
     setBusy(true); setError(null);
     const { error: e } = await createClient().rpc("set_party", { p_ids: ids });
     if (e) { setError("Couldn't set your party. Try again."); setBusy(false); return; }
-    onGo();
+    onGo(code.trim() || undefined);
   };
 
   return (
@@ -101,6 +102,14 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
             );
           })}
         </div>
+        <label className="mt-3 flex items-center gap-2 text-lg text-steel">
+          Friend&apos;s room code
+          <input
+            value={code} onChange={(e) => setCode(e.target.value.replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 8))}
+            placeholder="optional" autoCapitalize="characters" autoComplete="off" spellCheck={false} aria-label="Friend's room code"
+            className="pixel-box w-28 bg-night px-2 py-1 text-center text-xl uppercase tracking-widest text-paper placeholder:text-steel/60"
+          />
+        </label>
         {error && <p role="alert" className="mt-2 text-xl text-ember">{error}</p>}
       </section>
 

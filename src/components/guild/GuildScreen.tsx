@@ -122,7 +122,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
           <div className="absolute inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3">
             <div className="pixel-box card-reveal w-full max-w-lg bg-night p-5">
               {panel === "party" ? (
-                <PartyPanel floorNo={floorSel} fighters={fighters} onBack={() => setPanel("adventure")} onGo={() => router.push(`/floor/${floorSel}`)} />
+                <PartyPanel floorNo={floorSel} fighters={fighters} onBack={() => setPanel("adventure")} onGo={(code) => router.push(`/floor/${floorSel}${code ? `?room=${code}` : ""}`)} />
               ) : panel === "adventure" ? (
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Adventure</h2>

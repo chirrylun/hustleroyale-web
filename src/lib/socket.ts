@@ -20,3 +20,21 @@ export function getGameSocket(): Socket {
   }
   return socket;
 }
+
+let floorSocket: Socket | null = null;
+
+/** Connection to the shared-room namespace (`/floor`). Same token handling as the battle socket. */
+export function getFloorSocket(): Socket {
+  if (!floorSocket) {
+    const supabase = createClient();
+    floorSocket = io(`${process.env.NEXT_PUBLIC_GAME_SERVER_URL}/floor`, {
+      autoConnect: false,
+      transports: ["websocket", "polling"],
+      reconnectionDelayMax: 3000,
+      auth: (cb) => {
+        supabase.auth.getSession().then(({ data }) => cb({ token: data.session?.access_token }));
+      },
+    });
+  }
+  return floorSocket;
+}

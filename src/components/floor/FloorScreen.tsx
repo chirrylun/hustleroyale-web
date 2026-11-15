@@ -19,6 +19,8 @@ import { ZOOM } from "@/lib/world/zoom";
 import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import { getFloorSocket } from "@/lib/socket";
+import type { Socket } from "socket.io-client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
 
 const T = 34 * ZOOM; // one tile on screen, in px (smaller = more of the map in view)
@@ -135,7 +137,15 @@ interface Ag {
   skipId: string; skipUntil: number;
   /** Foes: it was hit by one of ours, so it fights back whatever the floor's temper. */
   provoked: boolean;
+  /** Shared rooms: driven by the server (mobs) or by another player (their fighters); it eases toward (tx, ty). */
+  net?: boolean; tx?: number; ty?: number; swings?: number; uid?: string;
 }
+
+/** What the room server sends about a mob and about another player's fighters. */
+interface WireMob { id: number; kind: string; rarity: string; sprite: string; level: number; boss: boolean; x: number; y: number; hp: number; max: number; home: [number, number, number]; dead?: boolean }
+interface WireFighter { id: string; sprite: string; name: string; role: "tank" | "healer" | "dps"; level: number; max: number; x?: number; y?: number; frac?: number; dead?: boolean }
+interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
+interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[] }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -181,16 +191,16 @@ function Unit({ a, party }: { a: Ag; party: number }) {
  * Combat here runs in the browser and reports kills to the server, which checks the floor is unlocked and
  * pays XP. A fully server-run version comes with shared rooms.
  */
-export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floorUnlocked = 1, arriveFromAbove = false }: { floorNo: number; /** Came down from the floor above: the party appears beside the way up instead of by the way in. */ arriveFromAbove?: boolean; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number }) {
+export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floorUnlocked = 1, arriveFromAbove = false, roomCode }: { floorNo: number; /** Came down from the floor above: the party appears beside the way up instead of by the way in. */ arriveFromAbove?: boolean; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number; /** A friend's room code to join instead of being matched. */ roomCode?: string }) {
   const floor = useMemo(() => generateFloor(floorNo), [floorNo]);
   const [run, setRun] = useState(0); // bump to retry
   const [revived, setRevived] = useState(false);
   // After a defeat the party starts again at a quarter of its health.
   const squadIn = useMemo(() => (revived ? fighters.map((f) => ({ ...f, hp_frac: 0.25, hp_at: undefined })) : fighters), [revived, fighters]);
-  return <FloorMap key={run} floor={floor} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} retry={() => { setRevived(true); setRun((r) => r + 1); }} />;
+  return <FloorMap key={run} floor={floor} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} roomCode={roomCode} retry={() => { setRevived(true); setRun((r) => r + 1); }} />;
 }
 
-function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromAbove, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
+function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromAbove, roomCode, retry }: { roomCode?: string; floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
   const router = useRouter();
   const [askBack, setAskBack] = useState(false);
   const [askNext, setAskNext] = useState(false);
@@ -202,6 +212,9 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
 
   const allies = useRef<Ag[]>([]);
   const foes = useRef<Ag[]>([]);
+  const mates = useRef<Ag[]>([]); // other players' fighters in a shared room
+  const net = useRef<{ mode: "pending" | "on" | "off"; hits: [number, string, number][]; lastU: number; sock: Socket | null }>({ mode: "pending", hits: [], lastU: 0, sock: null });
+  const [room, setRoom] = useState<{ n: number; code: string } | null>(null);
   const [ready, setReady] = useState(false);
   const [state, setState] = useState<"play" | "lost">("play");
   /** The party's best level, which colours the level tags over monsters; rises when someone levels up. */
@@ -484,11 +497,12 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
     }
   };
-  const killReport = (m: Ag) => sendKill({ floor: floor.n, kind: m.kind, level: m.level, boss: m.boss }, (data) => {
+  const paid = (data: unknown, kind: string, boss: boolean) => {
     showXp(data); noteKill(data as never);
     // The tutorial job is finished by the first bat; it gets the same banner as every other job.
-    if (tutorialStep === 8 && floor.n === 1 && m.kind === "bat" && !m.boss && !firstDone.current) { firstDone.current = true; setFirstJobDone(true); showToast("Job complete: First job. Hand it in at the job board."); }
-  });
+    if (tutorialStep === 8 && floor.n === 1 && kind === "bat" && !boss && !firstDone.current) { firstDone.current = true; setFirstJobDone(true); showToast("Job complete: First job. Hand it in at the job board."); }
+  };
+  const killReport = (m: Ag) => sendKill({ floor: floor.n, kind: m.kind, level: m.level, boss: m.boss }, (data) => paid(data, m.kind, m.boss));
 
   // The loop: movement, fighting, camera.
   useEffect(() => {
@@ -518,9 +532,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       to.look.act = "hurt"; to.look.n++;
       from.look.act = "attack"; from.look.n++;
       spawnText(to.x, to.y, dmg > 0 ? String(dmg) : "Blocked", from.side === "ally" ? "text-gold" : "text-ember");
+      if (to.net && to.side === "foe") net.current.hits.push([Number(to.id.slice(1)), from.id, dmg]); // the room server keeps the mob's health
       if (to.hp <= 0) {
         to.dead = true; to.path = []; to.deadAt = now;
-        if (to.side === "foe") {
+        if (to.side === "foe" && !to.net) {
           killReport(to);
           const pr = progress.current;
           if (to.boss) pr.boss = true; else pr.kills++;
@@ -624,7 +639,8 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const A = allies.current, F = foes.current;
-      const live = stateRef.current === "play";
+      const netOn = net.current.mode === "on";
+      const live = stateRef.current === "play" && net.current.mode !== "pending";
       const aliveA = A.filter((a) => !a.dead), aliveF = F.filter((f) => !f.dead);
       const pr = progress.current;
 
@@ -708,7 +724,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
           }
         });
 
-        for (const f of aliveF) {
+        for (const f of netOn ? [] : aliveF) {
           f.cd = Math.max(0, f.cd - dt);
           f.repath -= dt;
           if (now - f.born < 900) continue; // just arrived
@@ -745,15 +761,15 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         }
 
         // Keep bodies apart so nobody stands inside anybody else.
-        separate([...aliveA, ...aliveF].filter((u) => !u.dead), nav);
+        separate([...aliveA, ...(netOn ? [] : aliveF)].filter((u) => !u.dead), nav);
 
         // New arrivals, one at a time and never in a rush.
         const plan = spawnPlan(baseMobCount(floor.n), players);
-        if (F.filter((f) => !f.dead && !f.boss).length < plan.cap && now >= pr.next) {
+        if (!netOn && F.filter((f) => !f.dead && !f.boss).length < plan.cap && now >= pr.next) {
           pr.next = trySpawn(now, A, F) ? now + rnd(plan.gapMs[0], plan.gapMs[1]) : now + 2000;
         }
         // The fallen fade, then are cleared away.
-        if (F.some((f) => f.dead && now - f.deadAt > 2500)) {
+        if (!netOn && F.some((f) => f.dead && now - f.deadAt > 2500)) {
           foes.current = F.filter((f) => !(f.dead && now - f.deadAt > 2500));
           rerender();
         }
@@ -768,8 +784,26 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         }
       }
 
+      if (netOn) {
+        // Mobs and other players' fighters glide toward where the server says they are.
+        const k = Math.min(1, dt * 10);
+        for (const u of [...F, ...mates.current]) {
+          if (u.tx === undefined || u.ty === undefined) continue;
+          const dx = u.tx - u.x, dy = u.ty - u.y;
+          if (Math.abs(dx) + Math.abs(dy) > 0.02) { u.movedAt = now; if (Math.abs(dx) > 0.03) u.look.flip = dx < 0; }
+          u.x += dx * k; u.y += dy * k;
+        }
+        // Tell the room where our fighters are and what they hit, a few times a second.
+        const nt = net.current;
+        if (now - nt.lastU > 150) {
+          nt.lastU = now;
+          const r2 = (n: number) => Math.round(n * 100) / 100;
+          nt.sock?.emit("u", { p: A.map((a) => [a.id, r2(a.x), r2(a.y), r2(a.hp / a.max), a.dead ? 1 : 0]), a: nt.hits.splice(0, 24) });
+        }
+      }
+
       // Draw.
-      for (const u of [...A, ...F]) {
+      for (const u of [...A, ...F, ...mates.current]) {
         if (!u.el) continue;
         u.el.style.transform = `translate(${u.x * T}px, ${u.y * T}px)`;
         u.el.style.zIndex = String(depth(u.y));
@@ -823,8 +857,117 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       }
       raf = requestAnimationFrame(tick);
     };
+    /* ---- Shared room: join one, then follow what the server says ---- */
+    const nt = net.current;
+    const sock = getFloorSocket();
+    nt.sock = sock;
+    const netFoe = (w: WireMob, fresh: boolean): Ag => {
+      const f = makeAg("foe", {
+        id: `n${w.id}`, sprite: w.sprite, name: w.kind, level: w.level, x: w.x, y: w.y, hp: w.hp, atk: 0, def: 0, boss: w.boss, kind: w.kind,
+        home: w.home, born: fresh ? performance.now() : -1e9, net: true, tx: w.x, ty: w.y,
+      });
+      f.max = w.max;
+      if (w.dead) { f.dead = true; f.hp = 0; f.deadAt = performance.now() - 5000; }
+      return f;
+    };
+    const netMates = (p: WirePlayer): Ag[] => p.fighters.map((w) => {
+      const x = w.x ?? 0, y = w.y ?? 0;
+      const a = makeAg("ally", { id: w.id, sprite: w.sprite, role: w.role, name: w.name, level: w.level, x, y, hp: Math.max(1, Math.round(w.max * (w.frac ?? 1))), atk: 0, def: 0, kind: "fighter", net: true, tx: x, ty: y, uid: p.uid });
+      a.max = w.max;
+      if (w.dead) { a.dead = true; a.hp = 0; a.deadAt = -1e9; }
+      return a;
+    });
+    const foeById = (id: number) => foes.current.find((f) => f.id === `n${id}`);
+    let me = "";
+    const onSnap = (r: { m: [number, number, number, number, number][]; add: WireMob[]; dead: number[]; del: number[]; p: [string, [string, number, number, number, number][]][]; n: number }) => {
+      let structural = false;
+      for (const [id, x, y, hp, sw] of r.m) {
+        const f = foeById(id);
+        if (!f) continue;
+        f.tx = x; f.ty = y; f.hp = hp;
+        if (f.dead && hp > 0) f.dead = false;
+        if (f.swings !== undefined && sw !== f.swings) { f.look.act = "attack"; f.look.n++; }
+        f.swings = sw;
+      }
+      for (const w of r.add) if (!foeById(w.id)) { foes.current.push(netFoe(w, true)); structural = true; }
+      for (const id of r.dead) { const f = foeById(id); if (f && !f.dead) { f.dead = true; f.hp = 0; f.path = []; f.deadAt = performance.now(); } }
+      if (r.del.length) { const gone = new Set(r.del.map((i) => `n${i}`)); foes.current = foes.current.filter((f) => !gone.has(f.id)); structural = true; }
+      for (const [uid, list] of r.p) {
+        if (uid === me) continue;
+        for (const [fid, x, y, frac, dead] of list) {
+          const a = mates.current.find((u) => u.id === fid);
+          if (!a) continue;
+          a.tx = x; a.ty = y; a.hp = Math.max(0, Math.round(a.max * frac));
+          if (dead && !a.dead) { a.dead = true; a.deadAt = performance.now(); } else if (!dead && a.dead) a.dead = false;
+        }
+      }
+      setRoom((cur) => (cur && cur.n !== r.n ? { ...cur, n: r.n } : cur));
+      if (structural) rerender();
+    };
+    const onHit = (h: { m: number; f: string; d: number }) => {
+      const foe = foeById(h.m);
+      if (foe) { foe.look.act = "attack"; foe.look.n++; }
+      const a = allies.current.find((u) => u.id === h.f) ?? mates.current.find((u) => u.id === h.f);
+      if (!a || a.dead) return;
+      const now = performance.now();
+      let d = h.d;
+      if (a.net) { /* someone else's fighter: their screen keeps the numbers, we just show the blow */ }
+      else {
+        if (a.dodge > 0) { a.dodge--; spawnText(a.x, a.y, "Dodge", "text-steel"); return; }
+        if (a.shield > 0 && now < a.shieldUntil) { const soak = Math.min(a.shield, d); a.shield -= soak; d -= soak; }
+        a.hp = Math.max(0, a.hp - d);
+        if (a.hp <= 0) { a.dead = true; a.path = []; a.deadAt = now; }
+      }
+      a.look.act = "hurt"; a.look.n++;
+      spawnText(a.x, a.y, d > 0 ? String(d) : "Blocked", "text-ember");
+    };
+    const onPaid = (k: PaidKill) => {
+      paid(k, k.kind, k.boss);
+      if (k.throttled) return;
+      if (k.boss) progress.current.boss = true; else progress.current.kills++;
+    };
+    const onJoined = (j: { player?: WirePlayer; n: number }) => {
+      if (j.player && j.player.uid !== me) { mates.current.push(...netMates(j.player)); rerender(); }
+      setRoom((cur) => (cur ? { ...cur, n: j.n } : cur));
+      showToast(`${j.player?.name ?? "A player"} joined the floor`);
+    };
+    const onLeft = (j: { uid: string; n: number }) => {
+      mates.current = mates.current.filter((u) => u.uid !== j.uid);
+      rerender();
+      setRoom((cur) => (cur ? { ...cur, n: j.n } : cur));
+    };
+    let firstCode: string | undefined = roomCode;
+    const give = setTimeout(() => { if (nt.mode === "pending") nt.mode = "off"; }, 4500);
+    const join = (code?: string) => sock.emit("join", { floor: floor.n, ...(code ? { code } : {}) }, (r: { ok?: boolean; error?: string; code?: string; you: string; n: number; mobs: WireMob[]; players: WirePlayer[] }) => {
+      if (!r?.ok) {
+        if (code && ["no_such_room", "room_full", "wrong_floor"].includes(r?.error ?? "")) { showToast(r.error === "room_full" ? "That room is full: joining another" : "Room not found: joining an open room"); return join(); }
+        nt.mode = "off"; // no room (or no server): the floor plays on alone, as it always could
+        return;
+      }
+      me = r.you;
+      foes.current = r.mobs.map((w) => netFoe(w, false));
+      mates.current = r.players.filter((p) => p.uid !== me).flatMap(netMates);
+      nt.mode = "on";
+      setRoom({ n: r.n, code: r.code ?? "" });
+      rerender();
+    });
+    const onConnect = () => { const c = firstCode; firstCode = undefined; join(c); }; // a reconnect matches afresh, not by the code
+    const onFail = () => { if (nt.mode === "pending") nt.mode = "off"; };
+    sock.on("connect", onConnect);
+    sock.on("connect_error", onFail);
+    sock.on("s", onSnap); sock.on("hit", onHit); sock.on("k", onPaid); sock.on("joined", onJoined); sock.on("left", onLeft);
+    if (sock.connected) onConnect(); else sock.connect();
+
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(give);
+      sock.emit("leave");
+      sock.off("connect", onConnect); sock.off("connect_error", onFail);
+      sock.off("s", onSnap); sock.off("hit", onHit); sock.off("k", onPaid); sock.off("joined", onJoined); sock.off("left", onLeft);
+      sock.disconnect();
+      nt.mode = "pending"; nt.sock = null; mates.current = [];
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
@@ -926,6 +1069,11 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
           <p className="truncate text-lg uppercase text-gold">Floor {floor.n}{isBossFloor(floor.n) && " · Boss"}</p>
           <p className="truncate text-sm text-steel">{floor.theme.name}</p>
         </div>
+        {room && (
+          <p className="pixel-box shrink-0 bg-panel px-2 py-1 text-center text-base uppercase leading-tight text-paper" title="Share the code and a friend can join this room">
+            {room.n}/4 here<span className="block text-sm text-gold">Room {room.code}</span>
+          </p>
+        )}
       </div>
       {quest && !firstJobDone && state === "play" && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">First job: defeat a bat on this floor.</p>}
 
@@ -969,7 +1117,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
             );
           })}
           <div ref={marker} className="marker pointer-events-none absolute z-[5] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold opacity-0" />
-          {ready && [...allies.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} />)}
+          {ready && [...allies.current, ...mates.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} />)}
         </div>
 
         {state === "play" && (

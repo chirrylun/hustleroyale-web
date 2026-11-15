@@ -6,7 +6,7 @@ import { loadFighters } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/server";
 import { MAX_FLOOR } from "@/lib/world/floor";
 
-export default function FloorPage({ params, searchParams }: { params: Promise<{ n: string }>; searchParams: Promise<{ from?: string }> }) {
+export default function FloorPage({ params, searchParams }: { params: Promise<{ n: string }>; searchParams: Promise<{ from?: string; room?: string }> }) {
   return (
     <Suspense fallback={<div className="h-dvh animate-pulse bg-night" aria-busy="true" />}>
       <Content params={params} searchParams={searchParams} />
@@ -14,9 +14,10 @@ export default function FloorPage({ params, searchParams }: { params: Promise<{ 
   );
 }
 
-async function Content({ params, searchParams }: { params: Promise<{ n: string }>; searchParams: Promise<{ from?: string }> }) {
+async function Content({ params, searchParams }: { params: Promise<{ n: string }>; searchParams: Promise<{ from?: string; room?: string }> }) {
   await connection();
   const n = Number((await params).n);
+  const sp = await searchParams;
   if (!Number.isInteger(n) || n < 1 || n > MAX_FLOOR) notFound();
   const supabase = await createClient();
   const {
@@ -28,5 +29,5 @@ async function Content({ params, searchParams }: { params: Promise<{ n: string }
   if (n > (profile?.floor_unlocked ?? 1)) redirect("/home");
   const fighters = await loadFighters(supabase, user.id);
   if (!fighters.some((f) => f.team_slot > 0)) redirect(`/home?enter=${n}`);
-  return <FloorScreen floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} arriveFromAbove={(await searchParams).from === "above"} />;
+  return <FloorScreen floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} arriveFromAbove={sp.from === "above"} roomCode={/^[A-Z2-9]{4,8}$/i.test(sp.room ?? "") ? sp.room!.toUpperCase() : undefined} />;
 }
