@@ -4,13 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FighterSprite, type Action } from "@/components/sprites/FighterSprite";
 import { buildNav, findPath, nearestWalkable, type Pt } from "@/lib/guild-nav";
 import { TILE_SRC, generateFloor, rollMob, type Floor } from "@/lib/world/floor";
+import { ZOOM } from "@/lib/world/zoom";
 import { mobScale, type Role } from "@/lib/sprites/designs";
 
 /*
  * The front page's moving backdrop: a made-up floor where visiting heroes wander in, fight whatever lives there, and
  * leave, while the camera drifts across the map. It is all for show (no server, no sign-in), drawn under a dark veil.
  */
-const T = 34, FRAME = 2.7;
+const T = 34 * ZOOM, FRAME = 2.7 / ZOOM;
 const HEROES: [string, Role][] = [
   ["paladin_common", "tank"], ["paladin_rare", "tank"], ["tank_uncommon", "tank"], ["healer_rare", "healer"], ["bard_uncommon", "healer"],
   ["marksman_common", "dps"], ["marksman_rare", "dps"], ["rogue_uncommon", "dps"], ["magical_dps_rare", "dps"], ["necromancer_common", "dps"],
@@ -116,7 +117,7 @@ function Stage({ floor }: { floor: Floor }) {
       if (!p) return;
       const dx = p[0] - e.x, dy = p[1] - e.y, d = Math.hypot(dx, dy);
       if (d < 0.08) { e.path.shift(); return; }
-      const s = Math.min(d, speed * dt);
+      const s = Math.min(d, (speed * dt) / ZOOM);
       e.x += (dx / d) * s; e.y += (dy / d) * s;
       if (Math.abs(dx) > 0.02) e.flip = dx < 0;
     };
@@ -166,7 +167,7 @@ function Stage({ floor }: { floor: Floor }) {
           const t = e.target;
           if (t) {
             const d = Math.hypot(t.x - e.x, t.y - e.y);
-            if (d > 1.5) { if (now > e.repath) { goTo(e, [t.x - Math.sign(t.x - e.x) * 1.1, t.y]); e.repath = now + 700; } step(e, dt, 3.2); }
+            if (d > 1.5 / ZOOM) { if (now > e.repath) { goTo(e, [t.x - Math.sign(t.x - e.x) * 1.1 / ZOOM, t.y]); e.repath = now + 700; } step(e, dt, 3.2); }
             else {
               e.path = []; e.flip = t.x < e.x;
               if (now > e.nextHit) {
@@ -179,7 +180,7 @@ function Stage({ floor }: { floor: Floor }) {
           } else step(e, dt, 2.2);
         } else {
           const t = e.target && !e.target.dead && !e.target.leaving ? e.target : null;
-          if (t && Math.hypot(t.x - e.x, t.y - e.y) < 2) {
+          if (t && Math.hypot(t.x - e.x, t.y - e.y) < 2 / ZOOM) {
             e.flip = t.x < e.x;
             if (now > e.nextHit) { e.nextHit = now + rnd(1100, 1600); e.act = "attack"; e.n++; t.act = "hurt"; t.n++; }
           } else {
@@ -198,7 +199,7 @@ function Stage({ floor }: { floor: Floor }) {
         if (spot) { cam.tx = spot.x; cam.ty = spot.y; } else { const z = pick(zones); cam.tx = z[0]; cam.ty = z[1]; }
       }
       const cd = Math.hypot(cam.tx - cam.x, cam.ty - cam.y);
-      if (cd > 0.01) { const s = Math.min(cd, 1.7 * dt); cam.x += ((cam.tx - cam.x) / cd) * s; cam.y += ((cam.ty - cam.y) / cd) * s; }
+      if (cd > 0.01) { const s = Math.min(cd, 1.7 * dt / ZOOM); cam.x += ((cam.tx - cam.x) / cd) * s; cam.y += ((cam.ty - cam.y) / cd) * s; }
       const v = view();
       const cx = Math.max(Math.min(v.w / 2, floor.w * T - v.w / 2), Math.min(cam.x * T, Math.max(v.w / 2, floor.w * T - v.w / 2)));
       const cy = Math.max(Math.min(v.h / 2, floor.h * T - v.h / 2), Math.min(cam.y * T, Math.max(v.h / 2, floor.h * T - v.h / 2)));

@@ -1,3 +1,4 @@
+import { ZOOM } from "./zoom";
 import { walkable, type Nav, type Pt } from "@/lib/guild-nav";
 
 /*
@@ -23,7 +24,7 @@ export function formationOffset(slot: number, n: number, heading: number): Pt {
   const p = L[Math.min(slot, L.length - 1)];
   const lx = p[0] - L[0][0], ly = p[1] - L[0][1];
   const c = Math.cos(heading), s = Math.sin(heading);
-  return [lx * c - ly * s, lx * s + ly * c];
+  return [(lx * c - ly * s) / ZOOM, (lx * s + ly * c) / ZOOM];
 }
 
 /** Smallest signed difference between two angles. */
@@ -33,7 +34,7 @@ export const angleDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), M
 export const ringPoint = (t: { x: number; y: number }, angle: number, radius: number): Pt => [t.x + Math.cos(angle) * radius, t.y + Math.sin(angle) * radius];
 
 /** Nudges overlapping bodies apart. Only moves a body onto ground it may stand on. */
-export function separate(units: { x: number; y: number }[], nav: Nav, minD = 1.05, strength = 0.3) {
+export function separate(units: { x: number; y: number }[], nav: Nav, minD = 1.05 / ZOOM, strength = 0.3) {
   for (let i = 0; i < units.length; i++) {
     for (let j = i + 1; j < units.length; j++) {
       const a = units[i], b = units[j];

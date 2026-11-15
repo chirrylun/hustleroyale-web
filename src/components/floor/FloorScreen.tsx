@@ -15,12 +15,14 @@ import type { Stance } from "@/lib/battle";
 import { clearExpedition, partySig, readExpedition, writeExpedition } from "@/lib/world/expedition";
 import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal, sway } from "@/lib/world/stance";
 import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
+import { ZOOM } from "@/lib/world/zoom";
 import { restedFrac } from "@/lib/rest";
 import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
 
-const T = 34; // one tile on screen, in px (smaller = more of the map in view)
-const FRAME = 2.7; // a sprite frame, in tiles
+const T = 34 * ZOOM; // one tile on screen, in px (smaller = more of the map in view)
+const FRAME = 2.7 / ZOOM; // a sprite frame, in tiles (sprites keep their on-screen size however far the map is zoomed)
+const S = T / ZOOM; // one sprite-sized unit, in px
 const EDGE = 44; // px from the screen edge where the camera starts to scroll
 const SPEED = 3.1;
 const MOB_SPEED = 2.3;
@@ -401,7 +403,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     const d = document.createElement("div");
     d.textContent = text;
     d.className = `pointer-events-none absolute z-[9000] text-xl font-bold ${cls}`;
-    d.style.cssText += `;left:${x * T}px;top:${(y - 1.6) * T}px;animation:${anim} ${ms}ms ease-out forwards;${extra}`;
+    d.style.cssText += `;left:${x * T}px;top:${y * T - 1.6 * S}px;animation:${anim} ${ms}ms ease-out forwards;${extra}`;
     world.current?.appendChild(d);
     setTimeout(() => d.remove(), ms + 20);
   };
@@ -409,8 +411,8 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
   /** A skill animation (a row of an effect sheet) drawn over the floor; `to` makes it fly there as a projectile. */
   const spawnFx = (art: FxArt | null | undefined, x: number, y: number, opts: { ms?: number; to?: [number, number]; loop?: boolean } = {}) => {
     if (!art || !world.current) return;
-    const ms = opts.ms ?? 560, px = T * 2.2 * (art.size ?? 1);
-    const at = (wx: number, wy: number) => `translate(${wx * T - px / 2}px, ${(wy - (art.ground ? 0.15 : 0.95)) * T - px / 2}px)`;
+    const ms = opts.ms ?? 560, px = S * 2.2 * (art.size ?? 1);
+    const at = (wx: number, wy: number) => `translate(${wx * T - px / 2}px, ${wy * T - (art.ground ? 0.15 : 0.95) * S - px / 2}px)`;
     const d = document.createElement("div");
     const flip = opts.to && opts.to[0] < x ? " scaleX(-1)" : "";
     d.className = "pointer-events-none absolute left-0 top-0 z-[9000]";
@@ -492,7 +494,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     const step = (a: Ag, dt: number, speed: number) => {
       const p = a.path[0];
       if (!p) return false;
-      const dx = p[0] - a.x, dy = p[1] - a.y, d = Math.hypot(dx, dy), m = speed * dt;
+      const dx = p[0] - a.x, dy = p[1] - a.y, d = Math.hypot(dx, dy), m = (speed * dt) / ZOOM;
       if (Math.abs(dx) > 0.05) a.look.flip = dx < 0;
       if (d <= m) { a.x = p[0]; a.y = p[1]; a.path.shift(); } else { a.x += (dx / d) * m; a.y += (dy / d) * m; }
       return true;
@@ -564,7 +566,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
           done = true;
         } else if (sk.kind === "damage") {
           const t = a.target;
-          if (!t || t.dead || dist(a, t) > 1.7) continue;
+          if (!t || t.dead || dist(a, t) > 1.7 / ZOOM) continue;
           const hit = sk.area ? F.filter((f) => !f.dead && Math.hypot(f.x - t.x, f.y - t.y) < 3) : [t];
           if (art?.shot) spawnFx(art.shot, a.x, a.y, { to: [t.x, t.y], ms: 260, loop: true });
           hit.forEach((f) => hurt(a, f, now, sk.power, sk.type === "magical", sk.name));
@@ -729,7 +731,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
             continue;
           }
           const t = f.target;
-          if (dist(f, t) > 1.3) {
+          if (dist(f, t) > 1.3 / ZOOM) {
             if (f.repath <= 0 || !f.path.length) { f.path = findPath(nav, [f.x, f.y], ringPoint(t, f.angle, 0.95)); f.repath = 0.6; }
             step(f, dt, MOB_SPEED * f.speedMul);
           } else {
@@ -852,7 +854,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     if (Math.hypot(p.x - d.x, p.y - d.y) > 10 || performance.now() - d.t > 500) return;
     if (p.x < EDGE || p.y < EDGE || p.x > c.vw - EDGE || p.y > c.vh - EDGE) return;
     const wx = (p.x + c.x) / T, wy = (p.y + c.y) / T;
-    const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 - wy) < 0.9);
+    const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 / ZOOM - wy) < 0.9);
     const live = allies.current.filter((a) => !a.dead);
     progress.current.gate = false;
     // Tapping the white pillar walks the party into it; arriving there leads back out of the floor.
