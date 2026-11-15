@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import type { GuildFighter } from "@/lib/guild";
@@ -114,9 +114,29 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
 
 function HpBar({ f, now }: { f: GuildFighter; now: number }) {
   const fr = restedFrac(f.hp_frac, f.hp_at, now);
+  const hp = Math.round(fr * f.hp);
+  const shown = useRef({ hp, at: now });
+  const [pops, setPops] = useState<{ id: number; n: number }[]>([]);
+  // Like on the field: a green +N floats up each second the fighter heals.
+  useEffect(() => {
+    const gained = hp - shown.current.hp;
+    if (gained <= 0) { shown.current = { hp, at: shown.current.at }; return; }
+    if (now - shown.current.at < 1000) return;
+    shown.current = { hp, at: now };
+    const id = now;
+    setPops((p) => [...p.slice(-2), { id, n: gained }]);
+    const t = setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 1000);
+    return () => clearTimeout(t);
+  }, [hp, now]);
   return (
-    <div className="mt-0.5 h-1.5 w-full bg-ink/80" role="progressbar" aria-label="Health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fr * 100)}>
-      <div className={`h-full ${fr < 0.3 ? "bg-ember" : "bg-leaf"}`} style={{ width: `${fr * 100}%` }} />
+    <div className="relative mt-0.5 w-full">
+      {pops.map((p) => (
+        <span key={p.id} className="pointer-events-none absolute bottom-full left-1/2 z-10 text-base font-bold leading-none text-leaf" style={{ animation: "dmg 1000ms ease-out forwards", textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}>+{p.n}</span>
+      ))}
+      <div className="h-1.5 w-full bg-ink/80" role="progressbar" aria-label="Health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fr * 100)}>
+        <div className={`h-full ${fr < 0.3 ? "bg-ember" : "bg-leaf"}`} style={{ width: `${fr * 100}%` }} />
+      </div>
+      <span className="block text-sm leading-none text-steel">{hp}/{f.hp}</span>
     </div>
   );
 }
