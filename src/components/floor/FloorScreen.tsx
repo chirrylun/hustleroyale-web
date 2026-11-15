@@ -17,6 +17,7 @@ import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, st
 import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
 import { ZOOM } from "@/lib/world/zoom";
 import { restedFrac } from "@/lib/rest";
+import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
 
@@ -261,7 +262,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     (async () => {
       const sb = createClient();
       const { data: prof } = await sb.from("profiles").select("floor_reached").single();
-      await sb.rpc("enter_floor", { p_floor: floor.n });
+      try { await gameApi("/floor/enter", { floor: floor.n }); } catch { /* kills retry the entry themselves */ }
       const [pq, qs, os, pp, inv] = await Promise.all([
         sb.from("player_quests").select("quest_slug").eq("status", "active"),
         sb.from("quests").select("slug, title"),
@@ -294,7 +295,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     const saveDb = () => {
       const A = allies.current;
       if (!A.length) return;
-      void (async () => { try { await createClient().rpc("save_party_hp", { p_ids: A.map((a) => a.id), p_fracs: A.map((a) => (a.dead ? 0 : Math.max(0.01, a.hp / a.max))) }); } catch { /* the next save will catch up */ } })();
+      gameApi("/floor/hp", { ids: A.map((a) => a.id), fracs: A.map((a) => (a.dead ? 0 : Math.max(0.01, a.hp / a.max))) }, { keepalive: true }).catch(() => { /* the next save will catch up */ });
     };
     const save = () => { if (allies.current.length) { writeExpedition(sig, allies.current); const n = Date.now(); if (n - lastDb > 3000) { lastDb = n; saveDb(); } } };
     const t = setInterval(save, 1000);
@@ -306,7 +307,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     if (state !== "lost") return;
     clearExpedition();
     // After a defeat the party limps home at a quarter of its health, so "Try again" is not an instant loss.
-    void (async () => { try { await createClient().rpc("save_party_hp", { p_ids: allies.current.map((a) => a.id), p_fracs: allies.current.map(() => 0.25) }); } catch { /* ignore */ } })();
+    gameApi("/floor/hp", { ids: allies.current.map((a) => a.id), fracs: allies.current.map(() => 0.25) }, { keepalive: true }).catch(() => { /* ignore */ });
   }, [state]);
 
   // Build the two sides once.
@@ -425,17 +426,19 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     setTimeout(() => d.remove(), ms + 40);
   };
 
-  // Supabase's rpc() only sends once it is awaited. Kills are reported in order, each retried a few times so a
-  // blip in the connection can't lose one (the server pays XP, drops and quest progress from these).
+  // Kills go to the game server, which checks them against what the floor can hold before the database pays out.
+  // They are sent in order, each retried a few times so a blip in the connection can't lose one; a server that
+  // restarted (no_run) is simply told about the floor again.
   const reports = useRef<Promise<void>>(Promise.resolve());
-  const send = (fn: string, args: Record<string, unknown>, done?: (data: unknown) => void) => {
+  const sendKill = (body: { floor: number; kind: string; level: number; boss: boolean }, done?: (data: unknown) => void) => {
     reports.current = reports.current.then(async () => {
       for (let i = 0; i < 3; i++) {
-        try {
-          const { data, error } = await createClient().rpc(fn, args);
-          if (!error) { done?.(data); return; }
-          if (/floor_locked|bad_monster|unauthorized/.test(error.message)) return; // retrying won't help
-        } catch { /* network error: try again */ }
+        try { done?.(await gameApi("/floor/kill", body)); return; } catch (e) {
+          if (e instanceof ApiError) {
+            if (e.code === "no_run") { try { await gameApi("/floor/enter", { floor: body.floor }); } catch { /* retry below */ } continue; }
+            if (e.status >= 400 && e.status < 500 && e.status !== 429) return; // refused: retrying won't help
+          }
+        }
         await new Promise((r) => setTimeout(r, 700 * (i + 1)));
       }
     });
@@ -481,7 +484,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
     }
   };
-  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => {
+  const killReport = (m: Ag) => sendKill({ floor: floor.n, kind: m.kind, level: m.level, boss: m.boss }, (data) => {
     showXp(data); noteKill(data as never);
     // The tutorial job is finished by the first bat; it gets the same banner as every other job.
     if (tutorialStep === 8 && floor.n === 1 && m.kind === "bat" && !m.boss && !firstDone.current) { firstDone.current = true; setFirstJobDone(true); showToast("Job complete: First job. Hand it in at the job board."); }
