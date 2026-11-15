@@ -136,6 +136,7 @@ export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floo
 
 function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry }: { floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; retry: () => void }) {
   const router = useRouter();
+  const [askBack, setAskBack] = useState(false);
   const nav = useMemo(() => buildNav(floor.nav), [floor]);
   const squad = useMemo(() => {
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
@@ -505,7 +506,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
           if (goalMet && !pr.unlocked) { pr.unlocked = true; setUnlocked(true); }
           if (pr.gate && dist(A.find((x) => !x.dead)!, { x: floor.start[0], y: floor.start[1] + 0.9 }) < 2.3) {
             pr.gate = false;
-            router.push(floor.n > 1 ? `/home?enter=${floor.n - 1}` : "/home");
+            setAskBack(true);
           }
           const lead2 = A.find((a) => !a.dead)!;
           if (goalMet && dist(lead2, { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 }) < 2.4) {
@@ -731,7 +732,20 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
         </button>
         {free && <button type="button" onClick={recenter} className="pixel-box absolute bottom-3 right-3 z-[9600] bg-night/90 px-3 py-1 text-lg uppercase text-paper">Follow party</button>}
 
-        {state === "play" && unlocked && <p className="pointer-events-none absolute inset-x-0 top-3 z-[9600] text-center text-2xl uppercase text-gold drop-shadow">Floor clear! Head for the green light.</p>}
+        {state === "play" && unlocked && <p className="pointer-events-none absolute inset-x-0 top-3 z-[9600] text-center text-2xl uppercase text-gold drop-shadow">Floor clear! Head to the next floor.</p>}
+
+        {askBack && state === "play" && (
+          <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
+            <div className="pixel-box card-reveal w-full max-w-sm bg-night p-5 text-center">
+              <h2 className="mb-2 text-3xl uppercase text-paper">{floor.n > 1 ? `Back to Floor ${floor.n - 1}?` : "Return to the guild?"}</h2>
+              <p className="mb-4 text-xl text-paper">{floor.n > 1 ? "Your party will take the white light back down." : "This ends the expedition."}</p>
+              <div className="flex flex-col gap-2">
+                <PixelButton className="w-full" onClick={() => router.push(floor.n > 1 ? `/floor/${floor.n - 1}` : "/home")}>{floor.n > 1 ? `Go to Floor ${floor.n - 1}` : "Return"}</PixelButton>
+                <PixelButton variant="ghost" className="w-full" onClick={() => setAskBack(false)}>Stay here</PixelButton>
+              </div>
+            </div>
+          </div>
+        )}
 
         {state !== "play" && (
           <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
@@ -741,7 +755,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
                   <h2 className="mb-2 text-3xl uppercase text-gold">Floor {floor.n} cleared</h2>
                   <p className="mb-4 text-xl text-paper">{floor.n >= MAX_FLOOR ? "You reached the top of the tower." : !next ? `Finish the Floor ${floor.n} quests on the job board to open Floor ${floor.n + 1}.` : boss ? "The boss is down. A new region opens." : "The portal leads deeper."}</p>
                   <div className="flex flex-col gap-2">
-                    {next && <Link href={`/home?enter=${floor.n + 1}`}><PixelButton className="w-full">Floor {floor.n + 1}</PixelButton></Link>}
+                    {next && <Link href={`/floor/${floor.n + 1}`}><PixelButton className="w-full">Floor {floor.n + 1}</PixelButton></Link>}
                     <Link href="/home"><PixelButton variant="ghost" className="w-full">Back to the guild</PixelButton></Link>
                   </div>
                 </>
