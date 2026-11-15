@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useReducer, useRef, useState, type PointerEvent } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
-import { mobScale } from "@/lib/sprites/designs";
+import { FX_COLS, FX_ROWS, mobScale } from "@/lib/sprites/designs";
+import { artOf, type FxArt } from "@/lib/skill-art";
 import type { GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
 import { findPath, buildNav, clearLine, nearestWalkable, walkable, type Pt } from "@/lib/guild-nav";
@@ -379,6 +380,23 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     setTimeout(() => d.remove(), ms + 20);
   };
 
+  /** A skill animation (a row of an effect sheet) drawn over the floor; `to` makes it fly there as a projectile. */
+  const spawnFx = (art: FxArt | null | undefined, x: number, y: number, opts: { ms?: number; to?: [number, number]; loop?: boolean } = {}) => {
+    if (!art || !world.current) return;
+    const ms = opts.ms ?? 560, px = T * 2.2 * (art.size ?? 1);
+    const at = (wx: number, wy: number) => `translate(${wx * T - px / 2}px, ${(wy - (art.ground ? 0.15 : 0.95)) * T - px / 2}px)`;
+    const d = document.createElement("div");
+    const flip = opts.to && opts.to[0] < x ? " scaleX(-1)" : "";
+    d.className = "pointer-events-none absolute left-0 top-0 z-[9000]";
+    d.style.cssText += `;width:${px}px;height:${px}px;transform:${at(x, y)}${flip};background:url(/sprites/fx_${art.sheet}.png) 0% ${(art.row / (FX_ROWS - 1)) * 100}%/${FX_COLS * 100}% ${FX_ROWS * 100}% no-repeat;image-rendering:pixelated;animation:spr ${opts.loop ? 420 : ms}ms steps(${FX_COLS}, jump-none) ${opts.loop ? "infinite" : "1 forwards"};--to:100%`;
+    world.current.appendChild(d);
+    if (opts.to) {
+      const [tx, ty] = opts.to;
+      requestAnimationFrame(() => requestAnimationFrame(() => { d.style.transition = `transform ${ms}ms linear`; d.style.transform = `${at(tx, ty)}${flip}`; }));
+    }
+    setTimeout(() => d.remove(), ms + 40);
+  };
+
   // Supabase's rpc() only sends once it is awaited. Kills are reported in order, each retried a few times so a
   // blip in the connection can't lose one (the server pays XP, drops and quest progress from these).
   const reports = useRef<Promise<void>>(Promise.resolve());
@@ -450,7 +468,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       return true;
     };
     let spawnId = 0;
-    const hurt = (from: Ag, to: Ag, now: number, mult = 1, magical = false) => {
+    const hurt = (from: Ag, to: Ag, now: number, mult = 1, magical = false, skill = "Basic Strike") => {
       if (to.dodge > 0) { to.dodge--; spawnText(to.x, to.y, "Dodge", "text-steel"); return; }
       const power = from.side === "ally" ? (magical && from.magic ? from.magic : from.atk) * (now < from.buffUntil ? 1.25 : 1) : from.atk;
       const raw = (from.side === "ally" ? power - to.def * 0.5 : power * (now < from.weakUntil ? 0.7 : 1) - to.def * 0.45) * mult;
@@ -461,6 +479,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         to.provoked = true;
         if (!to.target || to.target.dead) { to.target = from; to.angle = Math.atan2(to.y - from.y, to.x - from.x) + rnd(-0.8, 0.8); to.path = []; }
       }
+      spawnFx(artOf(skill)?.hit, to.x, to.y, { ms: 480 });
       to.look.act = "hurt"; to.look.n++;
       from.look.act = "attack"; from.look.n++;
       spawnText(to.x, to.y, dmg > 0 ? String(dmg) : "Blocked", from.side === "ally" ? "text-gold" : "text-ember");
@@ -490,6 +509,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       for (const sk of a.skills) {
         if (now < sk.ready || a.en < sk.cost) continue;
         let done = false;
+        const art = artOf(sk.name);
         const say = (text: string, cls: string) => spawnText(a.x, a.y - 0.4, text, cls, 1100, "dmg");
         if (sk.kind === "heal") {
           const wounded = friends.filter((u) => hurtRatio(u) < (sk.all ? 0.8 : 0.65)).sort((p, q) => hurtRatio(p) - hurtRatio(q));
@@ -498,6 +518,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
           for (const u of targets) {
             const amt = Math.max(1, Math.round(Math.max(a.magic * sk.power * 0.5, u.max * 0.15 * sk.power) * (sk.all ? 0.8 : 1)));
             u.hp = Math.min(u.max, u.hp + amt);
+            spawnFx(art?.hit ?? { sheet: "support", row: 0 }, u.x, u.y);
             spawnText(u.x, u.y, `+${amt}`, "text-leaf");
           }
           done = true;
@@ -507,6 +528,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
           for (const u of pool) {
             u.shield = Math.max(u.shield, Math.max(5, Math.round(Math.max(a.def * sk.power * 0.5, u.max * 0.12 * sk.power))));
             u.shieldUntil = now + 6000;
+            spawnFx(art?.hit ?? { sheet: "support", row: 1 }, u.x, u.y);
             spawnText(u.x, u.y, "Shield", "text-steel");
           }
           done = true;
@@ -514,19 +536,20 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
           const t = a.target;
           if (!t || t.dead || dist(a, t) > 1.7) continue;
           const hit = sk.area ? F.filter((f) => !f.dead && Math.hypot(f.x - t.x, f.y - t.y) < 3) : [t];
-          hit.forEach((f) => hurt(a, f, now, sk.power, sk.type === "magical"));
+          if (art?.shot) spawnFx(art.shot, a.x, a.y, { to: [t.x, t.y], ms: 260, loop: true });
+          hit.forEach((f) => hurt(a, f, now, sk.power, sk.type === "magical", sk.name));
           a.cd = Math.max(a.cd, 0.7);
           done = true;
         } else if (sk.kind === "buff") {
           if (!fighting) continue;
           if (/dodge|vanish|step/i.test(sk.name)) a.dodge = /vanish/i.test(sk.name) ? 2 : 1;
-          else friends.forEach((u) => { u.buffUntil = now + 8000; });
+          else { friends.forEach((u) => { u.buffUntil = now + 8000; }); if (!art?.cast) friends.forEach((u) => spawnFx(art?.hit ?? { sheet: "support", row: 2 }, u.x, u.y)); }
           done = true;
         } else if (sk.kind === "debuff") {
           const t = a.target;
           if (!t || t.dead || dist(a, t) > 5) continue;
           const victims = sk.all ? foesNear : [t];
-          victims.forEach((f) => { f.weakUntil = now + 8000; if (/taunt/i.test(sk.name)) { f.target = a; f.path = []; } });
+          victims.forEach((f) => { spawnFx(art?.hit ?? { sheet: "support", row: 3 }, f.x, f.y); f.weakUntil = now + 8000; if (/taunt/i.test(sk.name)) { f.target = a; f.path = []; } });
           done = true;
         }
         if (!done) continue;
@@ -534,6 +557,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         sk.ready = now + sk.cd;
         a.gcd = now + 700;
         a.look.act = "attack"; a.look.n++;
+        spawnFx(art?.cast, a.x, a.y, { ms: 640 });
         say(sk.name, sk.kind === "heal" ? "text-leaf" : sk.kind === "damage" ? "text-gold" : "text-steel");
         return;
       }

@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { useState } from "react";
-import { ANIMS, COLS, sheetUrl, type Role } from "@/lib/sprites/designs";
+import { ANIMS, COLS, heroScale, sheetUrl, type Role } from "@/lib/sprites/designs";
 
 export type Action = "attack" | "cast" | "hurt";
 export type Rest = "idle" | "walk" | "windup" | "stun";
@@ -36,7 +36,8 @@ export function FighterSprite({
         backgroundSize: `${COLS * 100}% ${ANIMS.length * 100}%`,
         backgroundPosition: `0% ${(row / (ANIMS.length - 1)) * 100}%`,
         backgroundRepeat: "no-repeat",
-        transform: flip ? "scaleX(-1)" : undefined,
+        transform: `${flip ? "scaleX(-1) " : ""}scale(${heroScale(spriteKey, role)})`,
+        transformOrigin: "50% 90%",
         animation: still ? undefined : `spr ${ms}ms steps(${n}, jump-none) ${once ? "1 forwards" : "infinite"}`,
         ["--to" as string]: `${((n - 1) / (COLS - 1)) * 100}%`,
       }}

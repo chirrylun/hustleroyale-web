@@ -46,3 +46,16 @@ export const sheetUrl = (key: string, role: Role) => {
   }
   return `/sprites/${role}_${RARITY[TIER[key] ?? 0]}.png`;
 };
+
+/**
+ * Every hero is drawn to the mage's size. The sheets are close but not identical (novices read bulky, the paladin small,
+ * a few rarities are over- or under-sized), so each gets a small correction, applied around the feet.
+ */
+const ARCH_SCALE: Record<string, number> = { novice: 0.9, paladin: 1.1, recruit: 0.92 };
+const SHEET_SCALE: Record<string, number> = { healer_legendary: 0.92, tank_legendary: 0.95, tank_rare: 1.04, tank_uncommon: 1.07, necromancer_legendary: 1.07, marksman_legendary: 1.05, healer_uncommon: 1.04 };
+export const heroScale = (spriteKey: string, role: Role): number => {
+  if (spriteKey.startsWith("mob_") || spriteKey === "skeleton") return 1;
+  const url = sheetUrl(spriteKey, role).replace("/sprites/", "").replace(".png", "");
+  const arch = url.split("_")[0];
+  return (SHEET_SCALE[url] ?? 1) * (ARCH_SCALE[arch] ?? 1);
+};
