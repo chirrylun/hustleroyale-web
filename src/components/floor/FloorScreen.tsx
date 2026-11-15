@@ -58,6 +58,8 @@ interface Ag {
   look: { rest: "idle" | "walk" | "stun"; flip: boolean; act: "attack" | "hurt" | null; n: number };
   key?: string;
   lvEl?: HTMLElement | null;
+  /** Overlay layer above every tree and fighter: health bar, level tag, floating text. */
+  fx?: HTMLDivElement | null;
   setLook?: (l: Ag["look"]) => void;
   el?: HTMLDivElement | null;
   bar?: HTMLDivElement | null;
@@ -83,34 +85,37 @@ interface Ag {
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
-/** Colour of a monster's level tag, by how far it is above the party's best fighter: easy ones stay plain, tougher ones warn. */
-const levelTone = (gap: number) => (gap >= 5 ? "text-ember" : gap >= 2 ? "text-gold" : gap <= -3 ? "text-leaf" : "text-paper");
+/** Colour of a monster's tag, by how far it is above the party's best fighter: ordinary ones stay plain, tougher ones warn. */
+const levelTone = (gap: number) => (gap >= 5 ? "text-ember" : gap >= 2 ? "text-gold" : "text-paper");
+const MOB_NAME: Record<string, string> = { direwolf: "Dire Wolf" };
+const mobName = (kind: string) => MOB_NAME[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 
 function Unit({ a, party }: { a: Ag; party: number }) {
   const [look, setLook] = useState(a.look);
   // Bosses are drawn large on purpose; everything else is scaled to a realistic size next to a fighter.
   const size = FRAME * T * (a.boss ? 1.5 : mobScale(a.sprite));
+  const box = { width: size, height: size, marginLeft: -size / 2, marginTop: -size * 0.86 };
   return (
-    <div
-      ref={(el) => { a.el = el; a.setLook = setLook; }}
-      className="absolute left-0 top-0 will-change-transform"
-      style={{ width: size, height: size, marginLeft: -size / 2, marginTop: -size * 0.86 }}
-    >
-      <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
-        <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
-        <span
-          ref={(el) => { a.lvEl = el; }}
-          className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-bold leading-none ${a.side === "foe" ? levelTone(a.level - party) : "text-steel"}`}
-          style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}
-        >
-          Lv {a.level}
-        </span>
+    <>
+      <div ref={(el) => { a.el = el; a.setLook = setLook; }} className="absolute left-0 top-0 will-change-transform" style={box}>
+        <FighterSprite
+          spriteKey={a.sprite} role={a.role} flip={look.flip} rest={look.rest}
+          action={look.act} actionKey={look.n}
+        />
       </div>
-      <FighterSprite
-        spriteKey={a.sprite} role={a.role} flip={look.flip} rest={look.rest}
-        action={look.act} actionKey={look.n}
-      />
-    </div>
+      {/* Drawn on its own layer so a tree or another fighter in front can never cover the bar, the tag or a level-up. */}
+      <div ref={(el) => { a.fx = el; }} className="pointer-events-none absolute left-0 top-0 will-change-transform" style={{ ...box, zIndex: 9000 }}>
+        <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
+          <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
+          <span
+            className={`absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-bold leading-none ${a.side === "foe" ? levelTone(a.level - party) : "text-steel"}`}
+            style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}
+          >
+            <span ref={(el) => { a.lvEl = el; }}>Lv {a.level}</span>{a.side === "foe" ? ` ${mobName(a.kind)}` : ""}
+          </span>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -257,11 +262,11 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
   };
   // Text that floats up over a fighter's head and walks with them (damage numbers stay where they were struck).
   const overHead = (a: Ag, text: string, cls: string, ms: number, anim = "dmg", extra = "") => {
-    const el = a.el;
+    const el = a.fx;
     if (!el) return;
     const d = document.createElement("div");
     d.textContent = text;
-    d.className = `over-head pointer-events-none absolute z-[9000] text-xl font-bold ${cls}`;
+    d.className = `over-head pointer-events-none absolute text-xl font-bold ${cls}`;
     d.style.cssText += `;animation:${anim} ${ms}ms ease-out forwards;${extra}`;
     el.appendChild(d);
     setTimeout(() => d.remove(), ms + 20);
@@ -270,12 +275,12 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
   // A level-up: a golden aura behind the fighter, a ring spreading on the ground, a glow around their outline, and a
   // big banner overhead. All of it is attached to the fighter, so it follows them if they keep moving.
   const celebrate = (a: Ag) => {
-    const el = a.el;
-    if (el) {
-      const sprite = (el.children[1] as HTMLElement | undefined) ?? el; // children[0] is the health bar
+    const el = a.el, fx = a.fx;
+    if (el && fx) {
+      const sprite = (el.firstElementChild as HTMLElement | null) ?? el;
       const glow = document.createElement("div");
       glow.className = "levelup-glow";
-      el.appendChild(glow);
+      fx.appendChild(glow); // on the top layer, blended in, so nothing in front of the fighter can hide it
       sprite.style.transition = "filter 600ms ease-out";
       sprite.style.filter = "drop-shadow(0 0 3px #fff4b0) drop-shadow(0 0 10px #ffb82e)";
       setTimeout(() => { sprite.style.filter = ""; }, 1300); // eases away while the aura and banner fade
@@ -505,8 +510,14 @@ function FloorMap({ floor, fighters, tutorialStep, players, retry }: { floor: Fl
         if (!u.el) continue;
         u.el.style.transform = `translate(${u.x * T}px, ${u.y * T}px)`;
         u.el.style.zIndex = String(depth(u.y));
-        u.el.style.opacity = u.dead ? "0" : String(Math.min(1, (now - u.born) / 800)); // new arrivals fade in
+        const op = u.dead ? "0" : String(Math.min(1, (now - u.born) / 800)); // new arrivals fade in
+        u.el.style.opacity = op;
         u.el.style.transition = u.dead ? "opacity .6s" : "";
+        if (u.fx) {
+          u.fx.style.transform = u.el.style.transform;
+          u.fx.style.opacity = op;
+          u.fx.style.transition = u.el.style.transition;
+        }
         if (u.hpEl) u.hpEl.style.width = `${(u.hp / u.max) * 100}%`;
         if (u.path.length > 0 && !u.dead) u.movedAt = now;
         const moving = !u.dead && now - u.movedAt < 220; // short pauses between hops don't flicker to idle

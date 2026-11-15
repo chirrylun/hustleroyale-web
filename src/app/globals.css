@@ -500,8 +500,8 @@ canvas,
 }
 .levelup-glow {
   position: absolute; left: -12%; top: -6%; width: 124%; height: 124%; pointer-events: none; opacity: 0;
-  border-radius: 50%; z-index: -1; /* behind the fighter, so they stay fully visible inside it */
-  background: radial-gradient(closest-side, rgb(255 236 150 / .95), rgb(255 200 70 / .55) 48%, rgb(255 170 40 / 0) 76%);
+  border-radius: 50%; mix-blend-mode: screen; /* lights the fighter up without hiding them */
+  background: radial-gradient(closest-side, rgb(255 226 120 / .7), rgb(255 190 60 / .4) 48%, rgb(255 170 40 / 0) 76%);
   animation: levelup-glow 2000ms ease-out forwards;
 }
 .levelup-glow::after {
