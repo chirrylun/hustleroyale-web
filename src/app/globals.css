@@ -526,3 +526,7 @@ canvas,
 .pillar-next { --pc: #ffd34d; }
 .pillar-off { opacity: .3; animation: none; filter: none; }
 @keyframes pillar-pulse { 0%, 100% { opacity: .85; transform: scaleX(.96); } 50% { opacity: 1; transform: scaleX(1.1); } }
+
+/* A job-complete note: pops in, stays a few seconds, fades out. */
+.job-toast { animation: job-toast 5s ease-out forwards; }
+@keyframes job-toast { 0% { opacity: 0; transform: translateY(-8px); } 8% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }

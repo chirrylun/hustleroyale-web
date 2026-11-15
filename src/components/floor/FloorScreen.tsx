@@ -179,13 +179,9 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
   const allies = useRef<Ag[]>([]);
   const foes = useRef<Ag[]>([]);
   const [ready, setReady] = useState(false);
-  const [state, setState] = useState<"play" | "won" | "lost">("play");
-  const goal = baseMobCount(floor.n); // kills that open the portal (boss floors also need the boss down)
-  const [kills, setKills] = useState(0);
+  const [state, setState] = useState<"play" | "lost">("play");
   /** The party's best level, which colours the level tags over monsters; rises when someone levels up. */
   const [partyLvl, setPartyLvl] = useState(() => Math.max(1, ...fighters.filter((f) => f.team_slot > 0).map((f) => f.level)));
-  const [bossDown, setBossDown] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const progress = useRef({ kills: 0, boss: false, gate: false as false | "back" | "next", unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false, left: false });
   const [stance, setStanceState] = useState<Stance>("neutral");
@@ -202,7 +198,68 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
   stateRef.current = state;
 
   // Tell the server this floor has been reached (counts toward "Reach Floor N" quests).
-  useEffect(() => { void createClient().rpc("enter_floor", { p_floor: floor.n }); }, [floor.n]);
+
+  const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (text: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), text });
+    toastTimer.current = setTimeout(() => setToast(null), 5200);
+  };
+  interface JobState {
+    quests: { slug: string; title: string; objs: { idx: number; kind: string; item: string | null; qty: number }[] }[];
+    prog: Record<string, number>; items: Record<string, number>; done: Set<string>; reached: number;
+    have: (slug: string, o: { idx: number; kind: string; item: string | null; qty: number }, reached: number) => number;
+    check?: () => void;
+  }
+  const jobs = useRef<JobState | null>(null);
+  /** Tells the player the moment a job they took is finished (only then, and only for a few seconds). */
+  const checkJobs = () => {
+    const j = jobs.current;
+    if (!j) return;
+    for (const q of j.quests) {
+      if (j.done.has(q.slug) || !q.objs.length) continue;
+      if (q.objs.every((o) => j.have(q.slug, o, j.reached) >= o.qty)) { j.done.add(q.slug); showToast(`Job complete: ${q.title}. Hand it in at the job board.`); }
+    }
+  };
+  const noteKill = (res: { quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[] } | null) => {
+    const j = jobs.current;
+    if (!j || !res) return;
+    for (const u of res.quests ?? []) j.prog[`${u.slug}:${u.idx}`] = u.progress;
+    for (const d of res.drops ?? []) j.items[d.slug] = (j.items[d.slug] ?? 0) + d.qty;
+    checkJobs();
+  };
+
+  // Supabase calls only run once awaited, so this is an async block.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const sb = createClient();
+      const { data: prof } = await sb.from("profiles").select("floor_reached").single();
+      await sb.rpc("enter_floor", { p_floor: floor.n });
+      const [pq, qs, os, pp, inv] = await Promise.all([
+        sb.from("player_quests").select("quest_slug").eq("status", "active"),
+        sb.from("quests").select("slug, title"),
+        sb.from("quest_objectives").select("quest_slug, idx, kind, item_slug, qty"),
+        sb.from("player_quest_progress").select("quest_slug, idx, progress"),
+        sb.from("player_items").select("item_slug, qty"),
+      ]);
+      if (!live) return;
+      const taken = new Set((pq.data ?? []).map((r) => r.quest_slug as string));
+      const items: Record<string, number> = Object.fromEntries((inv.data ?? []).map((r) => [r.item_slug as string, r.qty as number]));
+      const prog: Record<string, number> = Object.fromEntries((pp.data ?? []).map((r) => [`${r.quest_slug}:${r.idx}`, r.progress as number]));
+      const reachedBefore = (prof?.floor_reached as number | undefined) ?? 0;
+      const quests = (qs.data ?? []).filter((q) => taken.has(q.slug as string)).map((q) => ({
+        slug: q.slug as string, title: q.title as string,
+        objs: (os.data ?? []).filter((o) => o.quest_slug === q.slug).map((o) => ({ idx: o.idx as number, kind: o.kind as string, item: o.item_slug as string | null, qty: o.qty as number })),
+      }));
+      const have = (slug: string, o: { idx: number; kind: string; item: string | null; qty: number }, reached: number) =>
+        o.kind === "kill" ? prog[`${slug}:${o.idx}`] ?? 0 : o.kind === "reach" ? reached : Math.min(o.qty, items[o.item ?? ""] ?? 0);
+      jobs.current = { quests, prog, items, have, done: new Set(quests.filter((q) => q.objs.length && q.objs.every((o) => have(q.slug, o, reachedBefore) >= o.qty)).map((q) => q.slug)), reached: Math.max(reachedBefore, floor.n) };
+      checkJobs();
+    })();
+    return () => { live = false; };
+  }, [floor.n]);
 
   // Build the two sides once.
   useEffect(() => {
@@ -345,7 +402,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
     }
   };
-  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => showXp(data));
+  const killReport = (m: Ag) => send("report_floor_kill", { p_floor: floor.n, p_kind: m.kind, p_level: m.level, p_boss: m.boss }, (data) => { showXp(data); noteKill(data as never); });
 
   // The loop: movement, fighting, camera.
   useEffect(() => {
@@ -379,7 +436,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         if (to.side === "foe") {
           killReport(to);
           const pr = progress.current;
-          if (to.boss) { pr.boss = true; setBossDown(true); } else { pr.kills++; setKills(pr.kills); }
+          if (to.boss) pr.boss = true; else pr.kills++;
           // The floor refills slowly: a kill buys a quiet spell before the next arrival.
           const plan = spawnPlan(baseMobCount(floor.n), players);
           pr.next = Math.max(pr.next, now + rnd(plan.afterKillMs[0], plan.afterKillMs[1]));
@@ -611,19 +668,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
 
         if (!A.some((a) => !a.dead)) setState("lost");
         else {
-          const goalMet = pr.kills >= goal && (!isBossFloor(floor.n) || pr.boss);
-          if (goalMet && !pr.unlocked) { pr.unlocked = true; setUnlocked(true); }
           const gateAt = pr.gate === "next" ? { x: floor.exit[0], y: floor.exit[1] + 0.9 } : { x: floor.start[0], y: floor.start[1] + 0.9 };
           if (pr.gate && dist(A.find((x) => !x.dead)!, gateAt) < 2.3) {
-            if (pr.gate === "back") setAskBack(true); else if (!goalMet) setAskNext(true);
+            if (pr.gate === "back") setAskBack(true); else setAskNext(true);
             pr.gate = false;
-          }
-          const lead2 = A.find((a) => !a.dead)!;
-          const exitAt = { x: floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), y: floor.exit[1] + 0.9 };
-          if (!pr.left && dist(lead2, exitAt) > 4) pr.left = true; // arriving beside the light doesn't count as walking into it
-          if (goalMet && pr.left && dist(lead2, exitAt) < 2.4) {
-            setState("won");
-            send("clear_floor", { p_floor: floor.n });
           }
         }
       }
@@ -773,18 +821,16 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
   };
 
   const A = floor.theme.atlas;
-  const boss = isBossFloor(floor.n);
   const quest = tutorialStep === 8 && floor.n === 1;
   // Floors 1 to 3 open one by one as you clear them; from Floor 3 on, the job-board quests open the next floor.
-  const nextOpen = unlocked || (floor.n < 3 && !isBossFloor(floor.n));
-  const next = floor.n < MAX_FLOOR && (floor.n < 3 || floor.n + 1 <= floorUnlocked);
+  const nextOpen = floor.n < MAX_FLOOR && (floor.n < 3 ? !isBossFloor(floor.n) : floor.n + 1 <= floorUnlocked);
 
   return (
     <div className="relative flex h-dvh w-full flex-col bg-ink">
       <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper">
         <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>
         <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-lg uppercase text-gold">Floor {floor.n}{boss && " · Boss"}</p>
+          <p className="truncate text-lg uppercase text-gold">Floor {floor.n}{isBossFloor(floor.n) && " · Boss"}</p>
           <p className="truncate text-sm text-steel">{floor.theme.name}</p>
         </div>
       </div>
@@ -860,7 +906,9 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         </button>
         {free && <button type="button" onClick={recenter} className="pixel-box absolute bottom-3 right-3 z-[9600] bg-night/90 px-3 py-1 text-lg uppercase text-paper">Follow party</button>}
 
-        {state === "play" && unlocked && <p className="pointer-events-none absolute inset-x-0 top-3 z-[9600] text-center text-2xl uppercase text-gold drop-shadow">Floor clear! Head to the next floor.</p>}
+        {toast && state === "play" && (
+          <p key={toast.id} role="status" className="job-toast pointer-events-none absolute inset-x-0 top-3 z-[9600] mx-auto w-fit max-w-[90%] bg-night/95 px-4 py-2 text-center text-xl uppercase text-gold pixel-box">{toast.text}</p>
+        )}
 
         {askNext && state === "play" && (
           <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
@@ -891,16 +939,6 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         {state !== "play" && (
           <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
             <div className="pixel-box card-reveal w-full max-w-sm bg-night p-5 text-center">
-              {state === "won" ? (
-                <>
-                  <h2 className="mb-2 text-3xl uppercase text-gold">Floor {floor.n} cleared</h2>
-                  <p className="mb-4 text-xl text-paper">{floor.n >= MAX_FLOOR ? "You reached the top of the tower." : !next ? `Finish the Floor ${floor.n} quests on the job board to open Floor ${floor.n + 1}.` : boss ? "The boss is down. A new region opens." : "The portal leads deeper."}</p>
-                  <div className="flex flex-col gap-2">
-                    {next && <Link href={`/floor/${floor.n + 1}`}><PixelButton className="w-full">Floor {floor.n + 1}</PixelButton></Link>}
-                    <Link href="/home"><PixelButton variant="ghost" className="w-full">Back to the guild</PixelButton></Link>
-                  </div>
-                </>
-              ) : (
                 <>
                   <h2 className="mb-2 text-3xl uppercase text-ember">Party down</h2>
                   <p className="mb-4 text-xl text-paper">Your fighters were beaten. Rest up and try again.</p>
@@ -909,7 +947,6 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
                     <Link href="/home"><PixelButton variant="ghost" className="w-full">Back to the guild</PixelButton></Link>
                   </div>
                 </>
-              )}
             </div>
           </div>
         )}
