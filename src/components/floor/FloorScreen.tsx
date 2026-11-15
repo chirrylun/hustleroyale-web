@@ -24,11 +24,26 @@ const WANDER: Record<string, { speed: number; rest: [number, number] }> = {
   slime: { speed: 0.7, rest: [2, 6] }, bat: { speed: 1.7, rest: [0.4, 1.6] }, mushroom: { speed: 0.6, rest: [3, 7] },
   goblin: { speed: 1.1, rest: [1.5, 5] }, direwolf: { speed: 1.5, rest: [1, 4] }, golem: { speed: 0.5, rest: [3, 8] },
 };
-const LEASH = 14; // a mob gives up the chase this far from home
+const LEASH = 14; // the farthest any mob will go from home
+/**
+ * How mobs react, by floor. Low floors are calm: mobs ignore you until you hit them, and give up quickly once
+ * you walk away. Higher floors notice you from further off and chase for longer. Kinds differ a little
+ * (slimes and mushrooms are placid, wolves are edgy); bosses guard their ring at every floor.
+ */
+const TEMPER: Record<string, number> = { slime: 0.5, mushroom: 0.5, golem: 0.8, goblin: 1.1, bat: 1.2, direwolf: 1.4 };
+/** Distance at which an unprovoked mob goes for you (tiles). Floors 1-2: never. */
+const aggroRange = (floor: number, kind: string, boss: boolean) => {
+  if (boss) return 6;
+  const base = floor <= 2 ? 0 : floor <= 10 ? 1.5 + (floor - 3) * 0.35 : Math.min(6.5, 4 + (floor - 11) * 0.1);
+  return base * (TEMPER[kind] ?? 1);
+};
+/** How far from home it will chase, and how far its target can get before it gives up. */
+const chaseRange = (floor: number, boss: boolean) => (boss ? LEASH : Math.min(LEASH, 3 + 0.3 * floor));
+const loseRange = (floor: number, boss: boolean) => (boss ? 14 : 4 + 0.2 * floor);
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
 const makeAg = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "name" | "level" | "x" | "y" | "hp" | "atk" | "def" | "kind">): Ag => ({
-  role: "dps", max: p.hp, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false,
+  role: "dps", max: p.hp, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false, provoked: false,
   look: { rest: "idle", flip: false, act: null, n: 0 }, side,
   slot: 0, speedMul: 1, delay: 0, sway: [0, 0], swayAt: 0, angle: Math.random() * Math.PI * 2, home: [p.x, p.y, 2], wanderAt: 0, born: -1e9, deadAt: 0,
   movedAt: 0, skipId: "", skipUntil: 0,
@@ -82,6 +97,8 @@ interface Ag {
   movedAt: number;
   /** A foe it could not find a way to, left alone until `skipUntil` (ms). */
   skipId: string; skipUntil: number;
+  /** Foes: it was hit by one of ours, so it fights back whatever the floor's temper. */
+  provoked: boolean;
 }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -327,6 +344,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
       const raw = from.side === "ally" ? from.atk - to.def * 0.5 : from.atk - to.def * 0.45;
       const dmg = Math.max(2, Math.round(raw * (0.9 + Math.random() * 0.2)));
       to.hp = Math.max(0, to.hp - dmg);
+      if (from.side === "ally" && to.side === "foe") {
+        to.provoked = true;
+        if (!to.target || to.target.dead) { to.target = from; to.angle = Math.atan2(to.y - from.y, to.x - from.x) + rnd(-0.8, 0.8); to.path = []; }
+      }
       to.look.act = "hurt"; to.look.n++;
       from.look.act = "attack"; from.look.n++;
       spawnText(to.x, to.y, String(dmg), from.side === "ally" ? "text-gold" : "text-ember");
@@ -455,11 +476,11 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, retry
           f.cd = Math.max(0, f.cd - dt);
           f.repath -= dt;
           if (now - f.born < 900) continue; // just arrived
-          if (f.target && (f.target.dead || Math.hypot(f.x - f.home[0], f.y - f.home[1]) > LEASH)) {
-            f.target = null; f.path = []; f.wanderAt = now + 600; // gives up and heads back home
+          if (f.target && (f.target.dead || Math.hypot(f.x - f.home[0], f.y - f.home[1]) > chaseRange(floor.n, f.boss) || dist(f, f.target) > loseRange(floor.n, f.boss))) {
+            f.target = null; f.provoked = false; f.path = []; f.wanderAt = now + 600; // gives up and heads back home
           }
           if (!f.target) {
-            let best = f.boss ? 7 : 4.6;
+            let best = aggroRange(floor.n, f.kind, f.boss);
             for (const a of aliveA) { const d = dist(f, a); if (d < best) { best = d; f.target = a; } }
             if (f.target) { f.angle = Math.atan2(f.y - f.target.y, f.x - f.target.x) + rnd(-0.8, 0.8); f.path = []; }
           }
