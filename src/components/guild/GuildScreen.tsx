@@ -1,5 +1,6 @@
 "use client";
 
+import { Music } from "@/components/Music";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
@@ -80,6 +81,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 p-3 sm:p-6">
+      <Music track="guild" />
       <header className="flex flex-wrap items-center justify-between gap-2 text-xl">
         <h1 className="text-2xl uppercase text-gold">{username}&apos;s Guild</h1>
         <p className="flex gap-4 text-paper">

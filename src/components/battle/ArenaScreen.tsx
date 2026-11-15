@@ -1,5 +1,6 @@
 "use client";
 
+import { Music } from "@/components/Music";
 import clsx from "clsx";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -100,6 +101,7 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
 
   return (
     <div className="flex flex-col gap-4">
+      <Music track="arena" />
       <div className="flex flex-wrap gap-2 text-lg">
         <Chip label="Points" value={coins} />
         <Chip label="Practice points today" value={`${earnedToday} / ${DAILY_CAP}`} />

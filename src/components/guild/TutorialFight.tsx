@@ -1,5 +1,6 @@
 "use client";
 
+import { Music } from "@/components/Music";
 import { Arena } from "@/components/battle/Arena";
 import { StanceBar } from "@/components/battle/ArenaScreen";
 import { PixelButton } from "@/components/pixel/PixelButton";
@@ -44,6 +45,7 @@ export function TutorialFight({ stage, step, total, onWin, onBack }: { stage: 1 
     const fighting = phase === "fighting";
     return (
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
+        <Music track="arena" />
         <Arena
           view={view}
           phase={phase}
