@@ -5,6 +5,7 @@ import { FighterSprite, type Action } from "@/components/sprites/FighterSprite";
 import { buildNav, findPath, nearestWalkable, type Pt } from "@/lib/guild-nav";
 import { TILE_SRC, generateFloor, rollMob, type Floor } from "@/lib/world/floor";
 import { ZOOM } from "@/lib/world/zoom";
+import { formationOffset, ringPoint, separate } from "@/lib/world/party";
 import { mobScale, type Role } from "@/lib/sprites/designs";
 
 /*
@@ -27,13 +28,15 @@ interface E {
   flip: boolean; act: Action | null; n: number; born: number;
   path: Pt[]; target: E | null; nextHit: number; repath: number; kills: number; leaveAt: number; leaving: boolean; dead: boolean; deadAt: number;
   home: Pt; wanderAt: number; key: string;
+  /** Heroes arriving together share a group: slot 0 leads, the rest hold formation around it. */
+  grp: number; slot: number; gn: number; heading: number;
   el: HTMLDivElement | null; hpEl: HTMLDivElement | null; setLook?: (l: { rest: "idle" | "walk"; flip: boolean; act: Action | null; n: number }) => void;
 }
 
 let uid = 1;
 const mk = (p: Partial<E> & Pick<E, "hero" | "sprite" | "role" | "name" | "level" | "x" | "y" | "hp" | "atk">, now: number): E => ({
   id: uid++, boss: false, max: p.hp, size: FRAME * T * (p.hero ? 1 : mobScale(p.sprite)), flip: false, act: null, n: 0, born: now,
-  path: [], target: null, nextHit: 0, repath: 0, kills: 0, leaveAt: 0, leaving: false, dead: false, deadAt: 0, home: [p.x, p.y], wanderAt: now + rnd(0, 3000), key: "",
+  path: [], target: null, nextHit: 0, repath: 0, kills: 0, leaveAt: 0, leaving: false, dead: false, deadAt: 0, home: [p.x, p.y], wanderAt: now + rnd(0, 3000), key: "", grp: 0, slot: 0, gn: 1, heading: 0,
   el: null, hpEl: null, ...p,
 });
 
@@ -120,6 +123,7 @@ function Stage({ floor }: { floor: Floor }) {
       const s = Math.min(d, (speed * dt) / ZOOM);
       e.x += (dx / d) * s; e.y += (dy / d) * s;
       if (Math.abs(dx) > 0.02) e.flip = dx < 0;
+      e.heading = Math.atan2(dy, dx);
     };
     const goTo = (e: E, to: Pt) => { e.path = findPath(nav, [e.x, e.y], nearestWalkable(nav, to[0], to[1])); };
 
@@ -128,10 +132,12 @@ function Stage({ floor }: { floor: Floor }) {
       const group = Math.random() < 0.4 ? Math.floor(rnd(2, 4)) : 1;
       const cx = rnd(cam.x - v.w / T / 3, cam.x + v.w / T / 3), cy = rnd(cam.y - v.h / T / 3, cam.y + v.h / T / 3);
       const lvl = Math.max(1, Math.round(floor.n + rnd(-1, 3)));
+      const heading = rnd(0, 6.28), leaveAt = now + rnd(16000, 32000), grp = uid++;
       for (let i = 0; i < group; i++) {
         const [spr, role] = pick(HEROES);
-        const [x, y] = nearestWalkable(nav, cx + rnd(-1.5, 1.5), cy + rnd(-1, 1));
-        ents.current.push(mk({ hero: true, sprite: spr, role, name: pick(NAMES), level: lvl + Math.floor(rnd(0, 2)), x, y, hp: 100, atk: 14 + lvl * 2, leaveAt: now + rnd(16000, 32000) }, now + i * 250));
+        const [ox, oy] = formationOffset(i, group, heading);
+        const [x, y] = nearestWalkable(nav, cx + ox, cy + oy);
+        ents.current.push(mk({ hero: true, sprite: spr, role, name: pick(NAMES), level: lvl + Math.floor(rnd(0, 2)), x, y, hp: 100, atk: 14 + lvl * 2, leaveAt, grp, slot: i, gn: group, heading }, now + i * 250));
       }
       bump((n) => n + 1);
     };
@@ -155,29 +161,50 @@ function Stage({ floor }: { floor: Floor }) {
       for (const e of E) {
         if (e.dead) continue;
         if (e.hero) {
-          if (!e.leaving && now > e.leaveAt) { e.leaving = true; e.target = null; const far = pick(zones); goTo(e, [far[0] + rnd(-6, 6), far[1] + rnd(-6, 6)]); e.leaveAt = now + 4500; }
-          if (e.leaving) { step(e, dt, 3.4); if (now > e.leaveAt) { e.dead = true; e.deadAt = now - 1500; } continue; }
+          const lead = e.slot > 0 ? heroes.find((h) => h.grp === e.grp && h.slot === 0 && !h.dead) ?? null : null;
+          // Hold the spot in the formation next to the leader, hurrying if left behind.
+          const follow = (speed: number) => {
+            if (!lead) return false;
+            const [ox, oy] = formationOffset(e.slot, e.gn, lead.heading);
+            const fx = lead.x + ox, fy = lead.y + oy, d = Math.hypot(fx - e.x, fy - e.y);
+            if (d > 0.5 / ZOOM) { if (now > e.repath) { goTo(e, [fx, fy]); e.repath = now + 500; } step(e, dt, d > 3 ? speed * 1.5 : speed + 0.3); }
+            else e.path = [];
+            return true;
+          };
+          if (!e.leaving && now > e.leaveAt) { e.leaving = true; e.target = null; if (!lead) { const far = pick(zones); goTo(e, [far[0] + rnd(-6, 6), far[1] + rnd(-6, 6)]); } e.leaveAt = now + 4500; }
+          if (e.leaving) { if (!(lead?.leaving && follow(3.4))) step(e, dt, 3.4); if (now > e.leaveAt) { e.dead = true; e.deadAt = now - 1500; } continue; }
           if (!e.target || e.target.dead) {
             e.target = null;
-            let best: E | null = null, bd = 16;
-            for (const m of mobs) { const d = Math.hypot(m.x - e.x, m.y - e.y); if (!m.dead && d < bd) { bd = d; best = m; } }
-            e.target = best; e.repath = 0;
-            if (!best && e.path.length === 0 && now > e.wanderAt) { goTo(e, [e.x + rnd(-6, 6), e.y + rnd(-4, 4)]); e.wanderAt = now + rnd(2500, 5000); }
+            if (lead) e.target = lead.target && !lead.target.dead ? lead.target : null;
+            else {
+              let best: E | null = null, bd = 16;
+              for (const m of mobs) { const d = Math.hypot(m.x - e.x, m.y - e.y); if (!m.dead && d < bd) { bd = d; best = m; } }
+              e.target = best;
+              if (!best && e.path.length === 0 && now > e.wanderAt) { goTo(e, [e.x + rnd(-6, 6), e.y + rnd(-4, 4)]); e.wanderAt = now + rnd(2500, 5000); }
+            }
+            e.repath = 0;
           }
           const t = e.target;
           if (t) {
             const d = Math.hypot(t.x - e.x, t.y - e.y);
-            if (d > 1.5 / ZOOM) { if (now > e.repath) { goTo(e, [t.x - Math.sign(t.x - e.x) * 1.1 / ZOOM, t.y]); e.repath = now + 700; } step(e, dt, 3.2); }
-            else {
-              e.path = []; e.flip = t.x < e.x;
+            if (d > 1.5 / ZOOM) {
+              if (now > e.repath) {
+                // Each fighter takes its own spot around the target instead of piling onto one side.
+                const from = lead ?? e;
+                const ang = Math.atan2(from.y - t.y, from.x - t.x) + [0, 0.95, -0.95][Math.min(e.slot, 2)];
+                goTo(e, ringPoint(t, ang, 1.1 / ZOOM)); e.repath = now + 700;
+              }
+              step(e, dt, 3.2);
+            } else {
+              e.path = []; e.flip = t.x < e.x; e.heading = Math.atan2(t.y - e.y, t.x - e.x);
               if (now > e.nextHit) {
                 e.nextHit = now + rnd(800, 1100);
                 e.act = "attack"; e.n++;
                 t.hp -= Math.round(e.atk * rnd(0.8, 1.2)); t.act = "hurt"; t.n++; t.target = e;
-                if (t.hp <= 0) { t.dead = true; t.deadAt = now; e.kills++; e.target = null; if (e.kills >= 3) e.leaveAt = Math.min(e.leaveAt, now + 1500); }
+                if (t.hp <= 0) { t.dead = true; t.deadAt = now; e.kills++; e.target = null; if (e.kills >= 3) for (const h of heroes) if (h.grp === e.grp) h.leaveAt = Math.min(h.leaveAt, now + 1500); }
               }
             }
-          } else step(e, dt, 2.2);
+          } else if (!follow(2.2)) step(e, dt, 2.2);
         } else {
           const t = e.target && !e.target.dead && !e.target.leaving ? e.target : null;
           if (t && Math.hypot(t.x - e.x, t.y - e.y) < 2 / ZOOM) {
@@ -190,6 +217,7 @@ function Stage({ floor }: { floor: Floor }) {
         }
       }
       if (E.some((e) => e.dead && now - e.deadAt > 2200)) { ents.current = E.filter((e) => !(e.dead && now - e.deadAt > 2200)); changed = true; }
+      separate(ents.current.filter((e) => !e.dead), nav);
       if (changed) bump((v) => v + 1);
 
       // Camera: drifts from one busy spot to the next.

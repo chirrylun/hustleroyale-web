@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { UiIcon } from "@/components/ui/UiIcon";
-import { RARITY, itemCell, itemImage } from "@/lib/items";
+import { RARITY, itemImage } from "@/lib/items";
 
 interface Item { slug: string; name: string; rarity: string; qty: number }
 interface Obj { idx: number; text: string; have: number; need: number }
@@ -13,9 +13,8 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 type Tab = "items" | "journal";
 
 function ItemArt({ slug, size }: { slug: string; size: number }) {
-  const cell = itemCell(slug);
   // eslint-disable-next-line @next/next/no-img-element
-  return cell ? <UiIcon name={cell} size={size} /> : <img src={itemImage(slug)} alt="" width={size} height={size} className="[image-rendering:pixelated]" draggable={false} />;
+  return <img src={itemImage(slug)} alt="" width={size} height={size} draggable={false} />;
 }
 
 /** The bag: what you're carrying (monster drops) and your journal of taken jobs with progress. */
@@ -100,7 +99,7 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
                 <ul className="grid grid-cols-4 gap-2 sm:grid-cols-5">
                   {items!.map((i) => (
                     <li key={i.slug} title={`${i.name} · ${RARITY[i.rarity]?.label ?? ""}`} className={`group relative flex aspect-square flex-col items-center justify-center border-2 bg-panel ${RARITY[i.rarity]?.ring ?? "border-steel"}`}>
-                      <ItemArt slug={i.slug} size={44} />
+                      <ItemArt slug={i.slug} size={48} />
                       <span className="absolute bottom-0 right-0 bg-ink/80 px-1 text-lg leading-5 text-paper">{i.qty}</span>
                       <span className="pointer-events-none absolute -top-1 left-1/2 z-10 hidden -translate-x-1/2 -translate-y-full whitespace-nowrap bg-ink px-2 py-1 text-base uppercase group-hover:block">
                         {i.name}<span className={`block text-sm normal-case ${RARITY[i.rarity]?.text}`}>{RARITY[i.rarity]?.label}</span>
