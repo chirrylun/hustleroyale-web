@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Pixelify_Sans } from "next/font/google";
 import "./globals.css";
+import { TapSound } from "@/components/TapSound";
 import { Providers } from "./providers";
 
 const pixel = Pixelify_Sans({
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${pixel.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
+        <TapSound />
       </body>
     </html>
   );

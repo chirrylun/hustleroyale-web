@@ -4,7 +4,7 @@ import { artOf } from "@/lib/skill-art";
 import type { FxSheet } from "@/lib/sprites/designs";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { getGameSocket } from "@/lib/socket";
-import { playSfx, unlockAudio, type Sfx } from "@/lib/sfx";
+import { playSfx, playSkill, skillSoundUrl, unlockAudio, warmSounds, type Sfx } from "@/lib/sfx";
 
 /*
  * The browser's side of the battle protocol. These shapes mirror `modules/battle/protocol.ts` in
@@ -584,6 +584,8 @@ export function useSoloBattle() {
   const [lastReward, setLastReward] = useState<RewardSummary | null>(null);
   const finaleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMove = useRef(0);
+  /** Casters whose skill has its own recorded sound, until when: their hits and heals skip the generic blips. */
+  const ownsSound = useRef(new Map<string, number>());
 
   useEffect(() => {
     const socket = getGameSocket();
@@ -591,6 +593,8 @@ export function useSoloBattle() {
     const onStart = (payload: BattleStartPayload) => {
       if (finaleTimer.current) clearTimeout(finaleTimer.current);
       dispatch({ type: "start", payload, now: Date.now() });
+      // Load this fight's skill sounds now, so the first cast is on time.
+      warmSounds([...new Set(payload.units.flatMap((u) => u.skills.map((sk) => skillSoundUrl(sk.name))))]);
       setError(null);
       setPhase(payload.awaitingStart ? "ready" : "fighting");
     };
@@ -601,7 +605,14 @@ export function useSoloBattle() {
     const onEvents = (p: { matchId: string; events: BattleEvent[] }) => {
       dispatch({ type: "events", ...p, now: Date.now() });
       // Sounds are a side effect of the stream, played once per event, outside the reducer.
+      // A skill with a recorded sound plays it instead of the generic blips for that caster's hit, heal or shield.
+      const now = performance.now();
       for (const e of p.events) {
+        if (e.type === "cast") {
+          if (playSkill(e.skill, e.skillIndex === 0 ? "swing" : undefined)) ownsSound.current.set(e.actorId, now + 700);
+          continue;
+        }
+        if ((e.type === "damage" || e.type === "heal" || e.type === "shield") && (ownsSound.current.get(e.sourceId) ?? 0) > now) continue;
         const name = soundFor(e);
         if (name) playSfx(name);
       }

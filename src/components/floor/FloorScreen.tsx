@@ -8,6 +8,7 @@ import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { FX_COLS, FX_ROWS, mobScale } from "@/lib/sprites/designs";
 import { artOf, type FxArt } from "@/lib/skill-art";
+import { playSkill, skillSoundUrl, warmSounds } from "@/lib/sfx";
 import type { GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
 import { findPath, buildNav, clearLine, nearestRoomy, nearestWalkable, roomy, walkable, standable, type Pt } from "@/lib/guild-nav";
@@ -359,6 +360,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         skills: (f.skills ?? []).filter((s) => s.slot >= 2 && s.name && s.kind).sort((x, y) => x.slot - y.slot).map(toFSkill),
       });
     });
+    // Load the party's skill sounds now, so the first cast is on time.
+    warmSounds([...new Set(allies.current.flatMap((a) => a.skills.map((sk) => skillSoundUrl(sk.name))))]);
     // Health and who is still up carry over from the last floor of this expedition.
     for (const f of squad) {
       const a = allies.current.find((x) => x.id === f.id);
@@ -628,6 +631,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         sk.ready = now + sk.cd;
         a.gcd = now + 700;
         a.look.act = "attack"; a.look.n++;
+        playSkill(sk.name);
         spawnFx(art?.cast, a.x, a.y, { ms: 640 });
         say(sk.name, sk.kind === "heal" ? "text-leaf" : sk.kind === "damage" ? "text-gold" : "text-steel");
         return;
