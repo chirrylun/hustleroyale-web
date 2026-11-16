@@ -10,7 +10,7 @@ import { FX_COLS, FX_ROWS, mobScale } from "@/lib/sprites/designs";
 import { artOf, type FxArt } from "@/lib/skill-art";
 import type { GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
-import { findPath, buildNav, clearLine, nearestWalkable, walkable, standable, type Pt } from "@/lib/guild-nav";
+import { findPath, buildNav, clearLine, nearestRoomy, nearestWalkable, roomy, walkable, standable, type Pt } from "@/lib/guild-nav";
 import type { Stance } from "@/lib/battle";
 import { clearExpedition, partySig, readExpedition, writeExpedition } from "@/lib/world/expedition";
 import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal } from "@/lib/world/stance";
@@ -375,7 +375,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       return best;
     };
     foes.current = floor.mobs.map((m) => {
-      const [mx, my] = nearestWalkable(nav, m.x, m.y);
+      const [mx, my] = nearestRoomy(nav, m.x, m.y);
       return makeAg("foe", {
         id: `m${m.id}`, sprite: m.sprite, name: m.kind, level: m.level, x: mx, y: my, hp: m.hp, atk: m.atk, def: m.def, boss: m.boss, kind: m.kind,
         home: m.boss ? [mx, my, 1.5] : zoneOf(mx, my), wanderAt: rnd(0, 3000), speedMul: rnd(0.9, 1.1),
@@ -635,7 +635,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         const z = floor.zones[Math.floor(Math.random() * floor.zones.length)];
         const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * Math.max(0.6, z[2] - 1);
         const x = z[0] + Math.cos(ang) * d, y = z[1] + Math.sin(ang) * d * 0.7;
-        if (!standable(nav, x, y)) continue;
+        if (!roomy(nav, x, y)) continue;
         const away = n < 9 ? 10 : 6;
         if (A.some((a) => !a.dead && dist(a, { x, y }) < away)) continue;
         if (F.some((f) => !f.dead && Math.hypot(f.x - x, f.y - y) < 1.6)) continue;
@@ -771,7 +771,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             else if (f.wanderAt === Infinity) f.wanderAt = now + rnd(w.rest[0], w.rest[1]) * 1000;
             else if (now >= f.wanderAt) {
               const rad = f.home[2] * 0.85, ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * rad;
-              const to = nearestWalkable(nav, f.home[0] + Math.cos(ang) * d, f.home[1] + Math.sin(ang) * d * 0.7);
+              const to = nearestRoomy(nav, f.home[0] + Math.cos(ang) * d, f.home[1] + Math.sin(ang) * d * 0.7);
               f.path = findPath(nav, [f.x, f.y], to);
               f.wanderAt = f.path.length ? Infinity : now + 2000;
             }

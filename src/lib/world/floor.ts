@@ -2,7 +2,7 @@ import cave from "./props_cave.json";
 import grass from "./props_grass.json";
 import ice from "./props_ice.json";
 import swamp from "./props_swamp.json";
-import { buildNav, nearestWalkable, standable, type NavLayout } from "../guild-nav";
+import { buildNav, nearestRoomy, roomy, type NavLayout } from "../guild-nav";
 
 /**
  * Adventure floors. A floor is generated from its number and a seed (same pair, same map), so the server
@@ -310,14 +310,14 @@ export function generateFloor(n: number, seed = 0): Floor {
     for (let t = 0; t < 40 && !ok; t++) {
       const a = rand() * Math.PI * 2, d = r(0.4, Math.max(0.6, c[2] - 1.1));
       x = c[0] + Math.cos(a) * d; y = c[1] + Math.sin(a) * d * 0.7;
-      ok = standable(nav, x, y);
+      ok = roomy(nav, x, y);
     }
-    if (!ok) [x, y] = nearestWalkable(nav, c[0], c[1]);
+    if (!ok) [x, y] = nearestRoomy(nav, c[0], c[1]);
     // Floor 1 always has a bat, so the first job can be done there.
     const kind = n === 1 && i === 0 ? "bat" : pick(theme.mobs);
     spawn(kind, RARITY[tier], Math.max(1, n + (i % 3 === 2 ? 1 : 0)), false, x, y);
   }
-  if (boss) { const [bx, by] = nearestWalkable(nav, exit[0] - 2.5, exit[1] - 0.2); spawn(theme.boss_mob, "legendary", n + 2, true, bx, by); }
+  if (boss) { const [bx, by] = nearestRoomy(nav, exit[0] - 2.5, exit[1] - 0.2); spawn(theme.boss_mob, "legendary", n + 2, true, bx, by); }
 
   return {
     n, theme, w: W, h: H, cells, variant, props, mobs, zones, start, exit,

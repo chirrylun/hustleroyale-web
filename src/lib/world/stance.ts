@@ -25,8 +25,8 @@ export interface StanceRule {
 
 export const RULES: Record<Stance, StanceRule> = {
   offensive: { aggro: 200, leash: Infinity, charge: 1.1 },
-  neutral: { aggro: 7, leash: Infinity, charge: 1 },
-  defensive: { aggro: 4.5, leash: 6.5, charge: 1 },
+  neutral: { aggro: 4.5, leash: Infinity, charge: 1 },
+  defensive: { aggro: 3, leash: 4.5, charge: 1 },
 };
 
 /** How fast the leader strolls while idle, relative to its walking pace. */
