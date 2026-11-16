@@ -6,13 +6,13 @@
  * so `unlockAudio()` is called from the Start button.
  */
 
-export type Sfx = "swing" | "hit" | "crit" | "heal" | "shield" | "stun" | "warn" | "boom" | "ko" | "horn" | "win" | "lose";
+export type Sfx = "tap" | "swing" | "hit" | "crit" | "heal" | "shield" | "stun" | "warn" | "boom" | "ko" | "horn" | "win" | "lose";
 
 let ctx: AudioContext | null = null;
 let muted = false;
 const lastPlayed = new Map<Sfx, number>();
 /** The same sound firing many times in a few milliseconds just turns into noise. */
-const MIN_GAP_MS: Partial<Record<Sfx, number>> = { swing: 70, hit: 60, crit: 80, heal: 120, shield: 150, stun: 100, warn: 250 };
+const MIN_GAP_MS: Partial<Record<Sfx, number>> = { tap: 45, swing: 70, hit: 60, crit: 80, heal: 120, shield: 150, stun: 100, warn: 250 };
 
 try {
   muted = typeof localStorage !== "undefined" && localStorage.getItem("hr-muted") === "1";
@@ -78,6 +78,11 @@ function noise(c: AudioContext, dur: number, vol: number, at = 0) {
 }
 
 const RECIPES: Record<Sfx, (c: AudioContext) => void> = {
+  // The stand-in for /audio/ui/tap.mp3: a short, soft click.
+  tap: (c) => {
+    tone(c, { freq: 780, to: 520, dur: 0.045, type: "square", vol: 0.05 });
+    tone(c, { freq: 1180, to: 900, dur: 0.03, type: "triangle", vol: 0.04, at: 0.006 });
+  },
   swing: (c) => tone(c, { freq: 420, to: 160, dur: 0.09, type: "triangle", vol: 0.06 }),
   hit: (c) => {
     noise(c, 0.06, 0.1);
@@ -124,4 +129,78 @@ export function playSfx(name: Sfx) {
   } catch {
     /* sound is never worth breaking a match over */
   }
+}
+
+/*
+ * Recorded sounds. Drop an mp3 in /public/audio and it is used; until it exists the game falls back to the
+ * synthesized blips above (or stays quiet where there is none).
+ *   /audio/ui/tap.mp3            every button tap (see TapSound)
+ *   /audio/skills/<slug>.mp3     one per skill, named after its slug (see public/audio/skills/README.md)
+ */
+type FileState = { audio: HTMLAudioElement; state: "loading" | "ok" | "missing" };
+const files = new Map<string, FileState>();
+const filePlayed = new Map<string, number>();
+
+/** "Lay on Hands" -> "lay-on-hands": the skill slug, which is also its sound's file name. */
+export const skillSlug = (nameOrSlug: string) => nameOrSlug.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+function fileOf(url: string): FileState | null {
+  if (typeof window === "undefined") return null;
+  let f = files.get(url);
+  if (!f) {
+    const audio = new Audio();
+    f = { audio, state: "loading" };
+    const entry = f;
+    audio.preload = "auto";
+    audio.addEventListener("canplaythrough", () => { entry.state = "ok"; }, { once: true });
+    audio.addEventListener("error", () => { entry.state = "missing"; }, { once: true });
+    audio.src = url;
+    audio.load();
+    files.set(url, f);
+  }
+  return f;
+}
+
+/** Starts loading these sounds ahead of time, so the first cast is already on time. Missing files are noted and skipped. */
+export function warmSounds(urls: string[]) {
+  for (const u of urls) fileOf(u);
+}
+
+/**
+ * Plays a recorded sound if its file exists. Returns true when it did (so the caller can skip a synthesized stand-in).
+ * The very first call for a file only starts loading it and returns false.
+ */
+function playFile(url: string, volume: number, minGapMs = 60): boolean {
+  const f = fileOf(url);
+  if (!f || f.state !== "ok") return false;
+  if (muted) return true;
+  const now = performance.now();
+  if (now - (filePlayed.get(url) ?? 0) < minGapMs) return true;
+  filePlayed.set(url, now);
+  try {
+    const a = f.audio.cloneNode(true) as HTMLAudioElement;
+    a.volume = volume;
+    void a.play().catch(() => {});
+  } catch {
+    /* never worth breaking a match over */
+  }
+  return true;
+}
+
+export const SKILL_SOUND_VOLUME = 0.8;
+export const TAP_SOUND_VOLUME = 0.6;
+export const skillSoundUrl = (nameOrSlug: string) => `/audio/skills/${skillSlug(nameOrSlug)}.mp3`;
+
+/** A skill's recorded sound. Returns true if one played; otherwise plays `fallback` (a synthesized blip) if given. */
+export function playSkill(nameOrSlug: string, fallback?: Sfx): boolean {
+  if (playFile(skillSoundUrl(nameOrSlug), SKILL_SOUND_VOLUME, 80)) return true;
+  if (fallback) playSfx(fallback);
+  return false;
+}
+
+/** The button tap: /audio/ui/tap.mp3, or a short synthesized click until that file is there. Called on a tap, so it also wakes the audio engine. */
+export function playTap() {
+  unlockAudio();
+  if (playFile("/audio/ui/tap.mp3", TAP_SOUND_VOLUME, 45)) return;
+  playSfx("tap");
 }

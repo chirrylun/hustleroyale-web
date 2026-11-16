@@ -237,16 +237,22 @@ function Lobby({
   );
 }
 
-function Choice({ selected, onClick, title, hint }: { selected: boolean; onClick: () => void; title: string; hint: string }) {
+function Choice({ selected, onClick, title, hint, icon }: { selected: boolean; onClick: () => void; title: string; hint: string; icon?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={clsx("pixel-btn flex cursor-pointer flex-col items-start px-3 py-2 text-left", selected ? "bg-gold text-ink" : "bg-panel text-paper")}
+      className={clsx("pixel-btn flex cursor-pointer items-center gap-3 px-3 py-2 text-left", selected ? "bg-gold text-ink" : "bg-panel text-paper")}
     >
-      <span className="text-xl uppercase leading-tight">{title}</span>
-      <span className={clsx("text-base leading-tight", selected ? "text-ink" : "text-steel")}>{hint}</span>
+      {icon && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={icon} alt="" className="h-10 w-10 shrink-0 [image-rendering:pixelated]" draggable={false} />
+      )}
+      <span className="flex min-w-0 flex-col items-start">
+        <span className="text-xl uppercase leading-tight">{title}</span>
+        <span className={clsx("text-base leading-tight", selected ? "text-ink" : "text-steel")}>{hint}</span>
+      </span>
     </button>
   );
 }
@@ -288,7 +294,10 @@ export function StanceBar({ current, onPick }: { current: Stance; onPick: (s: St
     <PixelPanel title="Tell your team what to do">
       <div className="grid gap-2 sm:grid-cols-3">
         {STANCES.map((s) => (
-          <Choice key={s.id} selected={current === s.id} onClick={() => onPick(s.id)} title={s.label} hint={s.hint} />
+          <Choice
+            key={s.id} selected={current === s.id} onClick={() => onPick(s.id)} title={s.label} hint={s.hint}
+            icon={`/ui/stance-${{ offensive: "attack", neutral: "balanced", defensive: "defend" }[s.id]}.png`}
+          />
         ))}
       </div>
     </PixelPanel>

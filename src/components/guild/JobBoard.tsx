@@ -1,5 +1,6 @@
 "use client";
 
+import { Npc } from "@/components/npc/Npc";
 import { useCallback, useEffect, useState } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { createClient } from "@/lib/supabase/client";
@@ -85,8 +86,14 @@ export function JobBoard({ onChanged }: { onChanged: () => void }) {
 
   return (
     <div>
-      <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
-      <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+      <div className="mb-2 flex items-end gap-3">
+        <Npc name="secretary" className="w-14 shrink-0 short:w-10" />
+        <div className="min-w-0">
+          <h2 className="text-2xl uppercase text-gold short:text-xl">Job board</h2>
+          <p className="text-base text-steel">Pick a job, then head out to the floors to finish it.</p>
+        </div>
+      </div>
+      <div className="max-h-[52dvh] space-y-2 overflow-y-auto pr-1 short:max-h-[55dvh]">
         {list.length === 0 && <p className="text-xl text-paper">No jobs open right now. Check back after you open new floors.</p>}
         {list.map((q) => {
           const status = b.taken[q.slug];

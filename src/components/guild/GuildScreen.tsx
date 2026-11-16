@@ -1,5 +1,6 @@
 "use client";
 
+import { BagButton } from "@/components/floor/BagButton";
 import { Music } from "@/components/Music";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,6 +12,8 @@ import { MAX_FLOOR, themeOf } from "@/lib/world/floor";
 import { Npc } from "@/components/npc/Npc";
 import { GuildHall } from "./GuildHall";
 import { clearExpedition } from "@/lib/world/expedition";
+import { itemImage, itemName } from "@/lib/items";
+import hallLayout from "./layout.json";
 import { InfoBox } from "./InfoBox";
 import { JobBoard } from "./JobBoard";
 import { PartyPanel } from "./PartyPanel";
@@ -89,10 +92,10 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 p-3 sm:p-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 p-3 sm:p-6 short:gap-1 short:p-1.5">
       <Music track="guild" />
-      <header className="flex flex-wrap items-center justify-between gap-2 text-xl">
-        <h1 className="text-2xl uppercase text-gold">{username}&apos;s Guild</h1>
+      <header className="flex flex-wrap items-center justify-between gap-2 text-xl short:text-base">
+        <h1 className="text-2xl uppercase text-gold short:text-lg">{username}&apos;s Guild</h1>
         <p className="flex gap-4 text-paper">
           <span>🪙 {coins}</span>
           <span>Lv {level}</span>
@@ -100,7 +103,8 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         </p>
       </header>
 
-      <div className="pixel-box relative overflow-hidden bg-night">
+      <div className="pixel-box relative overflow-hidden bg-night short:mx-auto short:w-full short:max-w-[var(--hall-w)]" style={{ ["--hall-w" as string]: `calc((100dvh - 2.75rem) * ${hallLayout.cols / hallLayout.rows})` }}>
+        <BagButton />
         <GuildHall
           fighters={fighters}
           onAction={onAction}
@@ -112,12 +116,12 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         {step === 6 && !panel && (
           <div className="absolute inset-x-0 bottom-3 z-[200] flex items-end justify-center gap-2 px-3 sm:gap-4">
             {intro === 0 ? (
-              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={0} total={2} title="Hello there!" onNext={() => setIntro(1)} nextLabel="Next">
+              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20 short:w-12" />} step={0} total={2} title="Hello there!" onNext={() => setIntro(1)} nextLabel="Next">
                 <p>Hi, I&apos;m your quest manager. I hand out every job in the guild.</p>
                 <p>This is your guild. You manage your adventurers and send them out on quests from here.</p>
               </InfoBox>
             ) : (
-              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={1} total={2} title="The job board" onBack={() => setIntro(0)} onNext={() => onAction("jobs")} nextLabel="Open job board">
+              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20 short:w-12" />} step={1} total={2} title="The job board" onBack={() => setIntro(0)} onNext={() => onAction("jobs")} nextLabel="Open job board">
                 <p>This is the job board. Jobs are posted here by other real players, people that need your help or from The Adventurer's Council.</p>
                 <p>Tap the glowing job board when you want to take a job. Let's start with your first one.</p>
               </InfoBox>
@@ -128,12 +132,12 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         {step === 8 && !panel && !notice && (
           <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
             {jobDone ? (
-              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={0} total={1} title="Success!" onNext={() => onAction("jobs")} nextLabel="Open job board">
+              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20 short:w-12" />} step={0} total={1} title="Success!" onNext={() => onAction("jobs")} nextLabel="Open job board">
                 <p>You beat the bat, hand in your job on the job board to get your reward.</p>
                 <p>Tap the glowing Job board.</p>
               </InfoBox>
             ) : (
-              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={0} total={1} title="Time to head out" onNext={() => onAction("adventure")} nextLabel="Open the gate">
+              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20 short:w-12" />} step={0} total={1} title="Time to head out" onNext={() => onAction("adventure")} nextLabel="Open the gate">
                 <p>You took the job successfully. Jobs are done out on the floors, so tap the glowing map to go on quests.</p>
                 <p>Pick floor 1, choose your fighters and go find that bat.</p>
               </InfoBox>
@@ -152,7 +156,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
         {panel && (
           <div className="absolute inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3">
-            <div className="pixel-box card-reveal w-full max-w-lg bg-night p-5">
+            <div className="pixel-box card-reveal max-h-[94dvh] w-full max-w-lg overflow-y-auto bg-night p-5 short:max-w-2xl short:p-3">
               {panel === "lobby" ? (
                 <PartyPanel fighters={fighters} kicker="Meet other players" title="Main Lobby" goLabel="Enter the lobby" startWithOne onBack={() => setPanel(null)} onGo={() => router.push("/lobby")} />
               ) : panel === "party" ? (
@@ -161,7 +165,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Adventure</h2>
                   {step < 9 && <p className="mb-2 text-xl text-paper">Floor 1 has a bat waiting for you.</p>}
-                  <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+                  <div className="max-h-[55dvh] short:max-h-[60dvh] space-y-3 overflow-y-auto pr-1">
                     {[0, 1, 2, 3].filter((t) => t * 10 + 1 <= unlocked).map((t) => (
                       <div key={t}>
                         <p className="mb-1 text-base uppercase text-steel">{themeOf(t * 10 + 1).name}</p>
@@ -179,6 +183,15 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
               ) : step === 9 ? (
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
+                  <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xl text-gold">
+                    <span>Reward: 100 coins · 60 XP each</span>
+                    {[["hp_potion", 3], ["mp_potion", 2]].map(([s, n]) => (
+                      <span key={s} className="inline-flex items-center gap-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={itemImage(s as string)} alt="" className="h-8 w-8 [image-rendering:pixelated]" draggable={false} />{n} {itemName(s as string)}s
+                      </span>
+                    ))}
+                  </p>
                   <p className="text-xl text-paper">You completed your first job! More jobs are posted here by other players, NPCs that need your help or special requests with extra rewards. You can also post jobs on the board for other players to complete with how much you're willing to pay for completing it successfully.</p>
                   <div className="mt-4"><PixelButton onClick={() => setTut(10)}>Open the job board</PixelButton></div>
                 </>
@@ -199,7 +212,12 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
                   <div className="pixel-box bg-panel p-3 text-xl text-paper">
                     <p className="uppercase text-leaf">First job · Guild</p>
                     <p>Kill a bat on Floor 1.</p>
-                    <p className="text-steel">Reward: 100 coins and 60 XP for each fighter on your team.</p>
+                    <p className="text-steel">Reward: <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 align-middle">100 coins, 60 XP for each fighter on your team
+                      {["hp_potion:3", "mp_potion:2"].map((x) => { const [s, n] = x.split(":"); return (
+                        <span key={s} className="inline-flex items-center gap-1 text-gold">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={itemImage(s)} alt="" className="h-7 w-7 [image-rendering:pixelated]" draggable={false} />{n} {itemName(s)}s
+                        </span>); })}</span></p>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     {step === 7 ? (

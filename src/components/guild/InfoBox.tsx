@@ -13,15 +13,15 @@ export function InfoBox({
   onBack?: () => void; onNext: () => void; nextLabel?: string; busy?: boolean;
 }) {
   return (
-    <section className="pixel-box card-reveal w-full max-w-xl bg-night p-5 text-left" aria-live="polite">
+    <section className="pixel-box card-reveal w-full max-w-xl bg-night p-5 text-left short:max-h-[92dvh] short:max-w-3xl short:overflow-y-auto short:p-2.5" aria-live="polite">
       <div className="flex items-start gap-3">
         {portrait && <div className="flex shrink-0 items-end justify-center self-stretch">{portrait}</div>}
         <div className="min-w-0 flex-1">
-          <h2 className="mb-3 text-2xl uppercase text-gold">{title}</h2>
-          <div className="flex min-h-24 flex-col gap-2 text-xl text-paper">{children}</div>
+          <h2 className="mb-3 text-2xl uppercase text-gold short:mb-1 short:text-xl">{title}</h2>
+          <div className="flex min-h-24 flex-col gap-2 text-xl text-paper short:min-h-0 short:gap-1 short:text-base">{children}</div>
         </div>
       </div>
-      <div className="mt-5 flex items-center justify-between gap-3">
+      <div className="mt-5 short:mt-2 flex items-center justify-between gap-3">
         <div className="flex gap-1.5" aria-label={`Step ${step + 1} of ${total}`}>
           {Array.from({ length: total }, (_, i) => (
             <span key={i} className={i === step ? "h-2.5 w-2.5 bg-gold" : i < step ? "h-2.5 w-2.5 bg-leaf" : "h-2.5 w-2.5 bg-panel"} />

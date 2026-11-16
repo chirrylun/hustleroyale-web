@@ -8,6 +8,7 @@ import { PixelButton } from "@/components/pixel/PixelButton";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { FX_COLS, FX_ROWS, mobScale } from "@/lib/sprites/designs";
 import { artOf, type FxArt } from "@/lib/skill-art";
+import { playSkill, skillSoundUrl, warmSounds } from "@/lib/sfx";
 import type { GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
 import { findPath, buildNav, clearLine, nearestRoomy, nearestWalkable, roomy, walkable, standable, type Pt } from "@/lib/guild-nav";
@@ -19,7 +20,7 @@ import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { BagMenu } from "@/components/floor/BagMenu";
-import { itemName } from "@/lib/items";
+import { itemImage, itemName } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
@@ -128,6 +129,7 @@ interface Ag {
   el?: HTMLDivElement | null;
   bar?: HTMLDivElement | null;
   hpEl?: HTMLDivElement | null;
+  mpEl?: HTMLDivElement | null;
   /** Allies: place in the formation (0 leads). */
   slot: number;
   /** Walking pace relative to the others, so a group never moves in lockstep. */
@@ -167,6 +169,8 @@ const levelTone = (gap: number) => (gap >= 5 ? "text-ember" : gap >= 2 ? "text-g
 const MOB_NAME: Record<string, string> = { direwolf: "Dire Wolf" };
 const mobName = (kind: string) => MOB_NAME[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 
+const POTIONS = ["hp_potion", "mp_potion"];
+
 function Unit({ a, party }: { a: Ag; party: number }) {
   const [look, setLook] = useState(a.look);
   // Bosses are drawn large on purpose; everything else is scaled to a realistic size next to a fighter.
@@ -184,6 +188,9 @@ function Unit({ a, party }: { a: Ag; party: number }) {
       <div ref={(el) => { a.fx = el; }} className="pointer-events-none absolute left-0 top-0 will-change-transform" style={{ ...box, zIndex: 9000 }}>
         <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
           <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
+          {a.side === "ally" && a.maxEn > 0 && (
+            <div className="absolute left-0 top-full h-1 w-full bg-ink/80"><div ref={(el) => { a.mpEl = el; }} className="h-full w-full bg-sky" /></div>
+          )}
           <span
             className={`absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-bold leading-none ${a.side === "foe" ? levelTone(a.level - party) : "text-steel"}`}
             style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}
@@ -237,6 +244,10 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const [stance, setStanceState] = useState<Stance>("neutral");
   const stanceRef = useRef<Stance>("neutral");
   const [bagOpen, setBagOpen] = useState(false);
+  const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
+  const [stock, setStock] = useState<Record<string, number>>({});
+  const [picking, setPicking] = useState<number | null>(null);
+  const usingPotion = useRef(false);
   const [free, setFree] = useState(false); // camera detached from the party
 
   const view = useRef<HTMLDivElement>(null);
@@ -359,6 +370,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         skills: (f.skills ?? []).filter((s) => s.slot >= 2 && s.name && s.kind).sort((x, y) => x.slot - y.slot).map(toFSkill),
       });
     });
+    // Load the party's skill sounds now, so the first cast is on time.
+    warmSounds([...new Set(allies.current.flatMap((a) => a.skills.map((sk) => skillSoundUrl(sk.name))))]);
     // Health and who is still up carry over from the last floor of this expedition.
     for (const f of squad) {
       const a = allies.current.find((x) => x.id === f.id);
@@ -433,6 +446,45 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       layer(2, rl, 4);
     };
   }, [floor]);
+
+  const loadStock = () => {
+    createClient().from("player_items").select("item_slug, qty").in("item_slug", POTIONS).then(({ data }) => {
+      setStock(Object.fromEntries((data ?? []).map((r) => [r.item_slug as string, r.qty as number])));
+    });
+  };
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem("hr_item_slots") ?? "null"); if (Array.isArray(v) && v.length === 3) setSlots(v.map((x) => (POTIONS.includes(x) ? x : null))); } catch {}
+    loadStock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const setSlot = (i: number, slug: string | null) => {
+    const next = slots.map((x, j) => (j === i ? slug : x));
+    setSlots(next); setPicking(null);
+    try { localStorage.setItem("hr_item_slots", JSON.stringify(next)); } catch {}
+  };
+  /** Drinks a slotted potion on whichever fighter needs it most. */
+  const drinkPotion = async (i: number) => {
+    const slug = slots[i];
+    if (!slug || usingPotion.current || (stock[slug] ?? 0) <= 0) return;
+    const live = allies.current.filter((u) => !u.dead);
+    const need = (u: Ag) => (slug === "hp_potion" ? 1 - u.hp / u.max : u.maxEn > 0 ? 1 - u.en / u.maxEn : 0);
+    const t = [...live].sort((p, q) => need(q) - need(p))[0];
+    if (!t || need(t) < 0.02) { setPicking(null); return; }
+    usingPotion.current = true;
+    try {
+      const { error } = await createClient().rpc("use_item", { p_slug: slug });
+      if (error) { loadStock(); return; }
+      setStock((m) => ({ ...m, [slug]: Math.max(0, (m[slug] ?? 1) - 1) }));
+      if (t.dead) return;
+      if (slug === "hp_potion") {
+        const amt = Math.max(1, Math.round(t.max * 0.4)); t.hp = Math.min(t.max, t.hp + amt);
+        spawnFx({ sheet: "support", row: 0 }, t.x, t.y); overHead(t, `+${amt}`, "text-leaf", 900);
+      } else {
+        const amt = Math.max(1, Math.round(t.maxEn * 0.5)); t.en = Math.min(t.maxEn, t.en + amt);
+        overHead(t, `+${amt} MP`, "text-sky", 900);
+      }
+    } finally { usingPotion.current = false; }
+  };
 
   const spawnText = (x: number, y: number, text: string, cls: string, ms = 700, anim = "dmg", extra = "") => {
     const d = document.createElement("div");
@@ -628,6 +680,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         sk.ready = now + sk.cd;
         a.gcd = now + 700;
         a.look.act = "attack"; a.look.n++;
+        playSkill(sk.name);
         spawnFx(art?.cast, a.x, a.y, { ms: 640 });
         say(sk.name, sk.kind === "heal" ? "text-leaf" : sk.kind === "damage" ? "text-gold" : "text-steel");
         return;
@@ -681,7 +734,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         aliveA.forEach((a, i) => {
           a.cd = Math.max(0, a.cd - dt);
           a.repath -= dt;
-          a.en = Math.min(a.maxEn, a.en + a.regen * dt);
+          // MP doesn't come back on its own; only a Defend stance recovers it, slowly (a potion is far faster).
+          if (hold) a.en = Math.min(a.maxEn, a.en + a.maxEn * 0.012 * dt);
           const spd = SPEED * a.speedMul;
           if (a.held) {
             if (a.delay > 0) { a.delay -= dt; return; } // each one sets off a beat apart
@@ -858,6 +912,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           u.fx.style.transition = u.el.style.transition;
         }
         if (u.hpEl) u.hpEl.style.width = `${(u.hp / u.max) * 100}%`;
+        if (u.mpEl && u.maxEn > 0) u.mpEl.style.width = `${(u.en / u.maxEn) * 100}%`;
         if (u.path.length > 0 && !u.dead) u.movedAt = now;
         const moving = !u.dead && now - u.movedAt < 220; // short pauses between hops don't flicker to idle
         const rest = u.dead ? "stun" : moving ? "walk" : "idle";
@@ -1190,13 +1245,13 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         {state === "play" && (
           <div
             role="group" aria-label="Party behaviour"
-            className="absolute left-2 top-1/2 z-[9600] flex -translate-y-1/2 flex-col gap-2"
+            className="absolute left-2 top-1/2 z-[9600] flex -translate-y-1/2 flex-col gap-2 short:gap-1"
             onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
           >
             {STANCES.map((o) => (
               <button
                 key={o.id} type="button" aria-pressed={stance === o.id} aria-label={o.label} onClick={() => pickStance(o.id)}
-                className={`group relative flex h-12 w-12 items-center justify-center pixel-box ${stance === o.id ? "bg-gold" : "bg-night/90"}`}
+                className={`group relative flex h-12 w-12 short:h-10 short:w-10 items-center justify-center pixel-box ${stance === o.id ? "bg-gold" : "bg-night/90"}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`/ui/stance-${{ offensive: "attack", neutral: "balanced", defensive: "defend" }[o.id]}.png`} alt="" className="h-8 w-8 [image-rendering:pixelated]" draggable={false} />
@@ -1206,14 +1261,52 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                 </span>
               </button>
             ))}
-            <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box flex h-12 w-12 items-center justify-center bg-night/90">
+            <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/ui/bag.png" alt="" className="h-8 w-8" draggable={false} />
             </button>
           </div>
         )}
 
-        {bagOpen && <BagMenu onClose={() => setBagOpen(false)} />}
+        {bagOpen && <BagMenu onClose={() => { setBagOpen(false); loadStock(); }} />}
+
+        {state === "play" && (
+          <div
+            role="group" aria-label="Item slots" className="absolute bottom-3 short:bottom-1.5 left-1/2 z-[9600] flex -translate-x-1/2 items-end gap-2"
+            onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
+          >
+            {slots.map((slug, i) => {
+              const n = slug ? stock[slug] ?? 0 : 0;
+              return (
+                <div key={i} className="relative">
+                  {picking === i && (
+                    <div className="pixel-box absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-2 bg-night/95 p-2">
+                      {POTIONS.map((p) => (
+                        <button key={p} type="button" aria-label={itemName(p)} disabled={(stock[p] ?? 0) <= 0} onClick={() => setSlot(i, p)} className="pixel-box relative h-12 w-12 bg-night disabled:opacity-40">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={itemImage(p)} alt="" className="h-10 w-10 [image-rendering:pixelated]" draggable={false} />
+                          <span className="absolute bottom-0 right-1 text-base font-bold text-paper">{stock[p] ?? 0}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button" aria-label={slug ? `Use ${itemName(slug)}` : "Empty item slot"}
+                    onClick={() => (slug && n > 0 ? drinkPotion(i) : setPicking(picking === i ? null : i))}
+                    className={`pixel-box relative flex h-14 w-14 short:h-11 short:w-11 items-center justify-center bg-night/90 ${slug && n <= 0 ? "opacity-50" : ""}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {slug && <img src={itemImage(slug)} alt="" className="h-11 w-11 [image-rendering:pixelated]" draggable={false} />}
+                    {slug && <span className="absolute bottom-0 right-1 text-base font-bold text-paper" style={{ textShadow: "0 1px 0 #000" }}>{n}</span>}
+                  </button>
+                  {slug && (
+                    <button type="button" aria-label="Clear slot" onClick={() => setSlot(i, null)} className="absolute -right-1 -top-1 h-5 w-5 bg-ink text-sm leading-5 text-paper">×</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <button ref={arrow} type="button" onClick={recenter} aria-label="Back to your fighters" className="pixel-box absolute left-0 top-0 z-[9600] hidden h-12 w-12 bg-night/90" style={{ display: "none" }}>
           <span className="block text-2xl leading-[3rem] text-gold">➤</span>
