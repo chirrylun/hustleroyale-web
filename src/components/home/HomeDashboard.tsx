@@ -25,6 +25,7 @@ const LEFT: MenuItem[] = [
   { href: "/team", title: "My Fighters", hint: "See your team", icon: "fighters", color: "bg-sky" },
   { href: "/training", title: "Training", hint: "Make fighters stronger", icon: "training", color: "bg-leaf" },
   { href: "/market", title: "Marketplace", hint: "Buy and sell fighters", icon: "market", color: "bg-gold" },
+  { href: "/lobby", title: "Lobby", hint: "Walk around the plaza", icon: "fighters", color: "bg-ice" },
 ];
 
 const RIGHT: MenuItem[] = [

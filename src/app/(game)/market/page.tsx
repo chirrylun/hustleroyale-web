@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/layout/ComingSoon";
+import { TownPage } from "@/components/town/townPage";
 
 export default function Page() {
-  return <ComingSoon title="Marketplace" text="Here you will buy and sell fighters with other players." />;
+  return <TownPage id="market" />;
 }
