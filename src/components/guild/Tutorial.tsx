@@ -7,6 +7,7 @@ import { GAME_NAME } from "@/lib/brand";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import type { StarterFighter } from "@/lib/starter-pack";
 import { createClient } from "@/lib/supabase/client";
+import { Music } from "@/components/Music";
 import { GuildManager } from "./GuildManager";
 import { InfoBox } from "./InfoBox";
 
@@ -104,7 +105,8 @@ export function Tutorial({ username, initialStep, fighters: existing }: { userna
   })();
 
   return (
-    <main className="mx-auto flex w-full flex-1 flex-col items-center justify-center gap-6 p-6">
+    <main className="mx-auto flex w-full flex-1 flex-col items-center justify-center gap-6 p-6 short:gap-2 short:p-2">
+      <Music track="intro" />
       <div key={step} className="flex w-full flex-col items-center justify-center gap-3">
         {box}
       </div>
