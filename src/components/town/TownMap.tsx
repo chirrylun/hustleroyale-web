@@ -12,11 +12,14 @@ import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, type Pt } from "@/lib/guild-nav";
 import { getFloorSocket } from "@/lib/socket";
 import type { Role } from "@/lib/sprites/designs";
-import { ATLAS, NPC_HEIGHT, PICTURE, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
+import { ATLAS, NPC_HEIGHT, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
 
 const SPEED = 2.6; // tiles per second
-const FRAME = 2.8; // a fighter's sprite frame, in tiles
-const WORLD = PICTURE * SCALE; // the picture on screen, in px
+const FRAME = 3.4; // a fighter's sprite frame, in tiles
+/** Tiles across the screen at the default zoom (the picture is zoomed in so the player has to explore). */
+const VIEW_TILES = 26;
+const ZOOM_CAP = 1.7;
+const ZOOM_MIN = 0.4;
 const FORMATION: Pt[] = [[0, 0], [-0.9, 0.6], [0.9, 0.6]];
 /** A tapped sign sends the party to it; this close to it counts as arrived. */
 const ARRIVE = 1.7;
@@ -76,7 +79,9 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
   const dirty = useRef(true);
   const view = useRef<HTMLDivElement>(null);
   const world = useRef<HTMLDivElement>(null);
-  const cam = useRef({ x: 0, y: 0, vw: 800, vh: 600 });
+  const cam = useRef({ x: 0, y: 0, vw: 800, vh: 600, z: 1, zu: 1 });
+  const WW = town.w * SCALE, WH = town.h * SCALE; // the picture on screen, in px
+  const fitZoom = () => { const c = cam.current; c.z = Math.min(ZOOM_CAP, Math.max(1, c.vw / (T * VIEW_TILES))) * c.zu; };
   const marker = useRef<HTMLDivElement>(null);
   const goal = useRef<TownProp | null>(null);
 
@@ -177,13 +182,13 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
       }
 
       // Camera: follow the leader; a picture smaller than the screen is centred.
-      const c = cam.current;
-      const tx = lead ? lead.x * T - c.vw / 2 : 0, ty = lead ? lead.y * T - c.vh / 2 : 0;
+      const c = cam.current, z = c.z, vw = c.vw / z, vh = c.vh / z;
+      const tx = lead ? lead.x * T - vw / 2 : 0, ty = lead ? lead.y * T - vh / 2 : 0;
       c.x += (tx - c.x) * Math.min(1, dt * 6);
       c.y += (ty - c.y) * Math.min(1, dt * 6);
-      c.x = WORLD <= c.vw ? (WORLD - c.vw) / 2 : Math.min(WORLD - c.vw, Math.max(0, c.x));
-      c.y = WORLD <= c.vh ? (WORLD - c.vh) / 2 : Math.min(WORLD - c.vh, Math.max(0, c.y));
-      if (world.current) world.current.style.transform = `translate(${-c.x}px, ${-c.y}px)`;
+      c.x = WW <= vw ? (WW - vw) / 2 : Math.min(WW - vw, Math.max(0, c.x));
+      c.y = WH <= vh ? (WH - vh) / 2 : Math.min(WH - vh, Math.max(0, c.y));
+      if (world.current) world.current.style.transform = `scale(${z}) translate(${-c.x}px, ${-c.y}px)`;
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -197,14 +202,15 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
       }
       agentMap.clear();
     };
-  }, [town, nav, mine, rig, router]);
+  }, [town, nav, mine, rig, router, WW, WH]);
 
   useEffect(() => {
     const el = view.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => { cam.current.vw = el.clientWidth; cam.current.vh = el.clientHeight; });
+    const ro = new ResizeObserver(() => { cam.current.vw = el.clientWidth; cam.current.vh = el.clientHeight; fitZoom(); });
     ro.observe(el);
     return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const down = useRef<{ x: number; y: number; t: number } | null>(null);
@@ -217,7 +223,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
     down.current = null;
     if (!d || Math.hypot(p.x - d.x, p.y - d.y) > 10 || performance.now() - d.t > 500) return;
     // Screen -> picture pixels.
-    const px = (p.x + c.x) / SCALE, py = (p.y + c.y) / SCALE;
+    const px = (p.x / c.z + c.x) / SCALE, py = (p.y / c.z + c.y) / SCALE;
     // A tap on a person talks to them.
     const person = town.npcs.find((n) => {
       const h = NPC_HEIGHT, w = h * npcRatio(n.npc as NpcName);
@@ -264,8 +270,9 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
         className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
         onPointerDown={(e) => { down.current = { ...local(e), t: performance.now() }; }}
         onPointerUp={onUp}
+        onWheel={(e) => { const c = cam.current; c.zu = Math.min(1.3, Math.max(ZOOM_MIN, c.zu + (e.deltaY > 0 ? -0.07 : 0.07))); fitZoom(); }}
       >
-        <div ref={world} className="absolute left-0 top-0 will-change-transform" style={{ width: WORLD, height: WORLD }}>
+        <div ref={world} className="absolute left-0 top-0 origin-top-left" style={{ width: WW, height: WH }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={town.ground} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full" />
           {town.props.map((p, k) => {

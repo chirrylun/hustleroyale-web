@@ -13,6 +13,9 @@ export interface TownNpc { npc: string; facing: "front" | "left" | "right"; x: n
 export interface TownMap {
   title: string;
   ground: string;
+  /** Size of the picture in picture pixels. */
+  w: number;
+  h: number;
   floor: [number, number, number, number];
   blocks: [number, number, number, number][];
   spawn: [number, number];
@@ -27,7 +30,6 @@ export const SCALE = data.scale;
 export const TILE_PX = 48;
 /** Picture pixels in one tile. */
 export const UNIT = TILE_PX / SCALE;
-export const PICTURE = data.size;
 export const ATLAS = atlas as { w: number; h: number; rects: [number, number, number, number][] };
 
 export const TOWNS = data.maps as unknown as Record<TownId, TownMap>;
@@ -41,14 +43,13 @@ export function footOf(p: TownProp): number[] {
 
 /** The walking layout for guild-nav. */
 export function navLayoutOf(town: TownMap) {
-  const n = Math.ceil(PICTURE / UNIT);
   const [x0, y0, x1, y1] = town.floor;
   return {
-    cols: n, rows: n,
+    cols: Math.ceil(town.w / UNIT), rows: Math.ceil(town.h / UNIT),
     floor: { x0: x0 / UNIT, y0: y0 / UNIT, x1: x1 / UNIT, y1: y1 / UNIT },
     props: [...town.props.map((p) => ({ foot: footOf(p) })), ...town.blocks.map((b) => ({ foot: b.map((v) => v / UNIT) }))],
   };
 }
 
-/** How tall an NPC's frame stands, in picture pixels (the figure inside fills most of it). */
-export const NPC_HEIGHT = 165;
+/** How tall an NPC's frame stands, in picture pixels (the figure fills it). Sized so a trader stands a touch taller than a fighter. */
+export const NPC_HEIGHT = 136;
