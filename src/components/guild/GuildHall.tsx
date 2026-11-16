@@ -6,11 +6,14 @@ import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { HealthTag } from "./HealthTag";
 import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, randomWalkable, type Pt } from "@/lib/guild-nav";
+import { Npc, npcRatio, type Facing, type NpcName } from "@/components/npc/Npc";
 import layout from "./layout.json";
 
 interface Prop {
   id: string;
   group: string;
+  /** The name shown under the prop (none: no tag). */
+  label?: string;
   x: number; y: number; w: number; h: number;
   foot: number[] | null;
   wall: boolean;
@@ -42,7 +45,10 @@ const SPEED = 2.6; // tiles per second
 const FRAME = layout.frame; // a fighter's sprite frame, in tiles
 const props = layout.props as Prop[];
 const spots = props.filter((p) => p.spot);
-const nav = buildNav(layout);
+interface RoomNpc { id: string; npc: string; x: number; y: number; h: number; facing: string; action?: string; foot: number[] }
+const npcList = (layout as unknown as { npcs: RoomNpc[] }).npcs;
+// NPCs are solid too, so fighters walk around them.
+const nav = buildNav({ ...layout, props: [...layout.props, ...npcList.map((n) => ({ foot: n.foot }))] });
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const pct = (v: number, of: number) => `${(v / of) * 100}%`;
@@ -217,9 +223,9 @@ export function GuildHall({
         // eslint-disable-next-line @next/next/no-img-element
         const art = <img src={`/guild/props/${p.id}.png`} alt="" draggable={false} className="pointer-events-none h-full w-full" />;
         const hot = highlight === p.group;
-        const tag = (
+        const tag = !p.label ? null : (
           <span className="pointer-events-none absolute -bottom-1 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap bg-ink px-1.5 text-[clamp(10px,1.6cqw,18px)] uppercase text-paper">
-            {p.group}
+            {p.label}
           </span>
         );
         const cls = "group absolute outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" + (hot ? " animate-pulse outline outline-4 outline-gold" : "");
@@ -239,6 +245,16 @@ export function GuildHall({
         }
         if (p.action) return <button key={p.id} type="button" className={cls} style={box} aria-label={p.group} onPointerDown={(e) => e.stopPropagation()} onClick={() => (locked ? onBlocked?.(p.group) : onAction(p.action!))}>{art}{tag}</button>;
         return <div key={p.id} className="pointer-events-none absolute" style={box}>{art}</div>;
+      })}
+
+      {npcList.map((n) => {
+        const w = n.h * npcRatio(n.npc as NpcName);
+        const locked = !!isLocked?.(n.action ?? "");
+        const box = { left: pct(n.x - w / 2, layout.cols), top: pct(n.y - n.h, layout.rows), width: pct(w, layout.cols), zIndex: depth(n.foot[3]) };
+        const art = <Npc name={n.npc as NpcName} facing={n.facing as Facing} className="pointer-events-none w-full" />;
+        const hot = highlight === n.action;
+        if (n.action) return <button key={n.id} type="button" className={"absolute outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" + (hot ? " animate-pulse" : "")} style={box} aria-label="Quest manager" onPointerDown={(e) => e.stopPropagation()} onClick={() => (locked ? onBlocked?.(n.action!) : onAction(n.action!))}>{art}</button>;
+        return <div key={n.id} className="pointer-events-none absolute" style={box}>{art}</div>;
       })}
 
       {fighters.map((f) => {

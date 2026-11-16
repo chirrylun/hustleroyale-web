@@ -536,3 +536,8 @@ canvas,
 @keyframes npc-idle { from { background-position-x: 0; } to { background-position-x: calc(var(--fw) * -6); } }
 .manager-idle { animation: npc-idle 2.4s steps(6) infinite; }
 @media (prefers-reduced-motion: reduce) { .manager-idle { animation: none; } }
+
+/* Percent-based idle loop for room NPCs (any size): 6 frames, 0% to 100% of the strip. */
+@keyframes npc-pct { from { background-position-x: 0%; } to { background-position-x: 100%; } }
+.npc-pct { animation: npc-pct 2.6s steps(6, jump-none) infinite; background-repeat: no-repeat; }
+@media (prefers-reduced-motion: reduce) { .npc-pct { animation: none; } }

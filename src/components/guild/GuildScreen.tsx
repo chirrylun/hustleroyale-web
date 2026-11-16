@@ -8,6 +8,7 @@ import { PixelButton } from "@/components/pixel/PixelButton";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, themeOf } from "@/lib/world/floor";
+import { Npc } from "@/components/npc/Npc";
 import { GuildHall } from "./GuildHall";
 import { clearExpedition } from "@/lib/world/expedition";
 import { InfoBox } from "./InfoBox";
@@ -75,6 +76,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
     });
 
   // Once the first job is taken, the adventure gate glows. Once it is done on the field (the player is told there), the job board glows to hand it in.
+  const [intro, setIntro] = useState(0);
   const [jobDone, setJobDone] = useState(false);
   useEffect(() => { try { setJobDone(localStorage.getItem("pocketrpg-first-job-done") === "1"); } catch { /* private mode: fine */ } }, []);
 
@@ -107,11 +109,19 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         />
 
         {step === 6 && !panel && (
-          <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
-            <InfoBox step={0} total={1} title="Your guild" onNext={() => onAction("jobs")} nextLabel="Open job board">
-              <p>This is your guild. Your control your adventurers and send them on quests from here. Let's get started with your first quest</p>
-              <p>Tap the glowing Job board to find work.</p>
-            </InfoBox>
+          <div className="absolute inset-x-0 bottom-3 z-[200] flex items-end justify-center gap-2 px-3 sm:gap-4">
+            <div className="w-20 sm:w-28 md:w-36 shrink-0 self-end"><Npc name="secretary" className="w-full" /></div>
+            {intro === 0 ? (
+              <InfoBox step={0} total={2} title="Hello there!" onNext={() => setIntro(1)} nextLabel="Next">
+                <p>Hi, I&apos;m your quest manager. I hand out every job in the guild.</p>
+                <p>This is your guild. You send your adventurers out on quests from here.</p>
+              </InfoBox>
+            ) : (
+              <InfoBox step={1} total={2} title="The job board" onBack={() => setIntro(0)} onNext={() => onAction("jobs")} nextLabel="Open job board">
+                <p>This is the job board. Every job is posted here for you to take.</p>
+                <p>Tap the glowing job board to find your first one.</p>
+              </InfoBox>
+            )}
           </div>
         )}
 
@@ -178,6 +188,12 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
               ) : (
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
+                  {step === 7 && (
+                    <div className="mb-3 flex items-end gap-3">
+                      <div className="w-14 shrink-0"><Npc name="secretary" className="w-full" /></div>
+                      <p className="text-lg text-paper">Here&apos;s a job for you. Take it, then head out to get it done.</p>
+                    </div>
+                  )}
                   <div className="pixel-box bg-panel p-3 text-xl text-paper">
                     <p className="uppercase text-leaf">First job · Guild</p>
                     <p>Kill a bat on Floor 1.</p>
