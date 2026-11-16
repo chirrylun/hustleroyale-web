@@ -70,3 +70,27 @@ For each character below, the gesture frames apply to all three rows; in the sid
 - Deliver as one PNG per character, transparent background if possible, otherwise the magenta (#FF00FF) background above and I will key it out.
 - If the generator cannot do exactly 6 frames, 4 frames is fine; I can use any count from 4 to 8 in a single row.
 - If it keeps adding a ground shadow or a different background, tell it: "no shadow, no floor, flat solid magenta only".
+
+## 5. Class Changer (Main Lobby, coming soon)
+
+> [three-facing format] A calm **guild class master** (a woman in her forties): a long deep-purple and teal robe with gold embroidery of crossed symbols (sword, staff, bow, shield) along the hem and sleeves, a small stack of folded tabards on her forearm, silver-streaked black hair in a long braid over one shoulder, kind sharp eyes, small round gold earrings, a ring of keys and a small brass emblem pendant at the belt. Row 1 front-facing; rows 2 and 3 in profile (the braid, the pendant and the stack of tabards clearly visible). One hand holds a **glowing blue-white class crystal** (a hexagonal gem, about the size of a fist) floating just above her open palm, the other hand relaxed at her side.
+>
+> Animation, 6 frames:
+> 1. Rest pose, crystal hovering above her palm.
+> 2. Crystal glows brighter (1-2 pixel sparkle), she tilts her head slightly.
+> 3. Crystal rises 2 pixels and its colour shifts from blue to gold.
+> 4. A tiny ring of light around the crystal, her free hand makes a small gesture as if offering a choice.
+> 5. Crystal settles back, colour returns to blue, she gives a small smile.
+> 6. Exhale, robe hem sways 1 pixel, back to the rest pose.
+
+## 6. Storage Keeper (Main Lobby, item storage)
+
+> [three-facing format] A sturdy, friendly **warehouse keeper** (a stocky middle-aged man): a brown leather work apron over a rolled-sleeve cream shirt and a dark green vest, heavy brown boots, a tool belt with a hammer and a lantern hook, a ring of large iron keys hanging at the hip, a flat tan cap, a thick brown moustache, ruddy cheeks. Row 1 front-facing; rows 2 and 3 in profile (the key ring and tool belt visible, a rolled receipt tucked behind his ear). He holds a **small wooden crate** (with a rope handle) against his hip with one arm, and a **tally ledger** in the other hand.
+>
+> Animation, 6 frames:
+> 1. Rest pose, crate on the hip, ledger down.
+> 2. Lifts the ledger a little and looks at it.
+> 3. Taps the ledger twice with a pencil (pencil moves 2 pixels), eyebrows up.
+> 4. Looks up and nods, keys jingle (swing 1 pixel).
+> 5. Hitches the crate higher with a small bounce.
+> 6. Settles, exhales, back to the rest pose.
