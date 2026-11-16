@@ -19,7 +19,6 @@ import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { BagMenu } from "@/components/floor/BagMenu";
-import { UiIcon } from "@/components/ui/UiIcon";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
@@ -34,7 +33,7 @@ const S = T; // one sprite-sized unit, in px
  */
 const VIEW_TILES = 15;
 const ZOOM_OUT = 0.5; // the furthest the player can pull back, as a fraction of the closest zoom
-const ZOOM_START = 0.8; // where each floor starts, as a fraction of the closest zoom
+const ZOOM_START = ZOOM_OUT; // each floor starts fully pulled back (the base view); wheel or pinch zooms in
 const ZOOM_CAP = 2.3; // never zoom in past this scale, even on a very wide screen
 const EDGE = 44; // px from the screen edge where the camera starts to scroll
 const SPEED = 3.1;
@@ -1178,17 +1177,11 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                 </span>
               </button>
             ))}
+            <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box flex h-12 w-12 items-center justify-center bg-night/90">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/ui/bag.png" alt="" className="h-8 w-8" draggable={false} />
+            </button>
           </div>
-        )}
-
-        {state === "play" && (
-          <button
-            type="button" aria-label="Bag" onClick={() => setBagOpen(true)}
-            onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
-            className="pixel-box absolute bottom-3 left-2 z-[9600] flex h-12 w-12 items-center justify-center bg-night/90"
-          >
-            <UiIcon name="bag" size={36} />
-          </button>
         )}
 
         {bagOpen && <BagMenu onClose={() => setBagOpen(false)} />}

@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -13,7 +14,6 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 type Tab = "items" | "journal";
 
 function ItemArt({ slug, size }: { slug: string; size: number }) {
-  // eslint-disable-next-line @next/next/no-img-element
   return <img src={itemImage(slug)} alt="" width={size} height={size} draggable={false} />;
 }
 
@@ -83,7 +83,7 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
           {tabs.map((t) => (
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
               className={`flex flex-1 items-center justify-center gap-2 px-2 py-1 text-xl uppercase ${tab === t.id ? "bg-gold text-ink" : "bg-panel text-paper"}`}>
-              <UiIcon name={t.icon} size={26} />
+              {t.icon === "bag" ? <img src="/ui/bag.png" alt="" width={26} height={26} draggable={false} /> : <UiIcon name="quest" size={26} />}
               {t.label}
               {!!t.n && <span className={`min-w-6 px-1 text-base ${tab === t.id ? "bg-ink/20" : "bg-night"}`}>{t.n}</span>}
             </button>
@@ -137,5 +137,5 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
 }
 
 function Empty({ icon, text }: { icon: "bag" | "quest"; text: string }) {
-  return <div className="flex h-40 flex-col items-center justify-center gap-2 text-xl uppercase text-paper/50"><UiIcon name={icon} size={56} className="opacity-40 grayscale" />{text}</div>;
+  return <div className="flex h-40 flex-col items-center justify-center gap-2 text-xl uppercase text-paper/50">{icon === "bag" ? <img src="/ui/bag.png" alt="" width={56} height={56} className="opacity-40 grayscale" draggable={false} /> : <UiIcon name="quest" size={56} className="opacity-40 grayscale" />}{text}</div>;
 }
