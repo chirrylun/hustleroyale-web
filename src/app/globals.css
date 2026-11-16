@@ -531,3 +531,8 @@ canvas,
 /* A job-complete note: pops in, stays a few seconds, fades out. */
 .job-toast { animation: job-toast 5s ease-out forwards; }
 @keyframes job-toast { 0% { opacity: 0; transform: translateY(-8px); } 8% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* NPC idle loops: a strip of frames stepped across a box one frame wide (--fw). */
+@keyframes npc-idle { from { background-position-x: 0; } to { background-position-x: calc(var(--fw) * -6); } }
+.manager-idle { animation: npc-idle 2.4s steps(6) infinite; }
+@media (prefers-reduced-motion: reduce) { .manager-idle { animation: none; } }

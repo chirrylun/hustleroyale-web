@@ -58,6 +58,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
       setMsg(null);
       if (!(await saveStep(8))) return setMsg("Couldn't take the job. Try again.");
       setStep(8);
+      setPanel(null); // the adventure gate glows next
     });
   const claim = () =>
     start(async () => {
@@ -72,7 +73,12 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
       router.refresh();
     });
 
+  // Once the first job is taken, the adventure gate glows. After the player has been out, the job board glows again to hand it in.
+  const [wentOut, setWentOut] = useState(false);
+  useEffect(() => { try { setWentOut(localStorage.getItem("pocketrpg-first-job-out") === "1"); } catch { /* private mode: fine */ } }, []);
+
   const onAction = (a: string) => {
+    if (a === "adventure" && step === 8) { setWentOut(true); try { localStorage.setItem("pocketrpg-first-job-out", "1"); } catch { /* ignore */ } }
     if (a === "jobs") {
       if (step === 6) setTut(7);
       setPanel("jobs");
@@ -95,7 +101,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         <GuildHall
           fighters={fighters}
           onAction={onAction}
-          highlight={step === 6 ? "jobs" : undefined}
+          highlight={step === 6 ? "jobs" : step === 8 && !panel ? (wentOut ? "jobs" : "adventure") : undefined}
           isLocked={(group) => firstJobOpen && !OPEN_DURING_FIRST_JOB.includes(group)}
           onBlocked={() => { setPanel(null); setNotice(FIRST_JOB_NOTICE); }}
         />
@@ -106,6 +112,22 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
               <p>This is your guild. Your control your adventurers and send them on quests from here. Let's get started with your first quest</p>
               <p>Tap the glowing Job board to find work.</p>
             </InfoBox>
+          </div>
+        )}
+
+        {step === 8 && !panel && !notice && (
+          <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
+            {wentOut ? (
+              <InfoBox step={0} total={1} title="Back already?" onNext={() => onAction("jobs")} nextLabel="Open job board">
+                <p>If you beat the bat, hand in your job on the job board to get your reward.</p>
+                <p>Tap the glowing Job board.</p>
+              </InfoBox>
+            ) : (
+              <InfoBox step={0} total={1} title="Time to head out" onNext={() => onAction("adventure")} nextLabel="Open the gate">
+                <p>You took a job. Jobs are done out on the floors, so tap the glowing Adventure gate to go on quests.</p>
+                <p>Pick a floor and go find that bat.</p>
+              </InfoBox>
+            )}
           </div>
         )}
 
