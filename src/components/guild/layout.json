@@ -14,20 +14,20 @@
    "group": "adventure",
    "label": "Adventure",
    "x": 1.3,
-   "y": 2.088,
+   "y": 4.688,
    "w": 2.297,
    "h": 2.219,
    "foot": [
     1.415,
-    3.464,
+    6.064,
     3.482,
-    4.24
+    6.84
    ],
    "wall": false,
    "action": "adventure",
    "spot": [
     2.45,
-    5.4
+    8.1
    ],
    "emote": "\ud83d\uddfa"
   },
@@ -35,21 +35,21 @@
    "id": "board",
    "group": "jobs",
    "label": "Job Board",
-   "x": 4.3,
+   "x": 11.2,
    "y": 1.557,
    "w": 2.562,
    "h": 2.766,
    "foot": [
-    4.428,
+    11.328,
     3.272,
-    6.734,
+    13.634,
     4.24
    ],
    "wall": false,
    "action": "jobs",
    "spot": [
-    5.6,
-    5.4
+    11.2,
+    5.7
    ],
    "emote": "\ud83d\udcdc"
   },
@@ -71,26 +71,16 @@
   {
    "id": "banner_red",
    "group": "banner_red",
-   "x": 14.1,
+   "x": 15.3,
    "y": 2.15,
    "w": 0.859,
    "h": 2.25,
    "foot": [
-    14.36,
+    15.56,
     4.13,
-    14.7,
+    15.9,
     4.4
    ],
-   "wall": false
-  },
-  {
-   "id": "dog",
-   "group": "dog",
-   "x": 11.1,
-   "y": 4.75,
-   "w": 2.359,
-   "h": 1.25,
-   "foot": null,
    "wall": false
   },
   {
@@ -136,46 +126,6 @@
     5.9
    ],
    "emote": "\u2b06"
-  },
-  {
-   "id": "roundtable",
-   "group": "roundtable",
-   "x": 11.25,
-   "y": 7.075,
-   "w": 2.5,
-   "h": 2.125,
-   "foot": [
-    11.5,
-    7.71,
-    13.5,
-    8.99
-   ],
-   "wall": false,
-   "spot": [
-    12.5,
-    10.3
-   ],
-   "emote": "\ud83c\udf7a"
-  },
-  {
-   "id": "banquet",
-   "group": "banquet",
-   "x": 19.009,
-   "y": 7.756,
-   "w": 2.781,
-   "h": 1.844,
-   "foot": [
-    19.12,
-    8.4,
-    21.68,
-    9.42
-   ],
-   "wall": false,
-   "spot": [
-    20.4,
-    10.7
-   ],
-   "emote": "\ud83c\udf56"
   },
   {
    "id": "scarecrow",
@@ -240,22 +190,44 @@
     11.6
    ],
    "emote": "\ud83d\udde1\ufe0f"
+  },
+  {
+   "id": "trophy",
+   "group": "leaderboard",
+   "x": 4.3,
+   "y": 2.138,
+   "w": 2.484,
+   "h": 2.312,
+   "foot": [
+    4.402,
+    3.29,
+    6.682,
+    4.33
+   ],
+   "wall": false,
+   "href": "/leaderboard",
+   "spot": [
+    5.6,
+    5.4
+   ],
+   "emote": "\ud83c\udfc6",
+   "label": "Leaderboard"
   }
  ],
  "npcs": [
   {
    "id": "secretary",
    "npc": "secretary",
-   "x": 8.0,
-   "y": 5.0,
+   "x": 13.75,
+   "y": 4.95,
    "h": 2.75,
    "facing": "front",
    "action": "jobs",
    "foot": [
-    7.45,
-    4.65,
-    8.55,
-    5.02
+    13.2,
+    4.6,
+    14.3,
+    4.97
    ]
   }
  ]

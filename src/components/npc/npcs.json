@@ -18,5 +18,15 @@
   "w": 236,
   "h": 367,
   "rows": 1
+ },
+ "class_changer": {
+  "w": 190,
+  "h": 381,
+  "rows": 3
+ },
+ "storage_keeper": {
+  "w": 207,
+  "h": 334,
+  "rows": 3
  }
 }
