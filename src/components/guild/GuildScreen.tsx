@@ -118,13 +118,13 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         {step === 8 && !panel && !notice && (
           <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
             {wentOut ? (
-              <InfoBox step={0} total={1} title="Back already?" onNext={() => onAction("jobs")} nextLabel="Open job board">
-                <p>If you beat the bat, hand in your job on the job board to get your reward.</p>
+              <InfoBox step={0} total={1} title="Success!" onNext={() => onAction("jobs")} nextLabel="Open job board">
+                <p>You beat the bat, hand in your job on the job board to get your reward.</p>
                 <p>Tap the glowing Job board.</p>
               </InfoBox>
             ) : (
               <InfoBox step={0} total={1} title="Time to head out" onNext={() => onAction("adventure")} nextLabel="Open the gate">
-                <p>You took a job. Jobs are done out on the floors, so tap the glowing Adventure gate to go on quests.</p>
+                <p>You took the job successfully. Jobs are done out on the floors, so tap the glowing gate to go on quests.</p>
                 <p>Pick a floor and go find that bat.</p>
               </InfoBox>
             )}
