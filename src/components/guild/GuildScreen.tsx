@@ -114,7 +114,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         />
 
         {step === 6 && !panel && (
-          <div className="absolute inset-x-0 bottom-3 z-[200] flex items-end justify-center gap-2 px-3 sm:gap-4">
+          <div className="fixed inset-x-0 bottom-3 z-[200] short:bottom-1.5 flex items-end justify-center gap-2 px-3 sm:gap-4">
             {intro === 0 ? (
               <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20 short:w-12" />} step={0} total={2} title="Hello there!" onNext={() => setIntro(1)} nextLabel="Next">
                 <p>Hi, I&apos;m your quest manager. I hand out every job in the guild.</p>
@@ -130,7 +130,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         )}
 
         {step === 8 && !panel && !notice && (
-          <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
+          <div className="fixed inset-x-0 bottom-3 z-[200] short:bottom-1.5 flex justify-center px-3">
             {jobDone ? (
               <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20 short:w-12" />} step={0} total={1} title="Success!" onNext={() => onAction("jobs")} nextLabel="Open job board">
                 <p>You beat the bat, hand in your job on the job board to get your reward.</p>
@@ -146,7 +146,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         )}
 
         {notice && !panel && (
-          <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
+          <div className="fixed inset-x-0 bottom-3 z-[200] short:bottom-1.5 flex justify-center px-3">
             <div role="alert" className="pixel-box card-reveal flex w-full max-w-xl items-center justify-between gap-3 bg-night p-4 text-xl text-paper">
               <p>{notice}</p>
               <PixelButton variant="ghost" className="shrink-0 text-base" onClick={() => setNotice(null)}>OK</PixelButton>
@@ -155,7 +155,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         )}
 
         {panel && (
-          <div className="absolute inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3 short:p-2">
             <div className="pixel-box card-reveal max-h-[94dvh] w-full max-w-lg overflow-y-auto bg-night p-5 short:max-w-2xl short:p-3">
               {panel === "lobby" ? (
                 <PartyPanel fighters={fighters} kicker="Meet other players" title="Main Lobby" goLabel="Enter the lobby" startWithOne onBack={() => setPanel(null)} onGo={() => router.push("/lobby")} />

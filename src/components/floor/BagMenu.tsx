@@ -77,8 +77,8 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-3" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()}>
-      <div role="dialog" aria-modal="true" aria-label="Bag" className="pixel-box flex max-h-full w-full max-w-md flex-col bg-night">
+    <div className="fixed inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-3 short:p-2" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label="Bag" className="pixel-box flex max-h-full w-full max-w-md flex-col bg-night short:max-w-2xl">
         <div className="flex items-stretch gap-1 border-b-2 border-steel p-2">
           {tabs.map((t) => (
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
@@ -91,29 +91,33 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
           <button type="button" aria-label="Close" onClick={onClose} className="w-10 bg-panel text-2xl text-paper">✕</button>
         </div>
 
-        <div className="min-h-48 overflow-y-auto p-3">
+        <div className="min-h-48 short:min-h-24 overflow-y-auto p-3 short:p-2">
           {error ? <p role="alert" className="text-xl text-ember">Couldn&apos;t open your bag. Try again.</p>
             : (tab === "items" ? items : jobs) === null ? <div className="h-40 animate-pulse bg-panel" aria-busy="true" />
             : tab === "items" ? (
               items!.length === 0 ? <Empty icon="bag" text="Nothing yet" /> : (
-                <ul className="grid grid-cols-3 gap-x-2 gap-y-3 sm:grid-cols-4">
+                <ul className="grid grid-cols-4 gap-x-1.5 gap-y-2 sm:grid-cols-6 short:grid-cols-8">
                   {items!.map((i) => (
                     <li key={i.slug} className="flex min-w-0 flex-col items-center gap-1">
                       <div className={`relative flex aspect-square w-full items-center justify-center border-2 bg-panel ${RARITY[i.rarity]?.ring ?? "border-steel"}`}>
-                        <ItemArt slug={i.slug} size={48} />
-                        <span className="absolute bottom-0 right-0 bg-ink/80 px-1 text-lg leading-5 text-paper">{i.qty}</span>
+                        <ItemArt slug={i.slug} size={36} />
+                        <span className="absolute bottom-0 right-0 bg-ink/80 px-1 text-sm leading-4 text-paper">{i.qty}</span>
                       </div>
-                      <span className={`w-full text-center text-base leading-4 ${RARITY[i.rarity]?.text ?? "text-paper"}`}>{i.name}</span>
+                      <span className={`w-full text-center text-sm leading-3 ${RARITY[i.rarity]?.text ?? "text-paper"}`}>{i.name}</span>
                     </li>
                   ))}
                 </ul>
               )
             ) : jobs!.length === 0 ? <Empty icon="quest" text="No jobs taken" /> : (
-              <ul className="flex flex-col gap-3">
-                {jobs!.map((j) => (
+              <div className="flex flex-col gap-3">
+                {([["Ongoing", jobs!.filter((j) => !j.done)], ["Completed", jobs!.filter((j) => j.done)]] as [string, Job[]][]).filter(([, l]) => l.length > 0).map(([label, list]) => (
+                  <section key={label}>
+                    <h3 className="mb-1 text-base uppercase text-steel">{label} · {list.length}</h3>
+                    <ul className="flex flex-col gap-2">
+                {list.map((j) => (
                   <li key={j.slug} className={`border-2 bg-panel p-2 ${j.done ? "border-leaf" : "border-steel"}`}>
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-xl uppercase text-paper">{j.title}</h3>
+                      <h4 className="text-xl uppercase text-paper short:text-lg">{j.title}</h4>
                       {j.done ? <span className="text-lg text-leaf">✓ Done</span> : <span className="flex items-center gap-1 text-base text-gold"><UiIcon name="coins" size={20} />{j.coins}</span>}
                     </div>
                     <ul className="mt-1 flex flex-col gap-1">
@@ -128,7 +132,10 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
                     </ul>
                   </li>
                 ))}
-              </ul>
+                    </ul>
+                  </section>
+                ))}
+              </div>
             )}
         </div>
       </div>
