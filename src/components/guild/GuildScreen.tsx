@@ -114,12 +114,12 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
             {intro === 0 ? (
               <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={0} total={2} title="Hello there!" onNext={() => setIntro(1)} nextLabel="Next">
                 <p>Hi, I&apos;m your quest manager. I hand out every job in the guild.</p>
-                <p>This is your guild. You send your adventurers out on quests from here.</p>
+                <p>This is your guild. You manage your adventurers and send them out on quests from here.</p>
               </InfoBox>
             ) : (
               <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={1} total={2} title="The job board" onBack={() => setIntro(0)} onNext={() => onAction("jobs")} nextLabel="Open job board">
-                <p>This is the job board. Every job is posted here for you to take.</p>
-                <p>Tap the glowing job board to find your first one.</p>
+                <p>This is the job board. Jobs are posted here by other real players, people that need your help or from The Adventurer's Council.</p>
+                <p>Tap the glowing job board when you want to take a job. Let's start with your first one.</p>
               </InfoBox>
             )}
           </div>
@@ -134,8 +134,8 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
               </InfoBox>
             ) : (
               <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={0} total={1} title="Time to head out" onNext={() => onAction("adventure")} nextLabel="Open the gate">
-                <p>You took the job successfully. Jobs are done out on the floors, so tap the glowing gate to go on quests.</p>
-                <p>Pick a floor and go find that bat.</p>
+                <p>You took the job successfully. Jobs are done out on the floors, so tap the glowing map to go on quests.</p>
+                <p>Pick floor 1, choose your fighters and go find that bat.</p>
               </InfoBox>
             )}
           </div>
@@ -179,7 +179,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
               ) : step === 9 ? (
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
-                  <p className="text-xl text-paper">You completed your first job! More jobs are posted here by other players and NPCs that need your help. You can also post jobs on the board for other players to complete.</p>
+                  <p className="text-xl text-paper">You completed your first job! More jobs are posted here by other players, NPCs that need your help or special requests with extra rewards. You can also post jobs on the board for other players to complete with how much you're willing to pay for completing it successfully.</p>
                   <div className="mt-4"><PixelButton onClick={() => setTut(10)}>Open the job board</PixelButton></div>
                 </>
               ) : step < 7 ? (
