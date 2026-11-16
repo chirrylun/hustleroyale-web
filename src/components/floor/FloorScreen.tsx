@@ -10,10 +10,10 @@ import { FX_COLS, FX_ROWS, mobScale } from "@/lib/sprites/designs";
 import { artOf, type FxArt } from "@/lib/skill-art";
 import type { GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
-import { findPath, buildNav, clearLine, nearestWalkable, walkable, standable, type Pt } from "@/lib/guild-nav";
+import { findPath, buildNav, clearLine, nearestRoomy, nearestWalkable, roomy, walkable, standable, type Pt } from "@/lib/guild-nav";
 import type { Stance } from "@/lib/battle";
 import { clearExpedition, partySig, readExpedition, writeExpedition } from "@/lib/world/expedition";
-import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal, sway } from "@/lib/world/stance";
+import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal } from "@/lib/world/stance";
 import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
 import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
@@ -88,7 +88,7 @@ const toFSkill = (s: EquippedSkill): FSkill => {
 const makeAg = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "name" | "level" | "x" | "y" | "hp" | "atk" | "def" | "kind">): Ag => ({
   role: "dps", max: p.hp, magic: 0, skills: [], en: 0, maxEn: 0, regen: 0, gcd: 0, shield: 0, shieldUntil: 0, buffUntil: 0, weakUntil: 0, dodge: 0, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false, provoked: false,
   look: { rest: "idle", flip: false, act: null, n: 0 }, side,
-  slot: 0, speedMul: 1, delay: 0, sway: [0, 0], swayAt: 0, angle: Math.random() * Math.PI * 2, home: [p.x, p.y, 2], wanderAt: 0, born: -1e9, deadAt: 0,
+  slot: 0, speedMul: 1, nudgeAt: -1, nudging: false, delay: 0, sway: [0, 0], swayAt: 0, angle: Math.random() * Math.PI * 2, home: [p.x, p.y, 2], wanderAt: 0, born: -1e9, deadAt: 0,
   movedAt: 0, skipId: "", skipUntil: 0,
   ...p,
 });
@@ -131,6 +131,8 @@ interface Ag {
   slot: number;
   /** Walking pace relative to the others, so a group never moves in lockstep. */
   speedMul: number;
+  /** Idle fidget: now and then a standing fighter shuffles a step or two, slowly, then stands again. */
+  nudgeAt: number; nudging: boolean;
   /** Allies: a short reaction delay before setting off when told to move (seconds). */
   delay: number;
   /** Allies: a small, slowly changing drift from their slot, so the formation stays loose. */
@@ -373,7 +375,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       return best;
     };
     foes.current = floor.mobs.map((m) => {
-      const [mx, my] = nearestWalkable(nav, m.x, m.y);
+      const [mx, my] = nearestRoomy(nav, m.x, m.y);
       return makeAg("foe", {
         id: `m${m.id}`, sprite: m.sprite, name: m.kind, level: m.level, x: mx, y: my, hp: m.hp, atk: m.atk, def: m.def, boss: m.boss, kind: m.kind,
         home: m.boss ? [mx, my, 1.5] : zoneOf(mx, my), wanderAt: rnd(0, 3000), speedMul: rnd(0.9, 1.1),
@@ -513,7 +515,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const paid = (data: unknown, kind: string, boss: boolean) => {
     showXp(data); noteKill(data as never);
     // The tutorial job is finished by the first bat; it gets the same banner as every other job.
-    if (tutorialStep === 8 && floor.n === 1 && kind === "bat" && !boss && !firstDone.current) { firstDone.current = true; setFirstJobDone(true); showToast("Job complete: First job. Hand it in at the job board."); }
+    if (tutorialStep === 8 && floor.n === 1 && kind === "bat" && !boss && !firstDone.current) { firstDone.current = true; setFirstJobDone(true); try { localStorage.setItem("pocketrpg-first-job-done", "1"); } catch { /* ignore */ } showToast("Job complete: First job. Hand it in at the job board."); }
   };
   const killReport = (m: Ag) => sendKill({ floor: floor.n, kind: m.kind, level: m.level, boss: m.boss }, (data) => paid(data, m.kind, m.boss));
 
@@ -633,7 +635,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         const z = floor.zones[Math.floor(Math.random() * floor.zones.length)];
         const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * Math.max(0.6, z[2] - 1);
         const x = z[0] + Math.cos(ang) * d, y = z[1] + Math.sin(ang) * d * 0.7;
-        if (!standable(nav, x, y)) continue;
+        if (!roomy(nav, x, y)) continue;
         const away = n < 9 ? 10 : 6;
         if (A.some((a) => !a.dead && dist(a, { x, y }) < away)) continue;
         if (F.some((f) => !f.dead && Math.hypot(f.x - x, f.y - y) < 1.6)) continue;
@@ -714,9 +716,22 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             // eases toward its slot and drifts a little, slowly and smoothly, instead of twitching.
             const ref: Pt = hold ? spot : [lead.x, lead.y];
             const off = formationOffset(i, aliveA.length, pr.heading, 1);
-            const w = sway(a.slot * 2.1 + a.speedMul * 6, now);
-            const want: Pt = [ref[0] + off[0] + w[0], ref[1] + off[1] + w[1]];
+            const want: Pt = [ref[0] + off[0], ref[1] + off[1]];
             const d = Math.hypot(want[0] - a.x, want[1] - a.y);
+            // A little fidget: mostly they stand in their idle pose, and only now and then take a slow step or two.
+            if (a.nudging) {
+              if (d > START_MOVING + 0.3) { a.nudging = false; a.path = []; }
+              else { step(a, dt, spd * 0.3); if (!a.path.length) a.nudging = false; return; }
+            }
+            if (!a.path.length && d <= START_MOVING) {
+              if (a.nudgeAt < 0) a.nudgeAt = now + rnd(5000, 14000);
+              else if (now >= a.nudgeAt) {
+                a.nudgeAt = now + rnd(9000, 20000);
+                const ang = Math.random() * Math.PI * 2, r = 0.25 + Math.random() * 0.35;
+                const to: Pt = [a.x + Math.cos(ang) * r, a.y + Math.sin(ang) * r];
+                if (walkable(nav, to[0], to[1]) && clearLine(nav, [a.x, a.y], to)) { a.path = [to]; a.nudging = true; return; }
+              }
+            }
             if (d > (a.path.length ? STOP_MOVING : START_MOVING)) {
               if (a.repath <= 0 || !a.path.length) {
                 const me: Pt = [a.x, a.y];
@@ -728,7 +743,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           } else if (stanceRef.current === "neutral") {
             // The leader strolls a few tiles toward the mobs, rests, then strolls again; the others flow along behind.
             if (a.path.length) { pr.strolling = true; step(a, dt, spd * STROLL_SPEED); }
-            else if (pr.strolling) { pr.strolling = false; pr.strollAt = now + rnd(4500, 9000); }
+            else if (pr.strolling) { pr.strolling = false; pr.strollAt = now + rnd(9000, 18000); }
             else if (pr.strollAt < 0) pr.strollAt = now + 2500;
             else if (now >= pr.strollAt) {
               a.path = findPath(nav, [a.x, a.y], strollGoal(nav, [a.x, a.y], floor.zones));
@@ -756,7 +771,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             else if (f.wanderAt === Infinity) f.wanderAt = now + rnd(w.rest[0], w.rest[1]) * 1000;
             else if (now >= f.wanderAt) {
               const rad = f.home[2] * 0.85, ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * rad;
-              const to = nearestWalkable(nav, f.home[0] + Math.cos(ang) * d, f.home[1] + Math.sin(ang) * d * 0.7);
+              const to = nearestRoomy(nav, f.home[0] + Math.cos(ang) * d, f.home[1] + Math.sin(ang) * d * 0.7);
               f.path = findPath(nav, [f.x, f.y], to);
               f.wanderAt = f.path.length ? Infinity : now + 2000;
             }
