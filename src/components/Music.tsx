@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import { isMuted } from "@/lib/sfx";
 
-export type Track = "intro" | "guild" | "arena" | "boss" | "floors-1" | "floors-2";
-const VOLUME: Record<Track, number> = { intro: 0.4, guild: 0.35, arena: 0.35, boss: 0.4, "floors-1": 0.3, "floors-2": 0.3 };
+export type Track = "intro" | "guild" | "lobby" | "market" | "arena" | "boss" | "floors-1" | "floors-2";
+const VOLUME: Record<Track, number> = { intro: 0.4, guild: 0.35, lobby: 0.35, market: 0.35, arena: 0.35, boss: 0.4, "floors-1": 0.3, "floors-2": 0.3 };
 
 /** The floor song for a floor number: 1-9 and 11-19 have their own; boss floors (10, 20, ...) use the boss song. */
 export const floorTrack = (n: number, boss: boolean): Track => (boss ? "boss" : n < 10 ? "floors-1" : "floors-2");
