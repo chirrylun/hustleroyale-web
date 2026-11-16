@@ -14,4 +14,5 @@ export const RARITY: Record<string, { ring: string; text: string; label: string 
 };
 
 /** "goblin_ear" -> "Goblin Ear" (the drop slugs are their names). */
-export const itemName = (slug: string) => slug.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+const NAMES: Record<string, string> = { hp_potion: "Health Potion", mp_potion: "Mana Potion" };
+export const itemName = (slug: string) => NAMES[slug] ?? slug.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");

@@ -1,5 +1,6 @@
 "use client";
 
+import { BagButton } from "@/components/floor/BagButton";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
@@ -255,6 +256,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
 
   return (
     <div className="relative flex h-dvh w-full flex-col bg-ink">
+      <BagButton />
       <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper">
         <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>
         <div className="min-w-0 flex-1 leading-tight">

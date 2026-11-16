@@ -1,5 +1,6 @@
 "use client";
 
+import { BagButton } from "@/components/floor/BagButton";
 import { Music } from "@/components/Music";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -101,6 +102,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
       </header>
 
       <div className="pixel-box relative overflow-hidden bg-night">
+        <BagButton />
         <GuildHall
           fighters={fighters}
           onAction={onAction}
