@@ -12,3 +12,6 @@ export const RARITY: Record<string, { ring: string; text: string; label: string 
   rare: { ring: "border-sky", text: "text-sky", label: "Rare" },
   legendary: { ring: "border-gold", text: "text-gold", label: "Legendary" },
 };
+
+/** "goblin_ear" -> "Goblin Ear" (the drop slugs are their names). */
+export const itemName = (slug: string) => slug.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { FighterSprite } from "@/components/sprites/FighterSprite";
+import { HealthTag } from "./HealthTag";
 import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, randomWalkable, type Pt } from "@/lib/guild-nav";
 import layout from "./layout.json";
@@ -264,6 +265,7 @@ export function GuildHall({
           >
             <span className="pointer-events-none absolute bottom-[8%] left-1/2 h-[7%] w-[34%] -translate-x-1/2 rounded-full bg-ink/40" />
             {sel && <span className="absolute bottom-[6%] left-1/2 h-[11%] w-[44%] -translate-x-1/2 rounded-full border-2 border-gold bg-gold/20" />}
+            <HealthTag f={f} />
             <span className="pointer-events-none absolute left-1/2 top-[21%] -translate-x-1/2 whitespace-nowrap bg-ink/80 px-1 text-[clamp(9px,1.3cqw,15px)] text-paper">Lv {f.level}</span>
             {look.emote && <span className="pointer-events-none absolute left-[62%] top-[6%] text-[clamp(12px,2.2cqw,26px)] leading-none">{look.emote}</span>}
             <FighterSprite

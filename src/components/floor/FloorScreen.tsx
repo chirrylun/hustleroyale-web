@@ -19,6 +19,7 @@ import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { BagMenu } from "@/components/floor/BagMenu";
+import { itemName } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
@@ -269,20 +270,24 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   }
   const jobs = useRef<JobState | null>(null);
   /** Tells the player the moment a job they took is finished (only then, and only for a few seconds). */
-  const checkJobs = () => {
+  const checkJobs = (delayMs = 0) => {
     const j = jobs.current;
     if (!j) return;
     for (const q of j.quests) {
       if (j.done.has(q.slug) || !q.objs.length) continue;
-      if (q.objs.every((o) => j.have(q.slug, o, j.reached) >= o.qty)) { j.done.add(q.slug); showToast(`Job complete: ${q.title}. Hand it in at the job board.`); }
+      if (q.objs.every((o) => j.have(q.slug, o, j.reached) >= o.qty)) { j.done.add(q.slug); const text = `Job complete: ${q.title}. Hand it in at the job board.`; if (delayMs) setTimeout(() => showToast(text), delayMs); else showToast(text); }
     }
   };
   const noteKill = (res: { quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[] } | null) => {
+    if (!res) return;
+    // A drop is announced like a finished job; if the same kill also finishes a job, that banner follows it.
+    const got = (res.drops ?? []).filter((d) => d.qty > 0);
+    if (got.length) showToast(`You got ${got.length === 1 ? "an item" : "items"}: ${got.map((d) => `${itemName(d.slug)} x${d.qty}`).join(", ")}`);
     const j = jobs.current;
-    if (!j || !res) return;
+    if (!j) return;
     for (const u of res.quests ?? []) j.prog[`${u.slug}:${u.idx}`] = u.progress;
     for (const d of res.drops ?? []) j.items[d.slug] = (j.items[d.slug] ?? 0) + d.qty;
-    checkJobs();
+    checkJobs(got.length ? 2600 : 0);
   };
 
   // Supabase calls only run once awaited, so this is an async block.

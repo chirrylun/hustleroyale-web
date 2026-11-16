@@ -96,14 +96,14 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
             : (tab === "items" ? items : jobs) === null ? <div className="h-40 animate-pulse bg-panel" aria-busy="true" />
             : tab === "items" ? (
               items!.length === 0 ? <Empty icon="bag" text="Nothing yet" /> : (
-                <ul className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                <ul className="grid grid-cols-3 gap-x-2 gap-y-3 sm:grid-cols-4">
                   {items!.map((i) => (
-                    <li key={i.slug} title={`${i.name} · ${RARITY[i.rarity]?.label ?? ""}`} className={`group relative flex aspect-square flex-col items-center justify-center border-2 bg-panel ${RARITY[i.rarity]?.ring ?? "border-steel"}`}>
-                      <ItemArt slug={i.slug} size={48} />
-                      <span className="absolute bottom-0 right-0 bg-ink/80 px-1 text-lg leading-5 text-paper">{i.qty}</span>
-                      <span className="pointer-events-none absolute -top-1 left-1/2 z-10 hidden -translate-x-1/2 -translate-y-full whitespace-nowrap bg-ink px-2 py-1 text-base uppercase group-hover:block">
-                        {i.name}<span className={`block text-sm normal-case ${RARITY[i.rarity]?.text}`}>{RARITY[i.rarity]?.label}</span>
-                      </span>
+                    <li key={i.slug} className="flex min-w-0 flex-col items-center gap-1">
+                      <div className={`relative flex aspect-square w-full items-center justify-center border-2 bg-panel ${RARITY[i.rarity]?.ring ?? "border-steel"}`}>
+                        <ItemArt slug={i.slug} size={48} />
+                        <span className="absolute bottom-0 right-0 bg-ink/80 px-1 text-lg leading-5 text-paper">{i.qty}</span>
+                      </div>
+                      <span className={`w-full text-center text-base leading-4 ${RARITY[i.rarity]?.text ?? "text-paper"}`}>{i.name}</span>
                     </li>
                   ))}
                 </ul>
