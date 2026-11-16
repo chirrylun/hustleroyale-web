@@ -6,7 +6,7 @@ Four idle-animation sheets for the guild hall and the tutorial. Same pixel-art l
 
 > 2D pixel-art sprite sheet in the style of Chained Echoes and 16-bit JRPGs (SNES era, modern polish). One character, **facing the camera (front view, centred)**, standing idle. **One horizontal row of 6 animation frames**, evenly spaced in equal square cells, total canvas 1254 x 209 px (each cell 209 x 209). The character is the **same size in every frame** (about 150 px tall), **feet on the same baseline in every frame**, and the same horizontal centre in every frame, so the loop does not jitter. Plain flat **magenta (#FF00FF) background**, no shadows, no ground, no text, no border, no frame numbers. Crisp hard pixel edges, no anti-aliasing, no blur, no gradients over the background. Limited rich palette, 1-pixel dark outline in a darker shade of each colour (not pure black), soft top-left lighting, gentle cel shading. Same proportions as a chunky 2.5-head-tall JRPG field sprite with a slightly oversized head. The six frames loop seamlessly (frame 6 flows back into frame 1).
 
-## 1. Guild Manager (tutorial guide, "Professor Oak" role)
+## 1. Guild Manager (tutorial guide, single row, front-facing only)
 
 > [shared format] A veteran **guild manager** dressed like a paladin: polished silver plate armour with gold trim, a deep blue tabard with the guild crest (a small gold shield) on the chest, a short blue cape behind the shoulders, steel gauntlets and greaves, brown leather belt. Older, kind and confident: weathered friendly face, short grey-brown hair and a neat grey beard, no helmet (helmet clipped to the belt). He stands **front-facing, relaxed upright posture**, holding a **large flanged mace in both hands in front of him with the mace head resting on the ground** between his boots, hands stacked on top of the handle, like a knight leaning on his weapon.
 >
@@ -19,9 +19,18 @@ Four idle-animation sheets for the guild hall and the tutorial. Same pixel-art l
 > 6. Exhale, shoulders drop a pixel, cape sways a pixel, head returns to centre (matches frame 1).
 > The mace head never leaves the ground.
 
+
+## Shared format for the Merchant, Secretary and Gladiator (3 rows: front, left, right)
+
+> 2D pixel-art sprite sheet in the style of Chained Echoes and 16-bit JRPGs (SNES era, modern polish). One character shown in **three facings, one per row, 3 rows x 6 columns = 18 frames** in equal square cells, total canvas 1254 x 627 px (each cell 209 x 209).
+> **Row 1: facing the camera (front view).** **Row 2: facing LEFT (side view, character's nose pointing to the left edge).** **Row 3: facing RIGHT (side view, nose pointing to the right edge)**. Row 3 is a mirror-quality match of row 2 (same design, same colours, same animation, held items swapped to the correct hand so it reads naturally).
+> Each row is a 6-frame idle loop of the same gesture. The character is the **same size in every frame of every row** (about 150 px tall), **feet on the same baseline** and the same horizontal centre in every cell, so switching facing or looping does not jitter. Plain flat **magenta (#FF00FF) background**, no shadows, no ground, no text, no border, no frame numbers. Crisp hard pixel edges, no anti-aliasing, no blur. Limited rich palette, 1px dark outline in a darker shade of each colour (not pure black), soft top-left lighting, gentle cel shading. Chunky JRPG field-sprite proportions with a slightly oversized head. Frame 6 flows back into frame 1.
+
+For each character below, the gesture frames apply to all three rows; in the side rows the same actions are seen in profile.
+
 ## 2. Merchant (beside the market)
 
-> [shared format] A cheerful **travelling merchant** in a green and tan layered outfit: a wide-brimmed brown felt hat with a feather, a dark green vest over a cream shirt with rolled sleeves, a brown apron with pockets, leather gloves, a big brown backpack stuffed with a rolled map, a bundle of cloth and hanging pots, a coin pouch on the belt. Round friendly face, a short moustache, rosy cheeks. Stands **front-facing**, one hand holding a small **glass potion bottle** up at chest height, the other hand resting on his hip.
+> [three-facing format] A cheerful **travelling merchant** in a green and tan layered outfit: a wide-brimmed brown felt hat with a feather, a dark green vest over a cream shirt with rolled sleeves, a brown apron with pockets, leather gloves, a big brown backpack stuffed with a rolled map, a bundle of cloth and hanging pots, a coin pouch on the belt. Round friendly face, a short moustache, rosy cheeks. Row 1 front-facing; rows 2 and 3 in profile (the backpack and its hanging pots are clearly visible from the side, the hat feather points backwards). One hand holding a small **glass potion bottle** up at chest height, the other hand resting on his hip.
 >
 > Animation, 6 frames, salesman idle:
 > 1. Rest pose, potion at chest height.
@@ -33,7 +42,7 @@ Four idle-animation sheets for the guild hall and the tutorial. Same pixel-art l
 
 ## 3. Guild Secretary (beside the job board)
 
-> [shared format] A neat, bright **guild secretary** (woman): a navy blue guild uniform jacket with gold buttons and a white collar, a long dark skirt, brown boots, a small blue ribbon in her hair, pinned brown hair in a bun, round glasses. A leather satchel on her hip and a **quill pen behind her ear**. Stands **front-facing**, holding a **clipboard with parchment** (visible lines of writing) in one arm against her chest, a **quill pen in the other hand**.
+> [three-facing format] A neat, bright **guild secretary** (woman): a navy blue guild uniform jacket with gold buttons and a white collar, a long dark skirt, brown boots, a small blue ribbon in her hair, pinned brown hair in a bun, round glasses. A leather satchel on her hip and a **quill pen behind her ear**. Row 1 front-facing; rows 2 and 3 in profile (the bun, satchel and quill behind the ear are visible from the side). Holding a **clipboard with parchment** (visible lines of writing) in one arm against her chest, a **quill pen in the other hand**.
 >
 > Animation, 6 frames, busy-but-welcoming idle:
 > 1. Rest pose, quill raised near the page.
@@ -45,7 +54,7 @@ Four idle-animation sheets for the guild hall and the tutorial. Same pixel-art l
 
 ## 4. Gladiator (beside the arena)
 
-> [shared format] A tough **arena gladiator**: muscular, tanned skin, a shaved head with a short dark beard and a scar over one eye. Bronze **segmentata shoulder guard on one shoulder only**, a leather harness across the chest, a red sash and red waist cloth over a leather skirt (pteruges), bronze greaves and wrapped leather sandals, a bronze arm guard, a dented bronze round shield strapped to his back. Stands **front-facing, wide stance, arms crossed** on his chest, a short **gladius sword hanging at his belt** and a small red plume on the shoulder guard.
+> [three-facing format] A tough **arena gladiator**: muscular, tanned skin, a shaved head with a short dark beard and a scar over one eye. Bronze **segmentata shoulder guard on one shoulder only**, a leather harness across the chest, a red sash and red waist cloth over a leather skirt (pteruges), bronze greaves and wrapped leather sandals, a bronze arm guard, a dented bronze round shield strapped to his back. Row 1 front-facing; rows 2 and 3 in profile (the shield on his back, the one-sided shoulder guard and the plume are visible from the side). Wide stance, **arms crossed** on his chest, a short **gladius sword hanging at his belt** and a small red plume on the shoulder guard.
 >
 > Animation, 6 frames, proud and restless idle:
 > 1. Rest pose, arms crossed, wide stance.
@@ -57,6 +66,7 @@ Four idle-animation sheets for the guild hall and the tutorial. Same pixel-art l
 
 ## Export notes
 
+- Manager: one PNG, 1 row. Merchant, Secretary, Gladiator: one PNG each, 3 rows (front, left, right).
 - Deliver as one PNG per character, transparent background if possible, otherwise the magenta (#FF00FF) background above and I will key it out.
 - If the generator cannot do exactly 6 frames, 4 frames is fine; I can use any count from 4 to 8 in a single row.
 - If it keeps adding a ground shadow or a different background, tell it: "no shadow, no floor, flat solid magenta only".
