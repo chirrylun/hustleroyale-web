@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/layout/ComingSoon";
+import { MarketRoom } from "@/components/market/MarketRoom";
 
 export default function Page() {
-  return <ComingSoon title="Marketplace" text="Here you will buy and sell fighters with other players." />;
+  return <MarketRoom />;
 }

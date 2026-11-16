@@ -12,17 +12,23 @@ const PARTY_MAX = 3;
 const ROLE_LABEL = { tank: "Tank", healer: "Healer", dps: "Damage" } as const;
 
 /** Pick who goes out, right in the guild. Heading out saves the party as the player's team (XP goes to them), then the floor loads. */
-export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: number; fighters: GuildFighter[]; onBack: () => void; onGo: () => void }) {
+export function PartyPanel({ floorNo, fighters, onBack, onGo, title, kicker, goLabel, startWithOne = false }: {
+  floorNo?: number; fighters: GuildFighter[]; onBack: () => void; onGo: (ids: string[]) => void;
+  /** Heading, small line above it and the go button's words, for places that aren't a floor (the lobby). */
+  title?: string; kicker?: string; goLabel?: string;
+  /** Begin with a single fighter chosen instead of the whole team. */
+  startWithOne?: boolean;
+}) {
   // Start from the current team (or the strongest fighters if none is set).
   const [ids, setIds] = useState<string[]>(() => {
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => a.team_slot - b.team_slot).map((f) => f.id);
-    return (team.length ? team : [...fighters].sort((a, b) => b.level - a.level).map((f) => f.id)).slice(0, PARTY_MAX);
+    return (team.length ? team : [...fighters].sort((a, b) => b.level - a.level).map((f) => f.id)).slice(0, startWithOne ? 1 : PARTY_MAX);
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const byId = useMemo(() => new Map(fighters.map((f) => [f.id, f])), [fighters]);
   const chosen = ids.map((id) => byId.get(id)!).filter(Boolean);
-  const theme = themeOf(floorNo);
+  const theme = floorNo ? themeOf(floorNo) : null;
   const full = ids.length >= PARTY_MAX;
   // Resting in the guild heals everyone, so the bars fill while you watch.
   const [now, setNow] = useState(() => Date.now());
@@ -37,15 +43,15 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
     setBusy(true); setError(null);
     const { error: e } = await createClient().rpc("set_party", { p_ids: ids });
     if (e) { setError("Couldn't set your party. Try again."); setBusy(false); return; }
-    onGo();
+    onGo(ids);
   };
 
   return (
     <div className="flex flex-col gap-4">
       <header className="flex items-end justify-between gap-2">
         <div>
-          <p className="text-base uppercase leading-none text-steel">{theme.name}</p>
-          <h1 className="text-3xl uppercase leading-tight text-gold">Floor {floorNo}{isBossFloor(floorNo) && " · Boss"}</h1>
+          <p className="text-base uppercase leading-none text-steel">{theme?.name ?? kicker}</p>
+          <h1 className="text-3xl uppercase leading-tight text-gold">{floorNo ? <>Floor {floorNo}{isBossFloor(floorNo) && " · Boss"}</> : title}</h1>
         </div>
         <p className="pb-1 text-lg text-steel">{chosen.length}/{PARTY_MAX} going</p>
       </header>
@@ -105,7 +111,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo }: { floorNo: numbe
 
       <div className="flex gap-2">
         <PixelButton variant="ghost" className="flex-none" onClick={onBack}>Back</PixelButton>
-        <PixelButton className="flex-1 text-xl" disabled={!chosen.length || busy} onClick={go}>{busy ? "…" : `Head out to Floor ${floorNo}`}</PixelButton>
+        <PixelButton className="flex-1 text-xl" disabled={!chosen.length || busy} onClick={go}>{busy ? "…" : goLabel ?? `Head out to Floor ${floorNo}`}</PixelButton>
       </div>
     </div>
   );
