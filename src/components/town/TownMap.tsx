@@ -257,7 +257,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
   return (
     <div className="relative flex h-dvh w-full flex-col bg-ink">
       <BagButton />
-      <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper">
+      <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper short:gap-2 short:py-1">
         <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-lg uppercase text-gold">{town.title}</p>

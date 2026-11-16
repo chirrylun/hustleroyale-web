@@ -1245,13 +1245,13 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         {state === "play" && (
           <div
             role="group" aria-label="Party behaviour"
-            className="absolute left-2 top-1/2 z-[9600] flex -translate-y-1/2 flex-col gap-2"
+            className="absolute left-2 top-1/2 z-[9600] flex -translate-y-1/2 flex-col gap-2 short:gap-1"
             onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
           >
             {STANCES.map((o) => (
               <button
                 key={o.id} type="button" aria-pressed={stance === o.id} aria-label={o.label} onClick={() => pickStance(o.id)}
-                className={`group relative flex h-12 w-12 items-center justify-center pixel-box ${stance === o.id ? "bg-gold" : "bg-night/90"}`}
+                className={`group relative flex h-12 w-12 short:h-10 short:w-10 items-center justify-center pixel-box ${stance === o.id ? "bg-gold" : "bg-night/90"}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`/ui/stance-${{ offensive: "attack", neutral: "balanced", defensive: "defend" }[o.id]}.png`} alt="" className="h-8 w-8 [image-rendering:pixelated]" draggable={false} />
@@ -1261,7 +1261,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                 </span>
               </button>
             ))}
-            <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box flex h-12 w-12 items-center justify-center bg-night/90">
+            <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/ui/bag.png" alt="" className="h-8 w-8" draggable={false} />
             </button>
@@ -1272,7 +1272,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
 
         {state === "play" && (
           <div
-            role="group" aria-label="Item slots" className="absolute bottom-3 left-1/2 z-[9600] flex -translate-x-1/2 items-end gap-2"
+            role="group" aria-label="Item slots" className="absolute bottom-3 short:bottom-1.5 left-1/2 z-[9600] flex -translate-x-1/2 items-end gap-2"
             onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
           >
             {slots.map((slug, i) => {
@@ -1293,7 +1293,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                   <button
                     type="button" aria-label={slug ? `Use ${itemName(slug)}` : "Empty item slot"}
                     onClick={() => (slug && n > 0 ? drinkPotion(i) : setPicking(picking === i ? null : i))}
-                    className={`pixel-box relative flex h-14 w-14 items-center justify-center bg-night/90 ${slug && n <= 0 ? "opacity-50" : ""}`}
+                    className={`pixel-box relative flex h-14 w-14 short:h-11 short:w-11 items-center justify-center bg-night/90 ${slug && n <= 0 ? "opacity-50" : ""}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {slug && <img src={itemImage(slug)} alt="" className="h-11 w-11 [image-rendering:pixelated]" draggable={false} />}

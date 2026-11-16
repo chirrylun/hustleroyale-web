@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Phones held sideways: very little height, so everything tightens up. */
+@custom-variant short (@media (max-height: 520px));
+
 /* Sweetie-16 inspired palette: warm, saturated, easy to read at low resolution. */
 :root {
   --ink: #1a1c2c;
