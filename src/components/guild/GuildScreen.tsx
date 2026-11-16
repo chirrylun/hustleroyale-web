@@ -70,15 +70,15 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         return setMsg("That didn't work. Try again.");
       }
       setStep(9);
+      try { localStorage.removeItem("pocketrpg-first-job-done"); } catch { /* ignore */ }
       router.refresh();
     });
 
-  // Once the first job is taken, the adventure gate glows. After the player has been out, the job board glows again to hand it in.
-  const [wentOut, setWentOut] = useState(false);
-  useEffect(() => { try { setWentOut(localStorage.getItem("pocketrpg-first-job-out") === "1"); } catch { /* private mode: fine */ } }, []);
+  // Once the first job is taken, the adventure gate glows. Once it is done on the field (the player is told there), the job board glows to hand it in.
+  const [jobDone, setJobDone] = useState(false);
+  useEffect(() => { try { setJobDone(localStorage.getItem("pocketrpg-first-job-done") === "1"); } catch { /* private mode: fine */ } }, []);
 
   const onAction = (a: string) => {
-    if (a === "adventure" && step === 8) { setWentOut(true); try { localStorage.setItem("pocketrpg-first-job-out", "1"); } catch { /* ignore */ } }
     if (a === "jobs") {
       if (step === 6) setTut(7);
       setPanel("jobs");
@@ -101,7 +101,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         <GuildHall
           fighters={fighters}
           onAction={onAction}
-          highlight={step === 6 ? "jobs" : step === 8 && !panel ? (wentOut ? "jobs" : "adventure") : undefined}
+          highlight={step === 6 ? "jobs" : step === 8 && !panel ? (jobDone ? "jobs" : "adventure") : undefined}
           isLocked={(group) => firstJobOpen && !OPEN_DURING_FIRST_JOB.includes(group)}
           onBlocked={() => { setPanel(null); setNotice(FIRST_JOB_NOTICE); }}
         />
@@ -117,9 +117,9 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
         {step === 8 && !panel && !notice && (
           <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
-            {wentOut ? (
-              <InfoBox step={0} total={1} title="Back already?" onNext={() => onAction("jobs")} nextLabel="Open job board">
-                <p>If you beat the bat, hand in your job on the job board to get your reward.</p>
+            {jobDone ? (
+              <InfoBox step={0} total={1} title="Job done!" onNext={() => onAction("jobs")} nextLabel="Open job board">
+                <p>You finished the job. Hand it in on the job board to get your reward.</p>
                 <p>Tap the glowing Job board.</p>
               </InfoBox>
             ) : (

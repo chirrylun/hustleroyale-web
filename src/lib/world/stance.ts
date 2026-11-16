@@ -55,7 +55,7 @@ export function strollGoal(nav: Nav, from: Pt, zones: readonly (readonly number[
     const d = Math.hypot(z[0] - from[0], z[1] - from[1]);
     if (d > 3 && d < nearest) { nearest = d; towards = Math.atan2(z[1] - from[1], z[0] - from[0]); }
   }
-  const len = Math.min(3.5 + rand() * 2, nearest);
+  const len = Math.min(2.5 + rand() * 1.5, nearest);
   const ang = towards === null ? rand() * Math.PI * 2 : towards + (rand() - 0.5) * 0.9;
   return nearestWalkable(nav, from[0] + Math.cos(ang) * len, from[1] + Math.sin(ang) * len);
 }
