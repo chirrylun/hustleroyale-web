@@ -117,7 +117,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
         {step === 8 && !panel && !notice && (
           <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
-            {wentOut ? (
+            {jobDone ? (
               <InfoBox step={0} total={1} title="Success!" onNext={() => onAction("jobs")} nextLabel="Open job board">
                 <p>You beat the bat, hand in your job on the job board to get your reward.</p>
                 <p>Tap the glowing Job board.</p>
