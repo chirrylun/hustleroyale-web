@@ -4,9 +4,9 @@ import { Suspense } from "react";
 import { FloorScreen } from "@/components/floor/FloorScreen";
 import { loadFighters } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/server";
-import { MAX_FLOOR } from "@/lib/world/floor";
+import { MAX_FLOOR, newSeed } from "@/lib/world/floor";
 
-export default function FloorPage({ params, searchParams }: { params: Promise<{ n: string }>; searchParams: Promise<{ from?: string; room?: string }> }) {
+export default function FloorPage({ params, searchParams }: { params: Promise<{ n: string }>; searchParams: Promise<{ from?: string; room?: string; seed?: string }> }) {
   return (
     <Suspense fallback={<div className="h-dvh animate-pulse bg-night" aria-busy="true" />}>
       <Content params={params} searchParams={searchParams} />
@@ -14,7 +14,7 @@ export default function FloorPage({ params, searchParams }: { params: Promise<{ 
   );
 }
 
-async function Content({ params, searchParams }: { params: Promise<{ n: string }>; searchParams: Promise<{ from?: string; room?: string }> }) {
+async function Content({ params, searchParams }: { params: Promise<{ n: string }>; searchParams: Promise<{ from?: string; room?: string; seed?: string }> }) {
   await connection();
   const n = Number((await params).n);
   const sp = await searchParams;
@@ -29,5 +29,5 @@ async function Content({ params, searchParams }: { params: Promise<{ n: string }
   if (n > (profile?.floor_unlocked ?? 1)) redirect("/home");
   const fighters = await loadFighters(supabase, user.id);
   if (!fighters.some((f) => f.team_slot > 0)) redirect(`/home?enter=${n}`);
-  return <FloorScreen floorNo={n} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} arriveFromAbove={sp.from === "above"} roomCode={/^[A-Z2-9]{4,8}$/i.test(sp.room ?? "") ? sp.room!.toUpperCase() : undefined} />;
+  return <FloorScreen floorNo={n} seed={/^\d{1,10}$/.test(sp.seed ?? "") ? Math.min(2_147_483_647, Number(sp.seed)) : newSeed()} fighters={fighters} tutorialStep={profile?.tutorial_step ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} arriveFromAbove={sp.from === "above"} roomCode={/^[A-Z2-9]{4,8}$/i.test(sp.room ?? "") ? sp.room!.toUpperCase() : undefined} />;
 }

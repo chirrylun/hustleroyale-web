@@ -19,12 +19,12 @@ const LOCAL: Pt[][] = [
 ];
 
 /** Where slot `slot` of `n` stands relative to the leader (slot 0) when the party faces `heading` (radians). */
-export function formationOffset(slot: number, n: number, heading: number): Pt {
+export function formationOffset(slot: number, n: number, heading: number, zoom = ZOOM): Pt {
   const L = LOCAL[Math.min(Math.max(n, 1), 3)];
   const p = L[Math.min(slot, L.length - 1)];
   const lx = p[0] - L[0][0], ly = p[1] - L[0][1];
   const c = Math.cos(heading), s = Math.sin(heading);
-  return [(lx * c - ly * s) / ZOOM, (lx * s + ly * c) / ZOOM];
+  return [(lx * c - ly * s) / zoom, (lx * s + ly * c) / zoom];
 }
 
 /** Smallest signed difference between two angles. */

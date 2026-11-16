@@ -15,17 +15,26 @@ import type { Stance } from "@/lib/battle";
 import { clearExpedition, partySig, readExpedition, writeExpedition } from "@/lib/world/expedition";
 import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal, sway } from "@/lib/world/stance";
 import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
-import { ZOOM } from "@/lib/world/zoom";
 import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import { BagMenu } from "@/components/floor/BagMenu";
+import { UiIcon } from "@/components/ui/UiIcon";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
 
-const T = 34 * ZOOM; // one tile on screen, in px (smaller = more of the map in view)
-const FRAME = 2.7 / ZOOM; // a sprite frame, in tiles (sprites keep their on-screen size however far the map is zoomed)
-const S = T / ZOOM; // one sprite-sized unit, in px
+const T = 34; // one tile, in px, before the camera zoom (tiles, props and sprites are all drawn at this scale)
+const FRAME = 2.7; // a sprite frame, in tiles
+const S = T; // one sprite-sized unit, in px
+/**
+ * The camera. Everything on the floor (ground, trees, fighters, mobs, effects) is scaled together, so sprites keep their
+ * proportions however far in the camera is. By default about this many tiles fit across the screen, so you cannot see
+ * what lies ahead and have to explore; the player can pull back a little.
+ */
+const VIEW_TILES = 15;
+const ZOOM_OUT = 0.62; // the furthest the player can pull back, as a fraction of the default zoom
+const ZOOM_CAP = 2.3; // never zoom in past this scale, even on a very wide screen
 const EDGE = 44; // px from the screen edge where the camera starts to scroll
 const SPEED = 3.1;
 const MOB_SPEED = 2.3;
@@ -191,16 +200,16 @@ function Unit({ a, party }: { a: Ag; party: number }) {
  * Combat here runs in the browser and reports kills to the server, which checks the floor is unlocked and
  * pays XP. A fully server-run version comes with shared rooms.
  */
-export function FloorScreen({ floorNo, fighters, tutorialStep, players = 1, floorUnlocked = 1, arriveFromAbove = false, roomCode }: { floorNo: number; /** Came down from the floor above: the party appears beside the way up instead of by the way in. */ arriveFromAbove?: boolean; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number; /** A friend's room code to join instead of being matched. */ roomCode?: string }) {
-  const floor = useMemo(() => generateFloor(floorNo), [floorNo]);
+export function FloorScreen({ floorNo, seed = 0, fighters, tutorialStep, players = 1, floorUnlocked = 1, arriveFromAbove = false, roomCode }: { floorNo: number; /** Which layout of this floor to build (a different seed is a different map). */ seed?: number; /** Came down from the floor above: the party appears beside the way up instead of by the way in. */ arriveFromAbove?: boolean; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number; /** A friend's room code to join instead of being matched. */ roomCode?: string }) {
+  const floor = useMemo(() => generateFloor(floorNo, seed), [floorNo, seed]);
   const [run, setRun] = useState(0); // bump to retry
   const [revived, setRevived] = useState(false);
   // After a defeat the party starts again at a quarter of its health.
   const squadIn = useMemo(() => (revived ? fighters.map((f) => ({ ...f, hp_frac: 0.25, hp_at: undefined })) : fighters), [revived, fighters]);
-  return <FloorMap key={run} floor={floor} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} roomCode={roomCode} retry={() => { setRevived(true); setRun((r) => r + 1); }} />;
+  return <FloorMap key={run} floor={floor} seed={seed} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} roomCode={roomCode} retry={() => { setRevived(true); setRun((r) => r + 1); }} />;
 }
 
-function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromAbove, roomCode, retry }: { roomCode?: string; floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
+function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked, fromAbove, roomCode, retry }: { roomCode?: string; seed: number; floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
   const router = useRouter();
   const [askBack, setAskBack] = useState(false);
   const [askNext, setAskNext] = useState(false);
@@ -223,14 +232,18 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
   const progress = useRef({ kills: 0, boss: false, gate: false as false | "back" | "next", unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false, left: false });
   const [stance, setStanceState] = useState<Stance>("neutral");
   const stanceRef = useRef<Stance>("neutral");
+  const [bagOpen, setBagOpen] = useState(false);
   const [free, setFree] = useState(false); // camera detached from the party
 
   const view = useRef<HTMLDivElement>(null);
   const world = useRef<HTMLDivElement>(null);
   const arrow = useRef<HTMLButtonElement>(null);
   const ground = useRef<HTMLCanvasElement>(null);
-  const cam = useRef({ x: 0, y: 0, free: false, px: -1, py: -1, vw: 800, vh: 600 });
+  const cam = useRef({ x: 0, y: 0, free: false, px: -1, py: -1, vw: 800, vh: 600, zu: 1, z: 1 });
   const marker = useRef<HTMLDivElement>(null);
+  /** Fits the default zoom to the screen (about VIEW_TILES tiles across), keeping however far the player has pulled back. */
+  const fitZoom = () => { const c = cam.current; c.z = Math.min(ZOOM_CAP, Math.max(1, c.vw / (T * VIEW_TILES))) * c.zu; };
+  const zoomBy = (d: number) => { const c = cam.current; c.zu = Math.min(1, Math.max(ZOOM_OUT, c.zu + d)); fitZoom(); };
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -328,7 +341,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     // Tanks lead, healers trail: that is the order they take in the formation.
     const order = squad.map((f, i) => ({ f, i })).sort((p, q) => ROLE_RANK[p.f.template.role] - ROLE_RANK[q.f.template.role] || p.i - q.i);
     allies.current = order.map(({ f }, slot) => {
-      const off = formationOffset(slot, order.length, 0);
+      const off = formationOffset(slot, order.length, 0, 1);
       // Beside the light, never inside it: by the white pillar when coming up, by the golden one when coming back down.
       const at = clearOfLight(nav, fromAbove ? [floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), floor.exit[1] + 0.9] : [floor.start[0], floor.start[1] + 0.9], fromAbove ? -1 : 1, off);
       return makeAg("ally", {
@@ -511,7 +524,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     const step = (a: Ag, dt: number, speed: number) => {
       const p = a.path[0];
       if (!p) return false;
-      const dx = p[0] - a.x, dy = p[1] - a.y, d = Math.hypot(dx, dy), m = (speed * dt) / ZOOM;
+      const dx = p[0] - a.x, dy = p[1] - a.y, d = Math.hypot(dx, dy), m = speed * dt;
       if (Math.abs(dx) > 0.05) a.look.flip = dx < 0;
       if (d <= m) { a.x = p[0]; a.y = p[1]; a.path.shift(); } else { a.x += (dx / d) * m; a.y += (dy / d) * m; }
       return true;
@@ -584,7 +597,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
           done = true;
         } else if (sk.kind === "damage") {
           const t = a.target;
-          if (!t || t.dead || dist(a, t) > 1.7 / ZOOM) continue;
+          if (!t || t.dead || dist(a, t) > 1.7) continue;
           const hit = sk.area ? F.filter((f) => !f.dead && Math.hypot(f.x - t.x, f.y - t.y) < 3) : [t];
           if (art?.shot) spawnFx(art.shot, a.x, a.y, { to: [t.x, t.y], ms: 260, loop: true });
           hit.forEach((f) => hurt(a, f, now, sk.power, sk.type === "magical", sk.name));
@@ -700,7 +713,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
             // Nothing to fight: keep a loose formation around the leader (or around the held ground). Each fighter
             // eases toward its slot and drifts a little, slowly and smoothly, instead of twitching.
             const ref: Pt = hold ? spot : [lead.x, lead.y];
-            const off = formationOffset(i, aliveA.length, pr.heading);
+            const off = formationOffset(i, aliveA.length, pr.heading, 1);
             const w = sway(a.slot * 2.1 + a.speedMul * 6, now);
             const want: Pt = [ref[0] + off[0] + w[0], ref[1] + off[1] + w[1]];
             const d = Math.hypot(want[0] - a.x, want[1] - a.y);
@@ -750,7 +763,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
             continue;
           }
           const t = f.target;
-          if (dist(f, t) > 1.3 / ZOOM) {
+          if (dist(f, t) > 1.3) {
             if (f.repath <= 0 || !f.path.length) { f.path = findPath(nav, [f.x, f.y], ringPoint(t, f.angle, 0.95)); f.repath = 0.6; }
             step(f, dt, MOB_SPEED * f.speedMul);
           } else {
@@ -761,7 +774,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         }
 
         // Keep bodies apart so nobody stands inside anybody else.
-        separate([...aliveA, ...(netOn ? [] : aliveF)].filter((u) => !u.dead), nav);
+        separate([...aliveA, ...(netOn ? [] : aliveF)].filter((u) => !u.dead), nav, 1.05);
 
         // New arrivals, one at a time and never in a rush.
         const plan = spawnPlan(baseMobCount(floor.n), players);
@@ -826,7 +839,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       }
 
       // Camera.
-      const c = cam.current, vw = c.vw, vh = c.vh;
+      const c = cam.current, z = c.z, vw = c.vw / z, vh = c.vh / z; // the view, in world px
       const WW = floor.w * T, HH = floor.h * T;
       const live2 = A.filter((a) => !a.dead);
       const cx = live2.length ? live2.reduce((s, a) => s + a.x, 0) / live2.length * T : WW / 2;
@@ -835,24 +848,24 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         c.x += (cx - vw / 2 - c.x) * Math.min(1, dt * 5);
         c.y += (cy - vh / 2 - c.y) * Math.min(1, dt * 5);
       } else if (c.px >= 0) {
-        const sp = 620 * dt;
+        const sp = (620 * dt) / z;
         if (c.px < EDGE) c.x -= sp; else if (c.px > vw - EDGE) c.x += sp;
         if (c.py < EDGE) c.y -= sp; else if (c.py > vh - EDGE) c.y += sp;
       }
       c.x = WW <= vw ? (WW - vw) / 2 : Math.min(WW - vw, Math.max(0, c.x));
       c.y = HH <= vh ? (HH - vh) / 2 : Math.min(HH - vh, Math.max(0, c.y));
-      if (world.current) world.current.style.transform = `translate(${-c.x}px, ${-c.y}px)`;
+      if (world.current) world.current.style.transform = `scale(${z}) translate(${-c.x}px, ${-c.y}px)`;
 
       // Arrow toward the party when it is off screen.
       const ar = arrow.current;
       if (ar) {
-        const sx = cx - c.x, sy = cy - c.y;
-        const off = sx < 0 || sy < 0 || sx > vw || sy > vh;
+        const sx = (cx - c.x) * z, sy = (cy - c.y) * z; // on screen
+        const off = sx < 0 || sy < 0 || sx > c.vw || sy > c.vh;
         ar.style.display = c.free && off ? "block" : "none";
         if (off) {
-          const ax = Math.min(vw - 34, Math.max(34, sx)), ay = Math.min(vh - 34, Math.max(34, sy));
+          const ax = Math.min(c.vw - 34, Math.max(34, sx)), ay = Math.min(c.vh - 34, Math.max(34, sy));
           ar.style.transform = `translate(${ax - 24}px, ${ay - 24}px)`;
-          (ar.firstElementChild as HTMLElement).style.transform = `rotate(${Math.atan2(sy - vh / 2, sx - vw / 2)}rad)`;
+          (ar.firstElementChild as HTMLElement).style.transform = `rotate(${Math.atan2(sy - c.vh / 2, sx - c.vw / 2)}rad)`;
         }
       }
       raf = requestAnimationFrame(tick);
@@ -938,10 +951,16 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     };
     let firstCode: string | undefined = roomCode;
     const give = setTimeout(() => { if (nt.mode === "pending") nt.mode = "off"; }, 4500);
-    const join = (code?: string) => sock.emit("join", { floor: floor.n, ...(code ? { code } : {}) }, (r: { ok?: boolean; error?: string; code?: string; you: string; n: number; mobs: WireMob[]; players: WirePlayer[] }) => {
+    const join = (code?: string) => sock.emit("join", { floor: floor.n, seed, ...(code ? { code } : {}) }, (r: { ok?: boolean; error?: string; code?: string; seed?: number; you: string; n: number; mobs: WireMob[]; players: WirePlayer[] }) => {
       if (!r?.ok) {
         if (code && ["no_such_room", "room_full", "wrong_floor"].includes(r?.error ?? "")) { showToast(r.error === "room_full" ? "That room is full: joining another" : "Room not found: joining an open room"); return join(); }
         nt.mode = "off"; // no room (or no server): the floor plays on alone, as it always could
+        return;
+      }
+      // Joined a room that runs a different layout: rebuild the floor from the room's seed so everyone sees the same map.
+      if (typeof r.seed === "number" && r.seed !== seed) {
+        sock.emit("leave");
+        router.replace(`/floor/${floor.n}?room=${r.code}&seed=${r.seed}`);
         return;
       }
       me = r.you;
@@ -974,7 +993,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
   useEffect(() => {
     const el = view.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => { cam.current.vw = el.clientWidth; cam.current.vh = el.clientHeight; });
+    const ro = new ResizeObserver(() => { cam.current.vw = el.clientWidth; cam.current.vh = el.clientHeight; fitZoom(); });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -999,8 +1018,8 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     if (!d || stateRef.current !== "play") return;
     if (Math.hypot(p.x - d.x, p.y - d.y) > 10 || performance.now() - d.t > 500) return;
     if (p.x < EDGE || p.y < EDGE || p.x > c.vw - EDGE || p.y > c.vh - EDGE) return;
-    const wx = (p.x + c.x) / T, wy = (p.y + c.y) / T;
-    const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 / ZOOM - wy) < 0.9);
+    const wx = (p.x / c.z + c.x) / T, wy = (p.y / c.z + c.y) / T;
+    const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 - wy) < 0.9);
     const live = allies.current.filter((a) => !a.dead);
     progress.current.gate = false;
     // Tapping the white pillar walks the party into it; arriving there leads back out of the floor.
@@ -1014,7 +1033,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
       progress.current.gate = onNext ? "next" : "back";
       const heading = Math.atan2(gy - (live[0]?.y ?? gy), gx - (live[0]?.x ?? gx));
       live.forEach((a, i) => {
-        const to: Pt = nearestWalkable(nav, gx + formationOffset(i, live.length, heading)[0] * 0.5, gy + 0.9);
+        const to: Pt = nearestWalkable(nav, gx + formationOffset(i, live.length, heading, 1)[0] * 0.5, gy + 0.9);
         a.path = findPath(nav, [a.x, a.y], to);
         a.held = a.path.length > 0; a.target = null; a.delay = i * 0.1;
       });
@@ -1034,7 +1053,7 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
     progress.current.anchor = goal; // Defend holds wherever the party was last sent
     progress.current.strolling = false;
     live.forEach((a, i) => {
-      const off = formationOffset(i, live.length, heading);
+      const off = formationOffset(i, live.length, heading, 1);
       const to: Pt = nearestWalkable(nav, goal[0] + off[0], goal[1] + off[1]);
       a.path = findPath(nav, [a.x, a.y], to);
       a.held = a.path.length > 0; a.target = null;
@@ -1081,9 +1100,10 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
         ref={view}
         className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
         onPointerMove={onMove} onPointerDown={onDown} onPointerUp={onUp}
+        onWheel={(e) => zoomBy(e.deltaY > 0 ? -0.07 : 0.07)}
         onPointerLeave={(e) => { if (e.pointerType === "mouse") cam.current.px = -1; }}
       >
-        <div ref={world} className="absolute left-0 top-0 will-change-transform" style={{ width: floor.w * T, height: floor.h * T }}>
+        <div ref={world} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: floor.w * T, height: floor.h * T }}>
           <canvas ref={ground} width={floor.w * T} height={floor.h * T} className="absolute inset-0" />
           {floor.props.map((p) => {
             // The two gates are pillars of light: white leads back, green leads on (dim until the floor is clear).
@@ -1139,6 +1159,22 @@ function FloorMap({ floor, fighters, tutorialStep, players, floorUnlocked, fromA
                 </span>
               </button>
             ))}
+            <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box mt-1 flex h-12 w-12 items-center justify-center bg-night/90">
+              <UiIcon name="bag" size={36} />
+            </button>
+          </div>
+        )}
+
+        {bagOpen && <BagMenu onClose={() => setBagOpen(false)} />}
+
+        {state === "play" && (
+          <div
+            role="group" aria-label="Zoom"
+            className="absolute right-2 top-1/2 z-[9600] flex -translate-y-1/2 flex-col gap-2"
+            onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
+          >
+            <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.12)} className="pixel-box h-10 w-10 bg-night/90 text-3xl leading-9 text-paper">+</button>
+            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-0.12)} className="pixel-box h-10 w-10 bg-night/90 text-3xl leading-9 text-paper">−</button>
           </div>
         )}
 
