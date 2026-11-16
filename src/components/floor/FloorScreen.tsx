@@ -133,6 +133,7 @@ interface Ag {
   speedMul: number;
   /** Idle fidget: now and then a standing fighter shuffles a step or two, slowly, then stands again. */
   nudgeAt: number; nudging: boolean;
+  slotRaw?: Pt; slotSnap?: Pt; cramped?: boolean;
   /** Allies: a short reaction delay before setting off when told to move (seconds). */
   delay: number;
   /** Allies: a small, slowly changing drift from their slot, so the formation stays loose. */
@@ -716,8 +717,16 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             // eases toward its slot and drifts a little, slowly and smoothly, instead of twitching.
             const ref: Pt = hold ? spot : [lead.x, lead.y];
             const off = formationOffset(i, aliveA.length, pr.heading, 1);
-            const want: Pt = [ref[0] + off[0], ref[1] + off[1]];
-            const d = Math.hypot(want[0] - a.x, want[1] - a.y);
+            const raw: Pt = [ref[0] + off[0], ref[1] + off[1]];
+            // Tight spot: if the slot is not standable, settle on the closest spot that is, worked out once per move
+            // of the slot (not every frame), and be happy with "near enough" so nobody keeps trying to squeeze in.
+            if (!a.slotRaw || Math.hypot(raw[0] - a.slotRaw[0], raw[1] - a.slotRaw[1]) > 0.35) {
+              a.slotRaw = raw;
+              a.slotSnap = standable(nav, raw[0], raw[1]) ? raw : nearestWalkable(nav, raw[0], raw[1]);
+              a.cramped = Math.hypot(a.slotSnap[0] - raw[0], a.slotSnap[1] - raw[1]) > 0.3;
+            }
+            const want: Pt = a.slotSnap ?? raw;
+            const d = Math.hypot(want[0] - a.x, want[1] - a.y) - (a.cramped ? 0.7 : 0);
             // A little fidget: mostly they stand in their idle pose, and only now and then take a slow step or two.
             if (a.nudging) {
               if (d > START_MOVING + 0.3) { a.nudging = false; a.path = []; }
