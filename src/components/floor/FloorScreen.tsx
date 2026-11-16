@@ -10,7 +10,7 @@ import { FX_COLS, FX_ROWS, mobScale } from "@/lib/sprites/designs";
 import { artOf, type FxArt } from "@/lib/skill-art";
 import type { GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
-import { findPath, buildNav, clearLine, nearestWalkable, walkable, type Pt } from "@/lib/guild-nav";
+import { findPath, buildNav, clearLine, nearestWalkable, walkable, standable, type Pt } from "@/lib/guild-nav";
 import type { Stance } from "@/lib/battle";
 import { clearExpedition, partySig, readExpedition, writeExpedition } from "@/lib/world/expedition";
 import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal, sway } from "@/lib/world/stance";
@@ -634,7 +634,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         const z = floor.zones[Math.floor(Math.random() * floor.zones.length)];
         const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * Math.max(0.6, z[2] - 1);
         const x = z[0] + Math.cos(ang) * d, y = z[1] + Math.sin(ang) * d * 0.7;
-        if (!walkable(nav, x, y)) continue;
+        if (!standable(nav, x, y)) continue;
         const away = n < 9 ? 10 : 6;
         if (A.some((a) => !a.dead && dist(a, { x, y }) < away)) continue;
         if (F.some((f) => !f.dead && Math.hypot(f.x - x, f.y - y) < 1.6)) continue;
