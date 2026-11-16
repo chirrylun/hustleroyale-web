@@ -20,10 +20,10 @@ const OPEN_DURING_FIRST_JOB = ["jobs", "adventure"];
 const FIRST_JOB_NOTICE = "Complete your first quest on the job board first.";
 
 /** Tutorial job: kill a bat on Floor 1 (steps 6-8 of the tutorial); afterwards the board is "empty" until more jobs land. */
-export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number }) {
+export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0, enterLobby = false }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number; enterLobby?: boolean }) {
   const router = useRouter();
   const [step, setStep] = useState(tutorialStep);
-  const [panel, setPanel] = useState<"jobs" | "adventure" | "party" | null>(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
+  const [panel, setPanel] = useState<"jobs" | "adventure" | "party" | "lobby" | null>(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : enterLobby && tutorialStep >= 9 ? "lobby" : null);
   const [floorSel, setFloorSel] = useState(enterFloor >= 1 ? enterFloor : 1);
   const [msg, setMsg] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
   // Coming back to the guild always starts at the hall, not on whatever panel was open when you left.
   useEffect(() => {
-    setPanel(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
+    setPanel(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : enterLobby && tutorialStep >= 9 ? "lobby" : null);
     setNotice(null);
     clearExpedition(); // resting at the guild heals everyone
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,7 +84,8 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
     if (a === "jobs") {
       if (step === 6) setTut(7);
       setPanel("jobs");
-    } else setPanel("adventure");
+    } else if (a === "lobby") setPanel("lobby");
+    else setPanel("adventure");
   };
 
   return (
@@ -110,14 +111,13 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
         {step === 6 && !panel && (
           <div className="absolute inset-x-0 bottom-3 z-[200] flex items-end justify-center gap-2 px-3 sm:gap-4">
-            <div className="w-20 sm:w-28 md:w-36 shrink-0 self-end"><Npc name="secretary" className="w-full" /></div>
             {intro === 0 ? (
-              <InfoBox step={0} total={2} title="Hello there!" onNext={() => setIntro(1)} nextLabel="Next">
+              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={0} total={2} title="Hello there!" onNext={() => setIntro(1)} nextLabel="Next">
                 <p>Hi, I&apos;m your quest manager. I hand out every job in the guild.</p>
                 <p>This is your guild. You send your adventurers out on quests from here.</p>
               </InfoBox>
             ) : (
-              <InfoBox step={1} total={2} title="The job board" onBack={() => setIntro(0)} onNext={() => onAction("jobs")} nextLabel="Open job board">
+              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={1} total={2} title="The job board" onBack={() => setIntro(0)} onNext={() => onAction("jobs")} nextLabel="Open job board">
                 <p>This is the job board. Every job is posted here for you to take.</p>
                 <p>Tap the glowing job board to find your first one.</p>
               </InfoBox>
@@ -128,12 +128,12 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         {step === 8 && !panel && !notice && (
           <div className="absolute inset-x-0 bottom-3 z-[200] flex justify-center px-3">
             {jobDone ? (
-              <InfoBox step={0} total={1} title="Success!" onNext={() => onAction("jobs")} nextLabel="Open job board">
+              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={0} total={1} title="Success!" onNext={() => onAction("jobs")} nextLabel="Open job board">
                 <p>You beat the bat, hand in your job on the job board to get your reward.</p>
                 <p>Tap the glowing Job board.</p>
               </InfoBox>
             ) : (
-              <InfoBox step={0} total={1} title="Time to head out" onNext={() => onAction("adventure")} nextLabel="Open the gate">
+              <InfoBox portrait={<Npc name="secretary" className="w-16 sm:w-20" />} step={0} total={1} title="Time to head out" onNext={() => onAction("adventure")} nextLabel="Open the gate">
                 <p>You took the job successfully. Jobs are done out on the floors, so tap the glowing gate to go on quests.</p>
                 <p>Pick a floor and go find that bat.</p>
               </InfoBox>
@@ -153,7 +153,9 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         {panel && (
           <div className="absolute inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3">
             <div className="pixel-box card-reveal w-full max-w-lg bg-night p-5">
-              {panel === "party" ? (
+              {panel === "lobby" ? (
+                <PartyPanel fighters={fighters} kicker="Meet other players" title="Main Lobby" goLabel="Enter the lobby" startWithOne onBack={() => setPanel(null)} onGo={() => router.push("/lobby")} />
+              ) : panel === "party" ? (
                 <PartyPanel floorNo={floorSel} fighters={fighters} onBack={() => setPanel("adventure")} onGo={() => router.push(`/floor/${floorSel}`)} />
               ) : panel === "adventure" ? (
                 <>
@@ -189,8 +191,8 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
                 <>
                   <h2 className="mb-2 text-2xl uppercase text-gold">Job board</h2>
                   {step === 7 && (
-                    <div className="mb-3 flex items-end gap-3">
-                      <div className="w-14 shrink-0"><Npc name="secretary" className="w-full" /></div>
+                    <div className="pixel-box mb-3 flex items-end gap-3 bg-panel p-3">
+                      <Npc name="secretary" className="w-14 shrink-0" />
                       <p className="text-lg text-paper">Here&apos;s a job for you. Take it, then head out to get it done.</p>
                     </div>
                   )}

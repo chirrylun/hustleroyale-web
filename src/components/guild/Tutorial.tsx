@@ -9,6 +9,11 @@ import type { StarterFighter } from "@/lib/starter-pack";
 import { createClient } from "@/lib/supabase/client";
 import { GuildManager } from "./GuildManager";
 import { InfoBox } from "./InfoBox";
+
+/** The tutorial's speech box with the guild manager standing inside it. */
+function ManagerBox(props: React.ComponentProps<typeof InfoBox>) {
+  return <InfoBox portrait={<GuildManager height={120} />} {...props} />;
+}
 import { TutorialFight } from "./TutorialFight";
 
 const TOTAL = 6; // welcome, guild, what you'll do, starters, fight 1, fight 2
@@ -59,27 +64,27 @@ export function Tutorial({ username, initialStep, fighters: existing }: { userna
     switch (step) {
       case 0:
         return (
-          <InfoBox step={0} total={TOTAL} title={`Welcome to ${GAME_NAME}`} onNext={() => go(1)} nextLabel="Let's go">
+          <ManagerBox step={0} total={TOTAL} title={`Welcome to ${GAME_NAME}`} onNext={() => go(1)} nextLabel="Let's go">
             <p>Hello, {username}! Your adventure starts here.</p>
-          </InfoBox>
+          </ManagerBox>
         );
       case 1:
         return (
-          <InfoBox step={1} total={TOTAL} title="You run a guild of adventurers" onBack={() => go(0)} onNext={() => go(2)}>
+          <ManagerBox step={1} total={TOTAL} title="You run a guild of adventurers" onBack={() => go(0)} onNext={() => go(2)}>
             <p>You manage an adventure guild. You hire or buy fighters to work for you and go on quests. Your guild grows as they do.</p>
-          </InfoBox>
+          </ManagerBox>
         );
       case 2:
         return (
-          <InfoBox step={2} total={TOTAL} title="What you'll do" onBack={() => go(1)} onNext={() => go(3)}>
+          <ManagerBox step={2} total={TOTAL} title="What you'll do" onBack={() => go(1)} onNext={() => go(3)}>
             <p>Recruit up to {ROSTER_CAP} fighters in your roster.</p>
             <p>Take requests on the job board from real players, or go on quests across the different floors.</p>
             <p>Enter your fighters into arena tournaments to climb the leaderboard, win <span className="text-gold">real money</span> and <span className="text-gold">prices</span>.</p>
-          </InfoBox>
+          </ManagerBox>
         );
       default:
         return (
-          <InfoBox step={3} total={TOTAL} title="Meet your Starters" onBack={() => go(2)} onNext={() => go(4)} nextLabel="Next" busy={fighters.length === 0}>
+          <ManagerBox step={3} total={TOTAL} title="Meet your Starters" onBack={() => go(2)} onNext={() => go(4)} nextLabel="Next" busy={fighters.length === 0}>
             <p>Each Starter has a role, stats and skills. Every one starts as a <span className="text-gold">Novice</span>.</p>
             <p>At level 10, you can rank up a Novice into a Recruit, and many other <span className="text-gold">Classes</span> as you level up.</p>
             <div className="mt-2 grid grid-cols-3 gap-2">
@@ -93,16 +98,14 @@ export function Tutorial({ username, initialStep, fighters: existing }: { userna
               {fighters.length === 0 && !error && [0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse bg-panel" aria-busy="true" />)}
             </div>
             {error && <p role="alert" className="text-xl text-ember">{error}</p>}
-          </InfoBox>
+          </ManagerBox>
         );
     }
   })();
 
   return (
     <main className="mx-auto flex w-full flex-1 flex-col items-center justify-center gap-6 p-6">
-      <div key={step} className="flex w-full flex-col items-center justify-center gap-3 md:flex-row md:items-end md:gap-6">
-        <div className="md:hidden"><GuildManager height={150} /></div>
-        <div className="hidden md:block"><GuildManager height={270} /></div>
+      <div key={step} className="flex w-full flex-col items-center justify-center gap-3">
         {box}
       </div>
     </main>

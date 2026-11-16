@@ -5,15 +5,22 @@ import { PixelButton } from "@/components/pixel/PixelButton";
 
 /** The tutorial's speech box: title, body, progress dots and Back / Next buttons. */
 export function InfoBox({
-  title, children, step, total, onBack, onNext, nextLabel = "Next", busy,
+  title, children, step, total, onBack, onNext, nextLabel = "Next", busy, portrait,
 }: {
+  /** Who is speaking, shown inside the box at its left. */
+  portrait?: ReactNode;
   title: string; children: ReactNode; step: number; total: number;
   onBack?: () => void; onNext: () => void; nextLabel?: string; busy?: boolean;
 }) {
   return (
     <section className="pixel-box card-reveal w-full max-w-xl bg-night p-5 text-left" aria-live="polite">
-      <h2 className="mb-3 text-2xl uppercase text-gold">{title}</h2>
-      <div className="flex min-h-24 flex-col gap-2 text-xl text-paper">{children}</div>
+      <div className="flex items-start gap-3">
+        {portrait && <div className="flex shrink-0 items-end justify-center self-stretch">{portrait}</div>}
+        <div className="min-w-0 flex-1">
+          <h2 className="mb-3 text-2xl uppercase text-gold">{title}</h2>
+          <div className="flex min-h-24 flex-col gap-2 text-xl text-paper">{children}</div>
+        </div>
+      </div>
       <div className="mt-5 flex items-center justify-between gap-3">
         <div className="flex gap-1.5" aria-label={`Step ${step + 1} of ${total}`}>
           {Array.from({ length: total }, (_, i) => (

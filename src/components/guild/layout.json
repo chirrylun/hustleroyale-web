@@ -120,12 +120,12 @@
     4.24
    ],
    "wall": false,
-   "href": "/lobby",
    "spot": [
     21.9,
     5.9
    ],
-   "emote": "\u2b06"
+   "emote": "\u2b06",
+   "action": "lobby"
   },
   {
    "id": "scarecrow",

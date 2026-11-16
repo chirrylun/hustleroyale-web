@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { PartyPanel } from "@/components/guild/PartyPanel";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { RoomScene, depth, pct, type SceneLayout } from "@/components/room/RoomScene";
 import { Speech, SpeechActions } from "@/components/room/Speech";
@@ -29,22 +28,11 @@ interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
 type Talk = "arena" | "classes" | "storage" | null;
 
 /**
- * The Main Lobby. First you choose who to bring (one fighter to begin with, more if you like); then they appear at the
- * stairs and you tap the floor to walk them about. Everyone in the same lobby sees each other's fighters live.
+ * The Main Lobby. The party was chosen in the guild before heading here; they appear at the stairs and you tap the
+ * floor to walk them about. Everyone in the same lobby sees each other's fighters live.
  */
 export function LobbyScreen({ fighters }: { fighters: GuildFighter[] }) {
-  const [mine, setMine] = useState<GuildFighter[] | null>(null);
-  if (!mine) {
-    return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-4 bg-ink p-4">
-        <PartyPanel
-          fighters={fighters} kicker="Meet other players" title="Main Lobby" goLabel="Enter the lobby" startWithOne
-          onBack={() => { window.location.href = "/home"; }}
-          onGo={(ids) => setMine(ids.map((id) => fighters.find((f) => f.id === id)!).filter(Boolean))}
-        />
-      </main>
-    );
-  }
+  const mine = fighters.filter((f) => f.team_slot > 0).sort((a, b) => a.team_slot - b.team_slot);
   return <Lobby mine={mine} />;
 }
 

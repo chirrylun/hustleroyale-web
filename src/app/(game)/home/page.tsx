@@ -13,7 +13,7 @@ import { connection } from "next/server";
  * with "unstable value Date.now()" from the auth client. The static shell renders instantly
  * and the player's data streams in.
  */
-export default function HomePage({ searchParams }: { searchParams: Promise<{ enter?: string }> }) {
+export default function HomePage({ searchParams }: { searchParams: Promise<{ enter?: string; lobby?: string }> }) {
   return (
     <Suspense fallback={<HomeFallback />}>
       <HomeContent searchParams={searchParams} />
@@ -21,9 +21,10 @@ export default function HomePage({ searchParams }: { searchParams: Promise<{ ent
   );
 }
 
-async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: string }> }) {
+async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: string; lobby?: string }> }) {
   await connection();
-  const enter = Number((await searchParams).enter) || 0;
+  const sp = await searchParams;
+  const enter = Number(sp.enter) || 0;
   const supabase = await createClient();
   const {
     data: { user },
@@ -45,7 +46,7 @@ async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: s
   if (step < 6) {
     return <Tutorial username={username} initialStep={step} fighters={fighters} />;
   }
-  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} enterFloor={enter} />;
+  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} enterFloor={enter} enterLobby={sp.lobby === "1"} />;
 }
 
 function HomeFallback() {
