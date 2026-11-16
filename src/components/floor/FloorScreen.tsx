@@ -33,7 +33,8 @@ const S = T; // one sprite-sized unit, in px
  * what lies ahead and have to explore; the player can pull back a little.
  */
 const VIEW_TILES = 15;
-const ZOOM_OUT = 0.62; // the furthest the player can pull back, as a fraction of the default zoom
+const ZOOM_OUT = 0.5; // the furthest the player can pull back, as a fraction of the closest zoom
+const ZOOM_START = 0.8; // where each floor starts, as a fraction of the closest zoom
 const ZOOM_CAP = 2.3; // never zoom in past this scale, even on a very wide screen
 const EDGE = 44; // px from the screen edge where the camera starts to scroll
 const SPEED = 3.1;
@@ -239,7 +240,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const world = useRef<HTMLDivElement>(null);
   const arrow = useRef<HTMLButtonElement>(null);
   const ground = useRef<HTMLCanvasElement>(null);
-  const cam = useRef({ x: 0, y: 0, free: false, px: -1, py: -1, vw: 800, vh: 600, zu: 1, z: 1 });
+  const cam = useRef({ x: 0, y: 0, free: false, px: -1, py: -1, vw: 800, vh: 600, zu: ZOOM_START, z: 1 });
   const marker = useRef<HTMLDivElement>(null);
   /** Fits the default zoom to the screen (about VIEW_TILES tiles across), keeping however far the player has pulled back. */
   const fitZoom = () => { const c = cam.current; c.z = Math.min(ZOOM_CAP, Math.max(1, c.vw / (T * VIEW_TILES))) * c.zu; };
@@ -1006,14 +1007,32 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   };
   const onMove = (e: PointerEvent) => {
     const p = local(e), c = cam.current;
+    if (fingers.current.has(e.pointerId)) {
+      fingers.current.set(e.pointerId, p);
+      if (fingers.current.size === 2) { const g = gap(); zoomBy(((g - pinch.current) / c.vw) * 1.6); pinch.current = g; return; }
+    }
     c.px = p.x; c.py = p.y;
     const nearEdge = p.x < EDGE || p.y < EDGE || p.x > c.vw - EDGE || p.y > c.vh - EDGE;
     if (nearEdge && (e.pointerType === "mouse" || down.current)) { if (!c.free) { c.free = true; setFree(true); } }
   };
-  const onDown = (e: PointerEvent) => { onMove(e); down.current = { ...local(e), t: performance.now() }; };
+  // Two fingers pinch to zoom; the closest zoom is the game's base view and the player can only pull back from it.
+  const fingers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef(0);
+  const gap = () => { const [a, b] = [...fingers.current.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  const onDown = (e: PointerEvent) => {
+    onMove(e);
+    if (e.pointerType === "touch") {
+      fingers.current.set(e.pointerId, local(e));
+      if (fingers.current.size === 2) { pinch.current = gap(); down.current = null; return; }
+    }
+    down.current = { ...local(e), t: performance.now() };
+  };
   const onUp = (e: PointerEvent) => {
     const d = down.current, p = local(e), c = cam.current;
     down.current = null;
+    const pinched = fingers.current.size > 1;
+    fingers.current.delete(e.pointerId);
+    if (pinched) return;
     if (e.pointerType !== "mouse") c.px = -1;
     if (!d || stateRef.current !== "play") return;
     if (Math.hypot(p.x - d.x, p.y - d.y) > 10 || performance.now() - d.t > 500) return;
@@ -1159,24 +1178,20 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                 </span>
               </button>
             ))}
-            <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box mt-1 flex h-12 w-12 items-center justify-center bg-night/90">
-              <UiIcon name="bag" size={36} />
-            </button>
           </div>
+        )}
+
+        {state === "play" && (
+          <button
+            type="button" aria-label="Bag" onClick={() => setBagOpen(true)}
+            onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
+            className="pixel-box absolute bottom-3 left-2 z-[9600] flex h-12 w-12 items-center justify-center bg-night/90"
+          >
+            <UiIcon name="bag" size={36} />
+          </button>
         )}
 
         {bagOpen && <BagMenu onClose={() => setBagOpen(false)} />}
-
-        {state === "play" && (
-          <div
-            role="group" aria-label="Zoom"
-            className="absolute right-2 top-1/2 z-[9600] flex -translate-y-1/2 flex-col gap-2"
-            onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
-          >
-            <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.12)} className="pixel-box h-10 w-10 bg-night/90 text-3xl leading-9 text-paper">+</button>
-            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-0.12)} className="pixel-box h-10 w-10 bg-night/90 text-3xl leading-9 text-paper">−</button>
-          </div>
-        )}
 
         <button ref={arrow} type="button" onClick={recenter} aria-label="Back to your fighters" className="pixel-box absolute left-0 top-0 z-[9600] hidden h-12 w-12 bg-night/90" style={{ display: "none" }}>
           <span className="block text-2xl leading-[3rem] text-gold">➤</span>
