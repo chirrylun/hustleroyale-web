@@ -1,0 +1,365 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { StoragePanel } from "@/components/lobby/StoragePanel";
+import { Npc, npcRatio, type NpcName } from "@/components/npc/Npc";
+import { PixelButton } from "@/components/pixel/PixelButton";
+import { Speech, SpeechActions } from "@/components/room/Speech";
+import { FighterSprite } from "@/components/sprites/FighterSprite";
+import type { GuildFighter } from "@/lib/guild";
+import { buildNav, findPath, nearestWalkable, type Pt } from "@/lib/guild-nav";
+import { getFloorSocket } from "@/lib/socket";
+import type { Role } from "@/lib/sprites/designs";
+import { ATLAS, NPC_HEIGHT, PICTURE, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
+
+const SPEED = 2.6; // tiles per second
+const FRAME = 2.8; // a fighter's sprite frame, in tiles
+const WORLD = PICTURE * SCALE; // the picture on screen, in px
+const FORMATION: Pt[] = [[0, 0], [-0.9, 0.6], [0.9, 0.6]];
+/** A tapped sign sends the party to it; this close to it counts as arrived. */
+const ARRIVE = 1.7;
+/** The figure inside an NPC's frame stands with its feet about this far down the frame. */
+const NPC_FEET = 0.97;
+const zOf = (yTiles: number) => 10 + Math.round(yTiles * 10);
+
+interface Agent { x: number; y: number; path: Pt[]; tx?: number; ty?: number; walking: boolean; flip: boolean }
+interface Look { walking: boolean; flip: boolean }
+interface Remote { id: string; uid: string; name: string; sprite: string; role: Role; level: number; lead: boolean }
+interface WireFighter { id: string; sprite: string; name: string; role: Role; level: number; x?: number; y?: number; dead?: boolean }
+interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
+/** How the loop reaches a figure's element and its look state, by id. */
+type Rig = Map<string, { el: HTMLDivElement | null; set: (l: Look) => void }>;
+
+type Talk = "arena" | "classes" | "storage" | "merchant" | "armourer" | "guard";
+const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", classes: "class_changer", storage: "storage_keeper", merchant: "merchant", armourer: "guard", guard: "guard" };
+
+function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite: string; role: Role; level: number; tag: string | null; own: boolean; rig: Rig }) {
+  const [look, setLook] = useState<Look>({ walking: false, flip: false });
+  const size = FRAME * T;
+  return (
+    <div
+      ref={(el) => { if (el) rig.set(id, { el, set: setLook }); else rig.delete(id); }}
+      className="pointer-events-none absolute left-0 top-0 will-change-transform"
+      // The feet sit at about 90% of the sprite frame, so lift the frame by that much to stand on the point.
+      style={{ width: size, height: size, marginLeft: -size / 2, marginTop: -size * 0.88, visibility: "hidden" }}
+    >
+      {tag && <span className={`absolute left-1/2 top-[14%] -translate-x-1/2 whitespace-nowrap px-1 text-sm ${own ? "bg-gold text-ink" : "bg-ink/80 text-paper"}`}>{tag}</span>}
+      <span className="absolute left-1/2 top-[24%] -translate-x-1/2 whitespace-nowrap bg-ink/80 px-1 text-sm text-paper">Lv {level}</span>
+      <FighterSprite spriteKey={sprite} role={role} flip={look.flip} rest={look.walking ? "walk" : "idle"} />
+    </div>
+  );
+}
+
+/**
+ * A town map: one painted picture with props and people on it. Your party walks around it (tap the ground to send
+ * them there; tap a sign to travel; tap a person to talk). The lobby is shared: everyone in it sees each other's
+ * fighters live.
+ */
+export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[] }) {
+  const town = TOWNS[id];
+  const router = useRouter();
+  const nav = useMemo(() => buildNav(navLayoutOf(town)), [town]);
+  const mine = useMemo(() => {
+    const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => a.team_slot - b.team_slot);
+    return (team.length ? team : fighters).slice(0, 3);
+  }, [fighters]);
+
+  const [rig] = useState<Rig>(() => new Map());
+  const agents = useRef(new Map<string, Agent>());
+  const [remote, setRemote] = useState<Remote[]>([]);
+  const [talk, setTalk] = useState<Talk | null>(null);
+  const [here, setHere] = useState<number | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [label, setLabel] = useState<string | null>(null);
+  const dirty = useRef(true);
+  const view = useRef<HTMLDivElement>(null);
+  const world = useRef<HTMLDivElement>(null);
+  const cam = useRef({ x: 0, y: 0, vw: 800, vh: 600 });
+  const marker = useRef<HTMLDivElement>(null);
+  const goal = useRef<TownProp | null>(null);
+
+  useEffect(() => {
+    const spawn = (i: number): Pt => nearestWalkable(nav, town.spawn[0] / UNIT + FORMATION[i % 3][0], town.spawn[1] / UNIT + FORMATION[i % 3][1]);
+    mine.forEach((f, i) => {
+      const at = spawn(i);
+      agents.current.set(f.id, { x: at[0], y: at[1], path: [], walking: false, flip: false });
+    });
+
+    // The shared lobby: other players' fighters appear and move live.
+    const sock = town.online ? getFloorSocket() : null;
+    let me = "";
+    const arrive = town.spawn;
+    const addPlayer = (p: WirePlayer) => {
+      setRemote((cur) => [...cur.filter((r) => r.uid !== p.uid), ...p.fighters.map((f, i) => ({ id: f.id, uid: p.uid, name: p.name, sprite: f.sprite, role: f.role, level: f.level, lead: i === 0 }))]);
+      for (const f of p.fighters) {
+        const placed = f.x !== undefined && !(f.dead && !f.x && !f.y);
+        const at = placed ? [f.x!, f.y!] : [arrive[0] / UNIT, arrive[1] / UNIT];
+        agents.current.set(f.id, { x: at[0], y: at[1], path: [], tx: at[0], ty: at[1], walking: false, flip: false });
+      }
+    };
+    const join = () => sock?.emit("join", { floor: 0 }, (r: { ok?: boolean; you: string; n: number; players: WirePlayer[] }) => {
+      if (!r?.ok) { setOffline(true); return; }
+      me = r.you; setOffline(false); setHere(r.n);
+      setRemote([]);
+      for (const p of r.players) if (p.uid !== me) addPlayer(p);
+      dirty.current = true;
+    });
+    const onSnap = (s: { p: [string, [string, number, number, number, number][]][]; n: number }) => {
+      setHere(s.n);
+      for (const [uid, list] of s.p) {
+        if (uid === me) continue;
+        for (const [rid, x, y] of list) {
+          const a = agents.current.get(rid);
+          if (!a) continue;
+          if (a.tx === undefined) { a.x = x; a.y = y; }
+          a.tx = x; a.ty = y;
+        }
+      }
+    };
+    const onJoined = (j: { player?: WirePlayer; n: number }) => { if (j.player && j.player.uid !== me) addPlayer(j.player); setHere(j.n); };
+    const onLeft = (j: { uid: string; n: number }) => {
+      setRemote((cur) => { for (const r of cur) if (r.uid === j.uid) agents.current.delete(r.id); return cur.filter((r) => r.uid !== j.uid); });
+      setHere(j.n);
+    };
+    if (sock) {
+      sock.on("connect", join);
+      sock.on("connect_error", () => setOffline(true));
+      sock.on("s", onSnap); sock.on("joined", onJoined); sock.on("left", onLeft);
+      if (sock.connected) join(); else sock.connect();
+    }
+
+    let raf = 0, last = performance.now(), lastSend = 0;
+    const frame = (t: number) => {
+      const dt = Math.min(0.1, (t - last) / 1000);
+      last = t;
+      for (const [aid, a] of agents.current) {
+        let moving = false;
+        if (a.tx !== undefined) {
+          const dx = a.tx - a.x, dy = a.ty! - a.y, k = Math.min(1, dt * 10);
+          moving = Math.abs(dx) + Math.abs(dy) > 0.03;
+          if (Math.abs(dx) > 0.04) a.flip = dx < 0;
+          a.x += dx * k; a.y += dy * k;
+        } else if (a.path.length) {
+          const [px, py] = a.path[0], dx = px - a.x, dy = py - a.y, d = Math.hypot(dx, dy), step = SPEED * dt;
+          moving = true;
+          if (Math.abs(dx) > 0.02) a.flip = dx < 0;
+          if (d <= step) { a.x = px; a.y = py; a.path.shift(); } else { a.x += (dx / d) * step; a.y += (dy / d) * step; }
+          dirty.current = true;
+        }
+        const r = rig.get(aid);
+        if (r?.el) {
+          r.el.style.transform = `translate(${a.x * T}px, ${a.y * T}px)`;
+          r.el.style.zIndex = String(zOf(a.y));
+          r.el.style.visibility = "visible";
+          if (a.walking !== moving || a.flip !== (r.el.dataset.flip === "1")) {
+            a.walking = moving;
+            r.el.dataset.flip = a.flip ? "1" : "0";
+            r.set({ walking: moving, flip: a.flip });
+          }
+        }
+      }
+
+      // Tell the lobby where our fighters are (when they moved, and now and then so latecomers find them).
+      if (sock?.connected && (dirty.current ? t - lastSend > 150 : t - lastSend > 3000)) {
+        lastSend = t; dirty.current = false;
+        const r2 = (n: number) => Math.round(n * 100) / 100;
+        sock.emit("u", { p: mine.map((f) => { const a = agents.current.get(f.id); return a ? [f.id, r2(a.x), r2(a.y), 1, 0] : [f.id, 0, 0, 1, 1]; }) });
+      }
+
+      // Walking to a sign: go through when the leader gets there.
+      const lead = agents.current.get(mine[0]?.id ?? "");
+      const g = goal.current;
+      if (g?.href && lead && Math.hypot(lead.x - g.x / UNIT, lead.y - (g.y + 36) / UNIT) < ARRIVE) {
+        goal.current = null;
+        router.push(g.href);
+      }
+
+      // Camera: follow the leader; a picture smaller than the screen is centred.
+      const c = cam.current;
+      const tx = lead ? lead.x * T - c.vw / 2 : 0, ty = lead ? lead.y * T - c.vh / 2 : 0;
+      c.x += (tx - c.x) * Math.min(1, dt * 6);
+      c.y += (ty - c.y) * Math.min(1, dt * 6);
+      c.x = WORLD <= c.vw ? (WORLD - c.vw) / 2 : Math.min(WORLD - c.vw, Math.max(0, c.x));
+      c.y = WORLD <= c.vh ? (WORLD - c.vh) / 2 : Math.min(WORLD - c.vh, Math.max(0, c.y));
+      if (world.current) world.current.style.transform = `translate(${-c.x}px, ${-c.y}px)`;
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    const agentMap = agents.current;
+    return () => {
+      cancelAnimationFrame(raf);
+      if (sock) {
+        sock.emit("leave");
+        sock.off("connect", join); sock.off("s", onSnap); sock.off("joined", onJoined); sock.off("left", onLeft);
+        sock.disconnect();
+      }
+      agentMap.clear();
+    };
+  }, [town, nav, mine, rig, router]);
+
+  useEffect(() => {
+    const el = view.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => { cam.current.vw = el.clientWidth; cam.current.vh = el.clientHeight; });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const down = useRef<{ x: number; y: number; t: number } | null>(null);
+  const local = (e: PointerEvent) => {
+    const r = view.current!.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const onUp = (e: PointerEvent) => {
+    const d = down.current, p = local(e), c = cam.current;
+    down.current = null;
+    if (!d || Math.hypot(p.x - d.x, p.y - d.y) > 10 || performance.now() - d.t > 500) return;
+    // Screen -> picture pixels.
+    const px = (p.x + c.x) / SCALE, py = (p.y + c.y) / SCALE;
+    // A tap on a person talks to them.
+    const person = town.npcs.find((n) => {
+      const h = NPC_HEIGHT, w = h * npcRatio(n.npc as NpcName);
+      return Math.abs(px - n.x) < w * 0.4 && py < n.y + 12 && py > n.y - h * NPC_FEET;
+    });
+    if (person) { setTalk(person.action as Talk); return; }
+    // A tap on a sign travels there; anything else is "walk here".
+    const sign = town.props.find((s) => {
+      if (!s.href) return false;
+      const [, , w, h] = ATLAS.rects[s.i];
+      return Math.abs(px - s.x) < w / 2 && py < s.y + 20 && py > s.y - h;
+    });
+    goal.current = sign ?? null;
+    const target: Pt = sign ? [sign.x / UNIT, (sign.y + 36) / UNIT] : [px / UNIT, py / UNIT];
+    const to = nearestWalkable(nav, target[0], target[1]);
+    mine.forEach((f, i) => {
+      const a = agents.current.get(f.id);
+      if (a) a.path = findPath(nav, [a.x, a.y], nearestWalkable(nav, to[0] + FORMATION[i % 3][0], to[1] + FORMATION[i % 3][1]));
+    });
+    setLabel(sign?.label ?? null);
+    const m = marker.current;
+    if (m) { m.style.left = `${to[0] * T}px`; m.style.top = `${to[1] * T}px`; m.classList.remove("marker-ping"); void m.offsetWidth; m.classList.add("marker-ping"); }
+  };
+
+  const close = () => setTalk(null);
+  const hint = town.online
+    ? offline ? "Can't reach the lobby right now: you're on your own." : "Tap the ground to walk · tap a sign to travel · tap a person to talk"
+    : "Tap the ground to walk · tap a sign to travel · tap a person to talk";
+
+  return (
+    <div className="relative flex h-dvh w-full flex-col bg-ink">
+      <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper">
+        <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="truncate text-lg uppercase text-gold">{town.title}</p>
+          <p className="truncate text-sm text-steel">{hint}</p>
+        </div>
+        {label && <p className="text-lg text-gold">→ {label}</p>}
+        {town.online && <p className="pixel-box bg-panel px-2 py-1 text-base uppercase leading-tight text-paper">{offline ? "Offline" : here === null ? "…" : `${here} here`}</p>}
+      </div>
+
+      <div
+        ref={view}
+        className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
+        onPointerDown={(e) => { down.current = { ...local(e), t: performance.now() }; }}
+        onPointerUp={onUp}
+      >
+        <div ref={world} className="absolute left-0 top-0 will-change-transform" style={{ width: WORLD, height: WORLD }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={town.ground} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full" />
+          {town.props.map((p, k) => {
+            const [rx, ry, rw, rh] = ATLAS.rects[p.i];
+            return (
+              <div
+                key={k}
+                aria-hidden="true"
+                className="pointer-events-none absolute"
+                style={{
+                  left: (p.x - rw / 2) * SCALE, top: (p.y - rh) * SCALE, width: rw * SCALE, height: rh * SCALE,
+                  backgroundImage: "url(/town/props.png)", backgroundSize: `${ATLAS.w * SCALE}px ${ATLAS.h * SCALE}px`,
+                  backgroundPosition: `${-rx * SCALE}px ${-ry * SCALE}px`, zIndex: zOf(p.y / UNIT),
+                }}
+              />
+            );
+          })}
+          {town.props.filter((p) => p.href).map((p, k) => (
+            <span
+              key={k}
+              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap bg-night/80 px-1.5 text-base uppercase text-gold"
+              style={{ left: p.x * SCALE, top: p.y * SCALE + 6, zIndex: 9000 }}
+            >
+              {p.label}
+            </span>
+          ))}
+          {town.npcs.map((n, k) => {
+            const h = NPC_HEIGHT, w = h * npcRatio(n.npc as NpcName);
+            return (
+              <Npc
+                key={k} name={n.npc as NpcName} facing={n.facing}
+                className="pointer-events-none absolute"
+                style={{ left: (n.x - w / 2) * SCALE, top: (n.y - h * NPC_FEET) * SCALE, width: w * SCALE, zIndex: zOf(n.y / UNIT) }}
+              />
+            );
+          })}
+          <div ref={marker} className="marker pointer-events-none absolute z-[5] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold opacity-0" />
+          {remote.map((r) => <Figure key={r.id} id={r.id} sprite={r.sprite} role={r.role} level={r.level} tag={r.lead ? r.name : null} own={false} rig={rig} />)}
+          {mine.map((f, i) => <Figure key={f.id} id={f.id} sprite={f.template.sprite_key} role={f.template.role} level={f.level} tag={i === 0 ? "You" : null} own rig={rig} />)}
+        </div>
+      </div>
+
+      {talk && (
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} onClose={close}>
+          {talk === "arena" && (
+            <>
+              <p>Think your fighters are tough? Test them against other guilds.</p>
+              <SpeechActions>
+                <Link href="/arena"><PixelButton className="w-full">Enter the arena</PixelButton></Link>
+                <PixelButton variant="ghost" onClick={close}>Not now</PixelButton>
+              </SpeechActions>
+            </>
+          )}
+          {talk === "classes" && (
+            <>
+              <p>I help fighters take up a new calling.</p>
+              <p className="text-steel">Coming soon: change a fighter&apos;s class here.</p>
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Okay</PixelButton></SpeechActions>
+            </>
+          )}
+          {talk === "storage" && (
+            <>
+              <p className="text-steel">Keep your spare items safe in a box with more room than your bag.</p>
+              <StoragePanel />
+            </>
+          )}
+          {talk === "merchant" && (
+            <>
+              <p>Welcome! The stalls aren&apos;t open just yet.</p>
+              <p className="text-steel">Soon you&apos;ll buy and sell fighters with other players here, and buy upgrades for your guild.</p>
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Okay</PixelButton></SpeechActions>
+            </>
+          )}
+          {talk === "armourer" && (
+            <>
+              <p>The armoury is still being stocked. Come back when the stalls open.</p>
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Okay</PixelButton></SpeechActions>
+            </>
+          )}
+          {talk === "guard" && (
+            <>
+              <p>The guild hall is just through here. Need to head back?</p>
+              <SpeechActions>
+                <Link href="/home"><PixelButton className="w-full">Back to the guild</PixelButton></Link>
+                <PixelButton variant="ghost" onClick={close}>Stay here</PixelButton>
+              </SpeechActions>
+            </>
+          )}
+        </Speech>
+      )}
+    </div>
+  );
+}
+
+const TITLE: Record<Talk, string> = {
+  arena: "The Arena", classes: "Class Changer", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", guard: "Guild Guard",
+};

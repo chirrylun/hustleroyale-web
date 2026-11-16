@@ -1,5 +1,5 @@
-import { MarketRoom } from "@/components/market/MarketRoom";
+import { TownPage } from "@/components/town/townPage";
 
 export default function Page() {
-  return <MarketRoom />;
+  return <TownPage id="market" />;
 }

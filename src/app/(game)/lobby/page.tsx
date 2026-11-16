@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { LobbyScreen } from "@/components/lobby/LobbyScreen";
+import { TownMap } from "@/components/town/TownMap";
 import { loadFighters } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,5 +22,5 @@ async function Content() {
   if (!user) redirect("/login");
   const fighters = await loadFighters(supabase, user.id);
   if (!fighters.some((f) => f.team_slot > 0)) redirect("/home?lobby=1"); // choose who to bring in the guild first
-  return <LobbyScreen fighters={fighters} />;
+  return <TownMap id="lobby" fighters={fighters} />;
 }
