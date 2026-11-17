@@ -7,99 +7,132 @@ Look: 2D pixel art in the style of Chained Echoes / 16-bit JRPGs, the same as th
 
 ## A. Equipment overlays
 
-### How it works (read first)
+### Plan: two bodies only
 
-Gear is drawn as **transparent overlay sheets that sit on top of a fighter's own sheet**, frame for frame. The game stacks them with the same animation, so a helmet is only correct if it is drawn in the *exact* pixel position of the head in *every* frame (idle, walk, attack, cast, hurt, windup).
+Every fighter is the **novice male or novice female** body, so all gear is made on just those two. Class identity then comes from the gear a fighter wears. (The existing class sheets stay in the game for now; they would only be replaced once gear is in.)
 
-- **Canvas:** 1248 x 1248 px, 6 columns x 6 rows, 208 px cells. Same layout as the fighter sheets: row 1 idle (4 frames), row 2 walk (6), row 3 attack (5), row 4 cast (5), row 5 hurt (2), row 6 windup (2). Unused cells stay empty.
-- **One overlay sheet = one item** (one helmet, one sword...). Only that item is drawn, everything else is flat magenta (#FF00FF). Nothing of the body, no shadow, no ground.
-- **Always generate against the body sheet.** Attach the fighter sheet the gear is for (for example `public/sprites/novice_male.png`) as the reference image and tell the generator to keep every item locked to that sheet's poses. Never generate gear without a reference; it will drift.
-- **Layer order (bottom to top):** boots, bottom armour, top armour, helmet, then the weapon. A shield is drawn on the off-hand and **in front of** the torso. Because the game stacks layers, an item must never redraw skin, hair or other gear; it only covers its own area.
-- **Check each sheet before keeping it:** `python3 tools/gear_preview.py <base sheet> <overlay sheet> [more overlays...]` writes a contact sheet of the composite so you can flip through every frame (see the script header). Reject any sheet where gear slides, jitters or changes size between frames.
+- **Overlay sheet = one item**, 1248 x 1248 px, 6 x 6 cells of 208 px, same layout as the fighter sheets: idle (4), walk (6), attack (5), cast (5), hurt (2), windup (2). Only the item is drawn, everything else is flat magenta.
+- **Make every item twice**: once with the **bare male** sheet attached, once with the **bare female** sheet attached. The prompt text is identical; only the attached sheet changes. Gear is drawn to the body's own silhouette, so the two will differ slightly in fit.
+- Layer order in the game, bottom to top: boots, bottom armour, top armour, helmet, weapon; the shield rides in front of the torso.
+- Check with `python3 tools/gear_preview.py <bare sheet> <overlay> [more overlays] -o out.png`.
+- Save as `public/gear/<male|female>/<slot>_<item>_<tier>.png`, for example `public/gear/male/weapon_sword_2.png`, `armor_helmet_3.png`.
+- Do tiers 1 and 2 first.
 
-### Start with the novices
+### Step 0: the bare base sheets (once each, for male and female)
 
-Every other class sheet already has a class outfit and weapon painted into it, which would clash with new gear. So:
+> Attach `public/sprites/novice_male.png` (then again with `novice_female.png`). Redraw **exactly the same sheet**: same 1248 x 1248 canvas, same 6 x 6 grid of 208 px cells, same poses, same frame positions, same body size and the **same feet baseline in every frame**. Keep the fighter's own **face, hair, skin tone and build**. Strip them to plain cloth underclothes: a short-sleeved off-white undershirt and simple brown shorts to the knee, **bare feet, no hat, no armour, no gloves, no belt or pouches, no weapon, no shield**. Hands are **empty and slightly curled** where they held something, and the attack, cast and windup rows keep the same arm motion as if swinging or casting with an empty hand. Plain flat magenta (#FF00FF) background, crisp hard pixel edges, no anti-aliasing, 1px dark outline, no shadow, no ground, no text.
 
-1. First do **`novice_male`** and **`novice_female`** (the class-less starting fighters).
-2. For these two, generate a **bare base sheet** first (prompt A0). Gear overlays are drawn on the bare base, and the game shows the bare base when nothing is equipped in a slot.
-3. Class sheets (paladin, mage, and so on) get the same treatment later, once the novice set looks right. The prompts below work for them unchanged; only the reference image changes.
+Save as `public/sprites/bare/novice_male.png` and `novice_female.png`.
 
-### A0. Bare base (once per body sheet)
+### Shared prompt (paste this first, every time)
 
-Run this once for **every body sheet that will wear gear**. Do the two novices first, then one class at a time.
+> 2D pixel-art **equipment overlay sheet** in the style of Chained Echoes and 16-bit JRPGs. Attached is the fighter's bare sprite sheet: **a 1248 x 1248 px canvas, 6 columns x 6 rows of 208 px cells**, rows = idle (4 frames), walk (6), attack (5), cast (5), hurt (2), windup (2). Output a sheet with the **identical canvas, grid, cell positions and frame count**. Draw **only the item named below**, positioned on the fighter exactly where it is worn or held **in every frame**, following the body's head bob, step cycle, lunge and recoil. Everything that is not the item (body, skin, hair, other clothes, shadow, ground) is **flat magenta (#FF00FF)**. The item keeps the **same size and shape in every frame** except where the pose forces it to turn or move. No anti-aliasing, no blur, no gradients, 1px dark outline in a darker shade of the item's colours (not pure black), soft top-left lighting, gentle cel shading, limited rich palette. The item is **fully opaque** and a touch larger than the body part so none of the base shows through. Gear is proportionate to a chunky 2.5-head JRPG body: no oversized pauldrons, no weapon taller than the character. Empty cells stay magenta. No text, no frame numbers, no border.
+>
+> **Tier looks.** **Rookie:** dull brown leather, plain grey iron, undyed cloth, a bit scuffed. **Soldier:** bright steel with blue-grey shading, tan leather straps, a little red cloth, clean and sturdy. **Knight:** polished steel with gold trim, deep red leather and cloth, one small gem accent. **Runed:** dark blued steel with gold edging, glowing cyan rune lines 2 to 3 px wide (a gentle 2-frame shimmer in idle only), deep navy cloth; the best looking tier but grounded, never flashy.
 
-> Attach the body sheet (for example `public/sprites/paladin_common.png`). Redraw **exactly the same sheet**: same 1248 x 1248 canvas, same 6 x 6 grid of 208 px cells, same poses, same frame positions, same body size and the **same feet baseline in every frame**. The fighter keeps their own **face, hair, skin tone, build and height** (copy them from the reference), but is **stripped to plain cloth underclothes**: a short-sleeved off-white undershirt and simple brown shorts to the knee, **bare feet, no hat or hood, no armour, no cape, no gloves, no belt or pouches, no jewellery, no weapon, no shield, no instrument or book**. Hands are **empty and slightly curled** wherever they held something, and the attack, cast and windup rows keep the same arm motion, as if swinging or casting with an empty hand. **Nothing that was in the original may remain** (no glowing orbs, no capes, no particle effects). Plain flat magenta (#FF00FF) background, crisp hard pixel edges, no anti-aliasing, 1px dark outline, no shadow, no ground, no text.
+### The item prompts (paste one after the shared prompt)
 
-Per sheet, tell the generator what to keep (the face and hair are what players recognise):
+**Dagger**
 
-| Sheet | Keep from the reference | Remove |
-|---|---|---|
-| `novice_male`, `novice_female` | face, hair, build | (already plain; just strip any hat, belt or weapon) |
-| `paladin_common/uncommon/rare/legendary` | stern face, short hair, broad build | plate armour, helm, cape, tabard, sword, mace, shield |
-| `magical_dps_*` (mage) | face, hair, slim build | robe, hat, cape, staff or wand, orb and glow |
-| `healer_*`, `bard_*` | face, hair, build | robe, vestments, hood, staff, holy symbol, lute or instrument |
-| `marksman_*` | face, hair, lean build | hooded cloak, quiver, bow, gloves, bandolier |
-| `rogue_*` | face, hair, agile build | hood, mask, cloak, daggers, belts |
-| `necromancer_*` | face, hair, thin build | dark robe, hood, staff, skull trinkets, glow |
-| `tank_*`, `dps_*` (fallback sheets) | face, hair, build | all armour, helms, weapons, shields |
-| `recruit_fighter`, `recruit_acolyte`, `recruit_thief` | face, hair, build | everything but the underclothes |
+> **Rookie Dagger**: a short dagger, about one third of the body height, in the main hand (a fast stab in attack, held up as a casting focus in cast). Design: short grey iron blade, wrapped brown grip. Use the Rookie tier look.
 
-Do **one rarity of a class first** (for example `paladin_common`), compare it with `tools/gear_preview.py`, then repeat for the other three rarities. Rarity sheets of one class share a face and build, so once the first looks right the rest go quickly. Save as `public/sprites/bare/<sheet name>.png`.
+> **Soldier Dagger**: a short dagger, about one third of the body height, in the main hand (a fast stab in attack, held up as a casting focus in cast). Design: straight steel blade, tan grip wrap, small crossguard. Use the Soldier tier look.
 
-### Shared preamble (paste at the top of every item below)
+> **Knight Dagger**: a short dagger, about one third of the body height, in the main hand (a fast stab in attack, held up as a casting focus in cast). Design: gold-capped guard, red grip, tiny gem in the pommel. Use the Knight tier look.
 
-> 2D pixel-art **equipment overlay sheet** in the style of Chained Echoes and 16-bit JRPGs. Attached is the fighter's bare sprite sheet: **a 1248 x 1248 px canvas, 6 columns x 6 rows of 208 px cells**, rows = idle (4 frames), walk (6), attack (5), cast (5), hurt (2), windup (2). Output a sheet with the **identical canvas, grid, cell positions and frame count**. Draw **only the item named below**, positioned on the fighter exactly where it would be worn or held **in every frame**, following the body's head bob, step cycle, lunge and recoil. Everything that is not the item (body, skin, hair, other clothes, shadow, ground) is **flat magenta (#FF00FF)**. The item keeps the **same size and shape in every frame** except where the pose forces it to turn or move. No anti-aliasing, no blur, no gradients, 1px dark outline in a darker shade of the item's colours (not pure black), soft top-left lighting, gentle cel shading, limited rich palette. The item must be **fully opaque** and slightly larger than the body part so none of the base shows through. Empty cells stay magenta. No text, no frame numbers, no border.
+> **Runed Dagger**: a short dagger, about one third of the body height, in the main hand (a fast stab in attack, held up as a casting focus in cast). Design: dark curved blade with a cyan rune line, gold edge. Use the Runed tier look.
 
-### Tier look (the same four tiers for every slot, so sets match)
+**Sword**
 
-| Tier | Name prefix | Look |
-|---|---|---|
-| 1 | **Rookie** | Dull brown leather, plain grey iron, undyed cloth. Simple, a bit scuffed. |
-| 2 | **Soldier** | Brighter steel with blue-grey shading, tan leather straps, a little red cloth. Clean and sturdy. |
-| 3 | **Knight** | Polished steel with **gold trim**, deep red leather and cloth, a small gem accent. Clearly a step up. |
-| 4 | **Runed** | Dark blued steel with gold edging, **cyan rune lines** that glow (2 to 3 pixels, a gentle 2-frame shimmer is allowed in idle only), deep navy cloth. The best looking set but still grounded, never ornate or glowing wildly. Special shop avatar gear will be flashier than this. |
+> **Rookie Sword**: a one-handed sword, about two thirds of the body height, in the main hand (a wide slash in attack). Design: plain iron blade, wooden grip. Use the Rookie tier look.
 
-Keep gear **proportionate to a chunky 2.5-head JRPG body**: no oversized pauldrons, no weapon taller than the character.
+> **Soldier Sword**: a one-handed sword, about two thirds of the body height, in the main hand (a wide slash in attack). Design: steel blade with a blue-grey fuller, leather grip. Use the Soldier tier look.
 
-### Weapons (main hand unless noted)
+> **Knight Sword**: a one-handed sword, about two thirds of the body height, in the main hand (a wide slash in attack). Design: polished blade, gold crossguard, red leather grip. Use the Knight tier look.
 
-Draw the weapon in the hand the base sheet holds it with, following the swing in the attack row, the raised arm in the cast row (held as a casting focus), and a ready position in windup. In walk and idle the weapon rests naturally at the hand.
+> **Runed Sword**: a one-handed sword, about two thirds of the body height, in the main hand (a wide slash in attack). Design: dark steel blade, glowing cyan rune down the fuller, gold guard. Use the Runed tier look.
 
-| Item | Tier 1 | Tier 2 | Tier 3 | Tier 4 |
-|---|---|---|---|---|
-| **Dagger** (short, about 1/3 body height, fast stabbing swing) | Rookie Dagger: short grey iron blade, wrapped brown grip | Soldier Dagger: straight steel blade, tan wrap, small crossguard | Knight Dagger: gold-capped guard, red grip, tiny gem in the pommel | Runed Dagger: dark curved blade with a cyan rune line along it, gold edge |
-| **Sword** (one-handed, about 2/3 body height, wide slash) | Rookie Sword: plain iron blade, wooden grip | Soldier Sword: steel blade, blue-grey fuller, leather grip | Knight Sword: gold crossguard, red leather grip, polished blade | Runed Sword: dark steel blade, glowing cyan rune line down the fuller, gold guard |
-| **Mace** (one-handed, overhead smash) | Rookie Mace: round iron head on a wooden handle | Soldier Mace: flanged steel head, leather strap | Knight Mace: gold-banded flanged head, red grip | Runed Mace: dark steel flanged head, cyan runes on the flanges, gold bands |
-| **Wand** (casting focus, about half body height; in the cast row the tip is raised and **the small gem glows in 2 frames**) | Rookie Wand: knotted wooden stick, dull green crystal chip | Soldier Wand: straight polished wood, steel cap, blue crystal | Knight Wand: gold-wrapped shaft, red crystal in a gold claw | Runed Wand: dark wood with cyan runes, gold claws, bright cyan crystal |
+**Mace**
 
-### Shields (off hand, drawn in front of the torso; weapon is a separate layer)
+> **Rookie Mace**: a one-handed mace in the main hand (an overhead smash in attack). Design: round iron head on a wooden handle. Use the Rookie tier look.
 
-The shield rides on the **off-hand forearm**. In attack the shield stays up and shifts a little with the body; in hurt it jolts back 1 to 2 px.
+> **Soldier Mace**: a one-handed mace in the main hand (an overhead smash in attack). Design: flanged steel head, leather strap. Use the Soldier tier look.
 
-| Item | Tier 1 | Tier 2 | Tier 3 | Tier 4 |
-|---|---|---|---|---|
-| **Shield** (small round or kite, about 40% of body height) | Rookie Shield: round wooden board, iron rim and centre boss | Soldier Shield: round steel, blue-grey face, tan strap | Knight Shield: kite shape, red face, gold rim, small crest | Runed Shield: dark steel kite, gold rim, cyan rune ring |
-| **Broadshield** (large tower shield, about 65% of body height, **held a little further from the body, covers most of the torso**; the character crouches slightly behind it in windup) | Rookie Broadshield: planks bound with iron straps | Soldier Broadshield: rectangular steel, riveted | Knight Broadshield: red field, gold trim and a guild-style crest | Runed Broadshield: dark steel, gold border, large glowing cyan rune sigil |
+> **Knight Mace**: a one-handed mace in the main hand (an overhead smash in attack). Design: gold-banded flanged head, red grip. Use the Knight tier look.
 
-### Armour
+> **Runed Mace**: a one-handed mace in the main hand (an overhead smash in attack). Design: dark steel flanged head with cyan runes, gold bands. Use the Runed tier look.
 
-Armour must **hug the body's silhouette** (follow the walk cycle, the breathing in idle, the stretch in attack). It may add small shapes (a skirt flap, a collar) but never changes the body's outline much, so sheets stay interchangeable.
+**Wand**
 
-| Item | Tier 1 | Tier 2 | Tier 3 | Tier 4 |
-|---|---|---|---|---|
-| **Helmet** (covers hair; face stays visible, eyes and mouth are **not** covered; head-top only) | Rookie Cap: brown leather cap with ear flaps | Soldier Helm: steel open-faced helm, short nose guard | Knight Helm: steel with gold band and a small red plume | Runed Helm: dark steel, gold brow band, cyan rune line, short crest |
-| **Top armour** (torso, shoulders and upper arms; leaves the hands bare) | Rookie Jerkin: brown leather vest over the undershirt, rough stitching | Soldier Cuirass: steel breastplate, leather pauldrons, red cloth sash | Knight Plate: gold-trimmed breastplate, red tabard, steel pauldrons with a gem | Runed Plate: dark steel plate, gold edging, glowing cyan chest rune, navy cape stub on the back (a 1px sway) |
-| **Bottom armour** (hips, thighs, knees; stops above the boot) | Rookie Trousers: brown cloth trousers with leather knee wraps | Soldier Greaves: steel thigh plates, tan straps | Knight Cuisses: gold-trimmed steel, red cloth skirt flap | Runed Cuisses: dark steel, gold edge, small cyan rune on each thigh, navy flap |
-| **Boots** (feet and shins only, cover the bare feet fully, same step cycle) | Rookie Boots: scuffed brown leather ankle boots | Soldier Boots: tall leather boots with steel toe caps | Knight Boots: steel shin guards, gold buckles, red cuffs | Runed Boots: dark steel greaves, gold trim, cyan rune at the ankle |
+> **Rookie Wand**: a casting wand, about half the body height, in the main hand (in cast the tip is raised and the crystal glows over 2 frames). Design: knotted wooden stick, dull green crystal chip. Use the Rookie tier look.
 
-### Per-item prompt (fill in and send)
+> **Soldier Wand**: a casting wand, about half the body height, in the main hand (in cast the tip is raised and the crystal glows over 2 frames). Design: straight polished wood, steel cap, blue crystal. Use the Soldier tier look.
 
-> [shared preamble] **Item: {tier name} {item}** ({description from the tables above}). Reference sheet attached: {novice_male / novice_female}. Draw this item only. Magenta everywhere else.
+> **Knight Wand**: a casting wand, about half the body height, in the main hand (in cast the tip is raised and the crystal glows over 2 frames). Design: gold-wrapped shaft, red crystal in a gold claw. Use the Knight tier look.
 
-That makes 40 overlay sheets per body (24 weapons and shields: dagger, sword, mace, wand, shield, broadshield, 4 tiers each = 24; 16 armour pieces). If 40 per body is too many to run at once, do **tier 1 and 2 first**.
+> **Runed Wand**: a casting wand, about half the body height, in the main hand (in cast the tip is raised and the crystal glows over 2 frames). Design: dark wood with cyan runes, gold claws, bright cyan crystal. Use the Runed tier look.
 
-Save as `public/gear/<body>/<slot>_<item>_<tier>.png`, for example `public/gear/novice_male/weapon_sword_2.png`, `armor_helmet_3.png`. When the first set is in, the game side gets a layered `FighterSprite`, equipment slots, bag integration, stats and the shop.
+**Shield**
+
+> **Rookie Shield**: a small shield, about 40% of the body height, on the off-hand forearm, drawn in front of the torso (kept up in attack, jolts back 1 to 2 px in hurt). Design: round wooden board, iron rim and centre boss. Use the Rookie tier look.
+
+> **Soldier Shield**: a small shield, about 40% of the body height, on the off-hand forearm, drawn in front of the torso (kept up in attack, jolts back 1 to 2 px in hurt). Design: round steel, blue-grey face, tan strap. Use the Soldier tier look.
+
+> **Knight Shield**: a small shield, about 40% of the body height, on the off-hand forearm, drawn in front of the torso (kept up in attack, jolts back 1 to 2 px in hurt). Design: kite shape, red face, gold rim, small crest. Use the Knight tier look.
+
+> **Runed Shield**: a small shield, about 40% of the body height, on the off-hand forearm, drawn in front of the torso (kept up in attack, jolts back 1 to 2 px in hurt). Design: dark steel kite, gold rim, ring of cyan runes. Use the Runed tier look.
+
+**Broadshield**
+
+> **Rookie Broadshield**: a large tower shield, about 65% of the body height, on the off-hand, held a little away from the body so it covers most of the torso, drawn in front (the character crouches behind it in windup). Design: planks bound with iron straps. Use the Rookie tier look.
+
+> **Soldier Broadshield**: a large tower shield, about 65% of the body height, on the off-hand, held a little away from the body so it covers most of the torso, drawn in front (the character crouches behind it in windup). Design: riveted rectangular steel. Use the Soldier tier look.
+
+> **Knight Broadshield**: a large tower shield, about 65% of the body height, on the off-hand, held a little away from the body so it covers most of the torso, drawn in front (the character crouches behind it in windup). Design: red field, gold trim and a crest. Use the Knight tier look.
+
+> **Runed Broadshield**: a large tower shield, about 65% of the body height, on the off-hand, held a little away from the body so it covers most of the torso, drawn in front (the character crouches behind it in windup). Design: dark steel, gold border, large glowing cyan sigil. Use the Runed tier look.
+
+**Helmet**
+
+> **Rookie Helmet**: a helmet that covers the hair, top of the head only; the eyes and mouth stay visible. Design: leather cap with ear flaps. Use the Rookie tier look.
+
+> **Soldier Helmet**: a helmet that covers the hair, top of the head only; the eyes and mouth stay visible. Design: open-faced steel helm, short nose guard. Use the Soldier tier look.
+
+> **Knight Helmet**: a helmet that covers the hair, top of the head only; the eyes and mouth stay visible. Design: steel helm, gold band, small red plume. Use the Knight tier look.
+
+> **Runed Helmet**: a helmet that covers the hair, top of the head only; the eyes and mouth stay visible. Design: dark steel helm, gold brow band, cyan rune line, short crest. Use the Runed tier look.
+
+**Top Armour**
+
+> **Rookie Top Armour**: armour for the torso, shoulders and upper arms; the hands stay bare; it hugs the body outline and follows the idle breathing and the stretch in attack. Design: rough leather vest with visible stitching. Use the Rookie tier look.
+
+> **Soldier Top Armour**: armour for the torso, shoulders and upper arms; the hands stay bare; it hugs the body outline and follows the idle breathing and the stretch in attack. Design: steel breastplate, leather pauldrons, red cloth sash. Use the Soldier tier look.
+
+> **Knight Top Armour**: armour for the torso, shoulders and upper arms; the hands stay bare; it hugs the body outline and follows the idle breathing and the stretch in attack. Design: gold-trimmed breastplate, red tabard, steel pauldrons with a gem. Use the Knight tier look.
+
+> **Runed Top Armour**: armour for the torso, shoulders and upper arms; the hands stay bare; it hugs the body outline and follows the idle breathing and the stretch in attack. Design: dark plate, gold edging, glowing cyan chest rune, a navy cape stub on the back that sways 1 px. Use the Runed tier look.
+
+**Bottom Armour**
+
+> **Rookie Bottom Armour**: armour for the hips, thighs and knees, stopping above the boot; it follows the walk cycle. Design: brown cloth trousers with leather knee wraps. Use the Rookie tier look.
+
+> **Soldier Bottom Armour**: armour for the hips, thighs and knees, stopping above the boot; it follows the walk cycle. Design: steel thigh plates with tan straps. Use the Soldier tier look.
+
+> **Knight Bottom Armour**: armour for the hips, thighs and knees, stopping above the boot; it follows the walk cycle. Design: gold-trimmed steel cuisses, red cloth skirt flap. Use the Knight tier look.
+
+> **Runed Bottom Armour**: armour for the hips, thighs and knees, stopping above the boot; it follows the walk cycle. Design: dark steel cuisses, gold edge, a small cyan rune on each thigh, navy flap. Use the Runed tier look.
+
+**Boots**
+
+> **Rookie Boots**: boots that fully cover the feet and shins, following the same step cycle as the bare feet. Design: scuffed brown leather ankle boots. Use the Rookie tier look.
+
+> **Soldier Boots**: boots that fully cover the feet and shins, following the same step cycle as the bare feet. Design: tall leather boots with steel toe caps. Use the Soldier tier look.
+
+> **Knight Boots**: boots that fully cover the feet and shins, following the same step cycle as the bare feet. Design: steel shin guards, gold buckles, red cuffs. Use the Knight tier look.
+
+> **Runed Boots**: boots that fully cover the feet and shins, following the same step cycle as the bare feet. Design: dark steel greaves, gold trim, cyan rune at the ankle. Use the Runed tier look.
+
+That is 40 items, times two bodies.
 
 ---
 
