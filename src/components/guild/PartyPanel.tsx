@@ -52,23 +52,23 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo, title, kicker, goL
       <header className="flex items-end justify-between gap-2">
         <div>
           <p className="text-base uppercase leading-none text-steel">{theme?.name ?? kicker}</p>
-          <h1 className="text-3xl uppercase leading-tight text-gold">{floorNo ? <>Floor {floorNo}{isBossFloor(floorNo) && " · Boss"}</> : title}</h1>
+          <h1 className="text-3xl uppercase leading-tight text-gold short:text-2xl">{floorNo ? <>Floor {floorNo}{isBossFloor(floorNo) && " · Boss"}</> : title}</h1>
         </div>
         <p className="pb-1 text-lg text-steel">{chosen.length}/{PARTY_MAX} going</p>
       </header>
 
       <p className="-mt-2 text-base text-steel short:hidden">Tap a fighter below to add them. Tap × to remove. The first card is your leader.</p>
 
-      <div className="grid gap-4 short:grid-cols-2 short:gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 short:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] short:gap-3">
       <section aria-label="Your party" className="grid grid-cols-3 content-start gap-2">
         {Array.from({ length: PARTY_MAX }, (_, i) => {
           const f = chosen[i];
           return f ? (
-            <div key={f.id} className={`pixel-box relative flex h-36 min-w-0 flex-col items-center justify-between bg-panel px-1 pb-1.5 pt-0 text-center short:h-32 ${i === 0 ? "!border-gold" : ""}`}>
+            <div key={f.id} className={`pixel-box relative flex h-32 min-w-0 flex-col items-center justify-between bg-panel px-1 pb-1.5 pt-0 text-center short:h-[7.5rem] ${i === 0 ? "!border-gold" : ""}`}>
               <span className={`absolute left-0.5 top-0.5 z-10 px-1 text-sm leading-4 ${i === 0 ? "bg-gold text-ink" : "bg-ink/80 text-steel"}`}>{i === 0 ? "Leader" : i + 1}</span>
               {i > 0 && <button type="button" onClick={() => lead(f.id)} aria-label={`Make ${f.template.name} the leader`} className="absolute bottom-0.5 right-0.5 z-10 bg-ink/80 px-1 text-sm leading-4 text-gold">★</button>}
               <button type="button" onClick={() => remove(f.id)} aria-label={`Remove ${f.template.name}`} className="absolute right-0.5 top-0.5 z-10 h-5 w-5 bg-ink/80 text-base leading-5 text-ember">×</button>
-              <div className="-mb-3 -mt-1 h-24 w-24"><FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} /></div>
+              <div className="-mb-3 -mt-1 h-20 w-20 short:h-[4.5rem] short:w-[4.5rem]"><FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} /></div>
               <div className="w-full">
                 <p className="truncate text-base leading-4 text-gold">{f.template.name}</p>
                 <p className="text-sm leading-4 text-steel">Lv {f.level} · {ROLE_LABEL[f.template.role]}</p>
@@ -80,7 +80,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo, title, kicker, goL
               key={`slot${i}`} type="button" disabled={fighters.length <= i}
               onClick={() => { const next = fighters.find((x) => !ids.includes(x.id)); if (next) add(next.id); }}
               aria-label="Add a fighter"
-              className="flex h-36 short:h-32 items-center justify-center border-2 border-dashed border-steel/60 bg-ink/40 text-4xl leading-none text-steel enabled:hover:border-gold enabled:hover:text-gold disabled:opacity-40"
+              className="flex h-32 short:h-[7.5rem] items-center justify-center border-2 border-dashed border-steel/60 bg-ink/40 text-4xl leading-none text-steel enabled:hover:border-gold enabled:hover:text-gold disabled:opacity-40"
             >+</button>
           );
         })}
@@ -88,7 +88,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo, title, kicker, goL
 
       <section aria-label="Your fighters" className="min-w-0">
         <div className="mb-1.5 flex items-center justify-between">
-          <h2 className="text-lg uppercase text-gold">Your fighters</h2>
+          <h2 className="whitespace-nowrap text-lg uppercase text-gold short:text-base">Your fighters</h2>
           <div className="flex gap-1">
             <PixelButton variant="ghost" className="px-2 py-0 text-base" onClick={() => setIds([])} disabled={!ids.length}>Clear</PixelButton>
             <PixelButton variant="ghost" className="px-2 py-0 text-base" onClick={sendAll} disabled={fighters.length === 0}>Best</PixelButton>
@@ -103,7 +103,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo, title, kicker, goL
                 aria-pressed={on} aria-label={`${f.template.name}, level ${f.level}`}
                 className={`relative flex min-w-0 flex-col items-center border-2 px-0.5 pb-1 pt-0.5 text-center enabled:hover:brightness-125 disabled:opacity-40 ${on ? "border-gold bg-gold/15" : "border-steel/40 bg-panel"}`}
               >
-                <div className="-mb-2 -mt-1 h-16 w-16"><FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} still /></div>
+                <div className="-mb-2 -mt-1 h-14 w-14 short:h-11 short:w-11"><FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} still /></div>
                 <span className="w-full truncate text-sm leading-4 text-paper">{f.template.name}</span>
                 <span className="text-sm leading-4 text-steel">Lv {f.level}</span>
                 <HpBar f={f} now={now} compact />

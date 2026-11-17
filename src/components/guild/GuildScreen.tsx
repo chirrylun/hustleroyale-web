@@ -156,7 +156,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
         {panel && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3 short:p-2">
-            <div className="pixel-box card-reveal max-h-[94dvh] w-full max-w-lg overflow-y-auto bg-night p-5 short:max-w-2xl short:p-3">
+            <div className="pixel-box card-reveal max-h-[94dvh] w-full max-w-lg overflow-y-auto bg-night p-5 short:max-w-3xl short:p-3">
               {panel === "lobby" ? (
                 <PartyPanel fighters={fighters} kicker="Meet other players" title="Main Lobby" goLabel="Enter the lobby" startWithOne onBack={() => setPanel(null)} onGo={() => router.push("/lobby")} />
               ) : panel === "party" ? (

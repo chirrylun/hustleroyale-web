@@ -103,7 +103,7 @@ export function BagMenu({ onClose, onUse }: { onClose: () => void; /** On a floo
   ];
 
   return (
-    <div className="fixed inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-3 short:p-2" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()}>
+    <div data-ui className="fixed inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-3 short:p-2" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()}>
       <div role="dialog" aria-modal="true" aria-label="Bag" className="pixel-box flex max-h-full w-full max-w-md flex-col bg-night short:max-w-2xl">
         <div className="flex items-stretch gap-1 border-b-2 border-steel p-2">
           {tabs.map((t) => (

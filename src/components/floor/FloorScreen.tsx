@@ -37,7 +37,7 @@ const VIEW_TILES = 15;
 const ZOOM_OUT = 0.5; // the furthest the player can pull back, as a fraction of the closest zoom
 const ZOOM_START = ZOOM_OUT; // each floor starts fully pulled back (the base view); wheel or pinch zooms in
 const ZOOM_CAP = 2.3; // never zoom in past this scale, even on a very wide screen
-const EDGE = 44; // px from the screen edge where the camera starts to scroll
+const EDGE = 8; // px: the mouse has to be at the very edge of the screen before the camera scrolls
 const SPEED = 3.1;
 const MOB_SPEED = 2.3;
 /** How fast each kind ambles about when nobody is near (tiles per second) and how long it rests between walks (s). */
@@ -935,8 +935,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         c.y += (cy - vh / 2 - c.y) * Math.min(1, dt * 5);
       } else if (c.px >= 0) {
         const sp = (620 * dt) / z;
-        if (c.px < EDGE) c.x -= sp; else if (c.px > vw - EDGE) c.x += sp;
-        if (c.py < EDGE) c.y -= sp; else if (c.py > vh - EDGE) c.y += sp;
+        if (c.px < EDGE) c.x -= sp; else if (c.px > c.vw - EDGE) c.x += sp;
+        if (c.py < EDGE) c.y -= sp; else if (c.py > c.vh - EDGE) c.y += sp;
       }
       c.x = WW <= vw ? (WW - vw) / 2 : Math.min(WW - vw, Math.max(0, c.x));
       c.y = HH <= vh ? (HH - vh) / 2 : Math.min(HH - vh, Math.max(0, c.y));
@@ -1090,15 +1090,29 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     const r = view.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
+  const drag = useRef<{ x: number; y: number; on: boolean } | null>(null);
   const onMove = (e: PointerEvent) => {
     const p = local(e), c = cam.current;
     if (fingers.current.has(e.pointerId)) {
       fingers.current.set(e.pointerId, p);
-      if (fingers.current.size === 2) { const g = gap(); zoomBy(((g - pinch.current) / c.vw) * 1.6); pinch.current = g; return; }
+      if (fingers.current.size === 2) { const g = gap(); zoomBy(((g - pinch.current) / c.vw) * 1.6); pinch.current = g; drag.current = null; return; }
     }
-    c.px = p.x; c.py = p.y;
-    const nearEdge = p.x < EDGE || p.y < EDGE || p.x > c.vw - EDGE || p.y > c.vh - EDGE;
-    if (nearEdge && (e.pointerType === "mouse" || down.current)) { if (!c.free) { c.free = true; setFree(true); } }
+    if (e.pointerType === "mouse") {
+      // Edge scrolling is only for the bare map: not over buttons or menus, and not while the bag is open.
+      const onUi = !!(e.target as HTMLElement).closest("button, [role=dialog], [role=group], [data-ui]");
+      if (onUi || bagOpen || picking !== null) { c.px = -1; return; }
+      c.px = p.x; c.py = p.y;
+      const atEdge = p.x < EDGE || p.y < EDGE || p.x > c.vw - EDGE || p.y > c.vh - EDGE;
+      if (atEdge && !c.free) { c.free = true; setFree(true); }
+      return;
+    }
+    // Touch: press, hold and drag to look around.
+    const d = drag.current;
+    if (d && down.current) {
+      if (!d.on && Math.hypot(p.x - down.current.x, p.y - down.current.y) > 10) { d.on = true; if (!c.free) { c.free = true; setFree(true); } }
+      if (d.on) { c.x -= (p.x - d.x) / c.z; c.y -= (p.y - d.y) / c.z; }
+      d.x = p.x; d.y = p.y;
+    }
   };
   // Two fingers pinch to zoom; the closest zoom is the game's base view and the player can only pull back from it.
   const fingers = useRef(new Map<number, { x: number; y: number }>());
@@ -1111,10 +1125,11 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       if (fingers.current.size === 2) { pinch.current = gap(); down.current = null; return; }
     }
     down.current = { ...local(e), t: performance.now() };
+    drag.current = e.pointerType === "touch" ? { ...local(e), on: false } : null;
   };
   const onUp = (e: PointerEvent) => {
     const d = down.current, p = local(e), c = cam.current;
-    down.current = null;
+    down.current = null; drag.current = null;
     const pinched = fingers.current.size > 1;
     fingers.current.delete(e.pointerId);
     if (pinched) return;
