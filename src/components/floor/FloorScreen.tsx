@@ -289,8 +289,9 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       if (q.objs.every((o) => j.have(q.slug, o, j.reached) >= o.qty)) { j.done.add(q.slug); const text = `Job complete: ${q.title}. Hand it in at the job board.`; if (delayMs) setTimeout(() => showToast(text), delayMs); else showToast(text); }
     }
   };
-  const noteKill = (res: { quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[] } | null) => {
+  const noteKill = (res: { quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; bag_full?: boolean } | null) => {
     if (!res) return;
+    if (res.bag_full) showToast("Your bag is full. Discard or store items to pick up more.");
     // A drop is announced like a finished job; if the same kill also finishes a job, that banner follows it.
     const got = (res.drops ?? []).filter((d) => d.qty > 0);
     if (got.length) showToast(`You got ${got.length === 1 ? "an item" : "items"}: ${got.map((d) => `${itemName(d.slug)} x${d.qty}`).join(", ")}`);
@@ -463,19 +464,19 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     try { localStorage.setItem("hr_item_slots", JSON.stringify(next)); } catch {}
   };
   /** Drinks a slotted potion on whichever fighter needs it most. */
-  const drinkPotion = async (i: number) => {
-    const slug = slots[i];
-    if (!slug || usingPotion.current || (stock[slug] ?? 0) <= 0) return;
+  const drinkPotion = async (i: number) => { const slug = slots[i]; if (slug) await drinkSlug(slug); };
+  const drinkSlug = async (slug: string): Promise<boolean> => {
+    if (!POTIONS.includes(slug) || usingPotion.current) return false;
     const live = allies.current.filter((u) => !u.dead);
     const need = (u: Ag) => (slug === "hp_potion" ? 1 - u.hp / u.max : u.maxEn > 0 ? 1 - u.en / u.maxEn : 0);
     const t = [...live].sort((p, q) => need(q) - need(p))[0];
-    if (!t || need(t) < 0.02) { setPicking(null); return; }
+    if (!t || need(t) < 0.02) { setPicking(null); return false; }
     usingPotion.current = true;
     try {
       const { error } = await createClient().rpc("use_item", { p_slug: slug });
-      if (error) { loadStock(); return; }
+      if (error) { loadStock(); return false; }
       setStock((m) => ({ ...m, [slug]: Math.max(0, (m[slug] ?? 1) - 1) }));
-      if (t.dead) return;
+      if (t.dead) return true;
       if (slug === "hp_potion") {
         const amt = Math.max(1, Math.round(t.max * 0.4)); t.hp = Math.min(t.max, t.hp + amt);
         spawnFx({ sheet: "support", row: 0 }, t.x, t.y); overHead(t, `+${amt}`, "text-leaf", 900);
@@ -483,6 +484,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         const amt = Math.max(1, Math.round(t.maxEn * 0.5)); t.en = Math.min(t.maxEn, t.en + amt);
         overHead(t, `+${amt} MP`, "text-sky", 900);
       }
+      return true;
     } finally { usingPotion.current = false; }
   };
 
@@ -1268,7 +1270,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           </div>
         )}
 
-        {bagOpen && <BagMenu onClose={() => { setBagOpen(false); loadStock(); }} />}
+        {bagOpen && <BagMenu onUse={drinkSlug} onClose={() => { setBagOpen(false); loadStock(); }} />}
 
         {state === "play" && (
           <div

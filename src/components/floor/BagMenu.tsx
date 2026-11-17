@@ -6,7 +6,11 @@ import { createClient } from "@/lib/supabase/client";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { RARITY, itemImage } from "@/lib/items";
 
-interface Item { slug: string; name: string; rarity: string; qty: number }
+interface Item { slug: string; name: string; rarity: string; qty: number; blurb: string }
+
+export const BAG_MAX = 100;
+const USABLE = ["hp_potion", "mp_potion"];
+type Ask = { kind: "use" | "discard"; n: number };
 interface Obj { idx: number; text: string; have: number; need: number }
 interface Job { slug: string; title: string; done: boolean; objs: Obj[]; coins: number; xp: number }
 
@@ -18,7 +22,12 @@ function ItemArt({ slug, size }: { slug: string; size: number }) {
 }
 
 /** The bag: what you're carrying (monster drops) and your journal of taken jobs with progress. */
-export function BagMenu({ onClose }: { onClose: () => void }) {
+export function BagMenu({ onClose, onUse }: { onClose: () => void; /** On a floor: drink/use an item on the party. Resolves true if it worked. */ onUse?: (slug: string) => Promise<boolean> }) {
+  const [rev, setRev] = useState(0);
+  const [sel, setSel] = useState<Item | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("items");
   const [items, setItems] = useState<Item[] | null>(null);
   const [jobs, setJobs] = useState<Job[] | null>(null);
@@ -35,7 +44,7 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
     (async () => {
       const sb = createClient();
       const [tpl, inv, q, o, pq, pp, prof] = await Promise.all([
-        sb.from("item_templates").select("slug, name, rarity"),
+        sb.from("item_templates").select("slug, name, rarity, blurb"),
         sb.from("player_items").select("item_slug, qty"),
         sb.from("quests").select("slug, title, reward_coins, reward_xp, sort").order("sort"),
         sb.from("quest_objectives").select("quest_slug, idx, kind, target_kind, target_boss, item_slug, qty"),
@@ -45,10 +54,10 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
       ]);
       if (!live) return;
       if (tpl.error || inv.error || q.error || o.error || pq.error || pp.error || !prof.data) return setError(true);
-      const info = new Map((tpl.data ?? []).map((t) => [t.slug as string, t as { slug: string; name: string; rarity: string }]));
+      const info = new Map((tpl.data ?? []).map((t) => [t.slug as string, t as { slug: string; name: string; rarity: string; blurb?: string }]));
       const qty = new Map((inv.data ?? []).map((r) => [r.item_slug as string, r.qty as number]));
       setItems(
-        [...qty].filter(([, n]) => n > 0).map(([slug, n]) => ({ slug, name: info.get(slug)?.name ?? slug, rarity: info.get(slug)?.rarity ?? "common", qty: n }))
+        [...qty].filter(([, n]) => n > 0).map(([slug, n]) => ({ slug, name: info.get(slug)?.name ?? slug, rarity: info.get(slug)?.rarity ?? "common", qty: n, blurb: info.get(slug)?.blurb ?? "" }))
           .sort((a, b) => Object.keys(RARITY).indexOf(b.rarity) - Object.keys(RARITY).indexOf(a.rarity) || a.name.localeCompare(b.name)),
       );
       const status = new Map((pq.data ?? []).map((r) => [r.quest_slug as string, r.status as string]));
@@ -69,10 +78,27 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
       );
     })().catch(() => live && setError(true));
     return () => { live = false; };
-  }, []);
+  }, [rev]);
+
+  const total = items?.reduce((s, i) => s + i.qty, 0) ?? 0;
+  const closeAsk = () => { setAsk(null); setNote(null); };
+  const confirm = async () => {
+    if (!sel || !ask || busy) return;
+    setBusy(true); setNote(null);
+    try {
+      if (ask.kind === "use") {
+        const ok = onUse ? await onUse(sel.slug) : false;
+        if (!ok) { setNote(`${sel.name} can't be used right now.`); return; }
+      } else {
+        const { error: e } = await createClient().rpc("discard_item", { p_slug: sel.slug, p_qty: ask.n });
+        if (e) { setNote("Couldn't discard that. Try again."); return; }
+      }
+      setAsk(null); setSel(null); setRev((x) => x + 1);
+    } finally { setBusy(false); }
+  };
 
   const tabs: { id: Tab; label: string; icon: "bag" | "quest"; n?: number }[] = [
-    { id: "items", label: "Items", icon: "bag", n: items?.reduce((s, i) => s + i.qty, 0) },
+    { id: "items", label: "Items", icon: "bag", n: items ? total : undefined },
     { id: "journal", label: "Journal", icon: "quest", n: jobs?.filter((j) => !j.done).length },
   ];
 
@@ -96,17 +122,20 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
             : (tab === "items" ? items : jobs) === null ? <div className="h-40 animate-pulse bg-panel" aria-busy="true" />
             : tab === "items" ? (
               items!.length === 0 ? <Empty icon="bag" text="Nothing yet" /> : (
+                <>
+                <p className={`mb-2 text-base ${total >= BAG_MAX ? "text-ember" : "text-steel"}`}>Bag {total}/{BAG_MAX}{total >= BAG_MAX ? " · full, new drops are lost" : " · tap an item"}</p>
                 <ul className="grid grid-cols-4 gap-x-1.5 gap-y-2 sm:grid-cols-6 short:grid-cols-8">
                   {items!.map((i) => (
                     <li key={i.slug} className="flex min-w-0 flex-col items-center gap-1">
-                      <div className={`relative flex aspect-square w-full items-center justify-center border-2 bg-panel ${RARITY[i.rarity]?.ring ?? "border-steel"}`}>
+                      <button type="button" aria-label={`${i.name}, ${i.qty}`} onClick={() => { setSel(i); setAsk(null); setNote(null); }} className={`relative flex aspect-square w-full items-center justify-center border-2 bg-panel enabled:hover:brightness-125 ${RARITY[i.rarity]?.ring ?? "border-steel"}`}>
                         <ItemArt slug={i.slug} size={36} />
                         <span className="absolute bottom-0 right-0 bg-ink/80 px-1 text-sm leading-4 text-paper">{i.qty}</span>
-                      </div>
+                      </button>
                       <span className={`w-full text-center text-sm leading-3 ${RARITY[i.rarity]?.text ?? "text-paper"}`}>{i.name}</span>
                     </li>
                   ))}
                 </ul>
+                </>
               )
             ) : jobs!.length === 0 ? <Empty icon="quest" text="No jobs taken" /> : (
               <div className="flex flex-col gap-3">
@@ -139,6 +168,48 @@ export function BagMenu({ onClose }: { onClose: () => void }) {
             )}
         </div>
       </div>
+
+      {sel && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink/70 p-3" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget && !busy) { setSel(null); closeAsk(); } }}>
+          <div role="dialog" aria-modal="true" aria-label={sel.name} className="pixel-box flex w-full max-w-sm flex-col gap-2 bg-night p-3 short:max-w-lg">
+            <div className="flex items-center gap-3">
+              <div className={`flex h-14 w-14 shrink-0 items-center justify-center border-2 bg-panel ${RARITY[sel.rarity]?.ring ?? "border-steel"}`}><ItemArt slug={sel.slug} size={44} /></div>
+              <div className="min-w-0">
+                <p className={`truncate text-2xl uppercase ${RARITY[sel.rarity]?.text ?? "text-paper"}`}>{sel.name}</p>
+                <p className="text-base text-steel">You have {sel.qty}</p>
+              </div>
+            </div>
+            {sel.blurb && <p className="text-lg text-paper/90">{sel.blurb}</p>}
+            {!ask ? (
+              <div className="flex flex-wrap gap-2">
+                {USABLE.includes(sel.slug) && (
+                  <button type="button" disabled={!onUse} onClick={() => setAsk({ kind: "use", n: 1 })} className="flex-1 bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Use</button>
+                )}
+                <button type="button" onClick={() => setAsk({ kind: "discard", n: 1 })} className="flex-1 bg-panel px-3 py-1 text-xl uppercase text-ember">Discard</button>
+                <button type="button" onClick={() => setSel(null)} className="bg-panel px-3 py-1 text-xl uppercase text-paper">Close</button>
+                {USABLE.includes(sel.slug) && !onUse && <p className="w-full text-base text-steel">Potions can be used out on the floors.</p>}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 border-t-2 border-steel pt-2">
+                <p className="text-xl text-paper">{ask.kind === "use" ? `Use ${sel.name}?` : `Discard ${ask.n} × ${sel.name}? This can't be undone.`}</p>
+                {ask.kind === "discard" && sel.qty > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button type="button" aria-label="Fewer" onClick={() => setAsk({ ...ask, n: Math.max(1, ask.n - 1) })} className="h-8 w-8 bg-panel text-xl text-paper">−</button>
+                    <span className="min-w-8 text-center text-xl text-paper">{ask.n}</span>
+                    <button type="button" aria-label="More" onClick={() => setAsk({ ...ask, n: Math.min(sel.qty, ask.n + 1) })} className="h-8 w-8 bg-panel text-xl text-paper">+</button>
+                    <button type="button" onClick={() => setAsk({ ...ask, n: sel.qty })} className="bg-panel px-2 text-base uppercase text-gold">All</button>
+                  </div>
+                )}
+                {note && <p role="alert" className="text-lg text-ember">{note}</p>}
+                <div className="flex gap-2">
+                  <button type="button" disabled={busy} onClick={confirm} className={`flex-1 px-3 py-1 text-xl uppercase text-ink disabled:opacity-50 ${ask.kind === "use" ? "bg-leaf" : "bg-ember"}`}>{busy ? "…" : ask.kind === "use" ? "Yes, use it" : "Yes, discard"}</button>
+                  <button type="button" disabled={busy} onClick={closeAsk} className="flex-1 bg-panel px-3 py-1 text-xl uppercase text-paper">Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

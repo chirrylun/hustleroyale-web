@@ -173,6 +173,7 @@ MARKET["props"] += [
     P(16, 215, 940, "Lobby", "/lobby"), P(16, MW - 215, 940, "Guild hall", "/home"),
 ]
 MARKET["npcs"].append(N("guard", "left", MW - 330, 1030, "guard"))
+MARKET["npcs"].append(N("storage_keeper", "left", MW - 330, 1180, "storage"))
 
 
 def main():

@@ -254,6 +254,13 @@
      "x": 2310,
      "y": 1030,
      "action": "guard"
+    },
+    {
+     "npc": "storage_keeper",
+     "facing": "left",
+     "x": 2310,
+     "y": 1180,
+     "action": "storage"
     }
    ]
   },

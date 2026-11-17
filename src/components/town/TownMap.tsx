@@ -67,8 +67,9 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
   const router = useRouter();
   const nav = useMemo(() => buildNav(navLayoutOf(town)), [town]);
   const mine = useMemo(() => {
+    // Only the party leader walks around the lobby and market.
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => a.team_slot - b.team_slot);
-    return (team.length ? team : fighters).slice(0, 3);
+    return (team.length ? team : fighters).slice(0, 1);
   }, [fighters]);
 
   const [rig] = useState<Rig>(() => new Map());

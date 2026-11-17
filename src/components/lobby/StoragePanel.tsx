@@ -3,12 +3,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RARITY, itemImage, itemName } from "@/lib/items";
+import { BAG_MAX } from "@/components/floor/BagMenu";
 import { createClient } from "@/lib/supabase/client";
 
 interface Item { slug: string; name: string; rarity: string; qty: number }
 type Side = "bag" | "box";
 
-const MESSAGES: Record<string, string> = { storage_full: "The box is full.", not_enough_items: "You don't have that many.", unauthorized: "Please sign in again." };
+const MESSAGES: Record<string, string> = { storage_full: "The box is full.", bag_full: "Your bag is full (100 items).", not_enough_items: "You don't have that many.", unauthorized: "Please sign in again." };
 
 /** The storage box: move items between your bag and a roomy box. Capacity is the total number of items inside. */
 export function StoragePanel() {
@@ -48,6 +49,8 @@ export function StoragePanel() {
   };
 
   const used = box?.reduce((s, i) => s + i.qty, 0) ?? 0;
+  const carried = bag?.reduce((s, i) => s + i.qty, 0) ?? 0;
+  const room = Math.max(0, BAG_MAX - carried);
   const list = side === "bag" ? bag : box;
   return (
     <div className="flex flex-col gap-2">
@@ -55,7 +58,7 @@ export function StoragePanel() {
         <div className="h-3 flex-1 bg-ink/80" role="progressbar" aria-label="Box space used" aria-valuemin={0} aria-valuemax={cap} aria-valuenow={used}>
           <div className={`h-full ${used >= cap ? "bg-ember" : "bg-gold"}`} style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} />
         </div>
-        <span className="text-lg text-paper">{used}/{cap}</span>
+        <span className="text-lg text-paper">Box {used}/{cap}</span>
       </div>
       <div className="flex gap-1" role="tablist">
         {(["bag", "box"] as const).map((s) => (
@@ -64,7 +67,7 @@ export function StoragePanel() {
           </button>
         ))}
       </div>
-      <p className="text-base text-steel">{side === "bag" ? "Tap an item to put it in the box." : "Tap an item to take it back."}</p>
+      <p className="text-base text-steel">{side === "bag" ? `Tap an item to put it in the box. Bag ${carried}/${BAG_MAX}.` : `Tap an item to take it back. Bag ${carried}/${BAG_MAX}${room === 0 ? " · full" : ""}.`}</p>
       <div className="max-h-72 min-h-32 overflow-y-auto">
         {list === null ? <div className="h-28 animate-pulse bg-panel" aria-busy="true" />
           : list.length === 0 ? <p className="py-6 text-center text-xl text-steel">{side === "bag" ? "Your bag is empty." : "The box is empty."}</p>
@@ -73,7 +76,7 @@ export function StoragePanel() {
               {list.map((i) => (
                 <li key={i.slug} className="flex min-w-0 flex-col items-center gap-1">
                   <button
-                    type="button" disabled={busy || (side === "bag" && used >= cap)} onClick={() => move(i.slug, side === "bag" ? 1 : -1)}
+                    type="button" disabled={busy || (side === "bag" ? used >= cap : room <= 0)} onClick={() => move(i.slug, side === "bag" ? 1 : -1)}
                     aria-label={`${side === "bag" ? "Store" : "Take"} one ${i.name}`}
                     className={`relative flex aspect-square w-full items-center justify-center border-2 bg-panel enabled:hover:brightness-125 disabled:opacity-50 ${RARITY[i.rarity]?.ring ?? "border-steel"}`}
                   >
@@ -82,7 +85,7 @@ export function StoragePanel() {
                   </button>
                   <span className={`w-full truncate text-center text-sm leading-4 ${RARITY[i.rarity]?.text ?? "text-paper"}`}>{i.name}</span>
                   {i.qty > 1 && (
-                    <button type="button" disabled={busy} onClick={() => move(i.slug, (side === "bag" ? 1 : -1) * Math.min(i.qty, side === "bag" ? Math.max(0, cap - used) : i.qty))} className="bg-night px-1.5 text-sm uppercase text-gold disabled:opacity-40">All</button>
+                    <button type="button" disabled={busy} onClick={() => move(i.slug, (side === "bag" ? 1 : -1) * Math.min(i.qty, side === "bag" ? Math.max(0, cap - used) : room))} className="bg-night px-1.5 text-sm uppercase text-gold disabled:opacity-40">All</button>
                   )}
                 </li>
               ))}
