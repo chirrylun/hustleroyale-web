@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GuildFighter } from "@/lib/guild";
+import { xpRequired, type GuildFighter } from "@/lib/guild";
 import { restedFrac } from "@/lib/rest";
 
 /** A fighter's health bar over its head in the guild. Resting heals, so the bar fills and a green +N floats up as it does, like on the floors. */
-export function HealthTag({ f }: { f: Pick<GuildFighter, "hp" | "hp_frac" | "hp_at"> }) {
+export function HealthTag({ f }: { f: Pick<GuildFighter, "hp" | "hp_frac" | "hp_at" | "xp" | "level"> }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, []);
   const fr = restedFrac(f.hp_frac, f.hp_at, now);
   const hp = Math.round(fr * f.hp);
+  const xpPct = Math.min(100, Math.round(((f.xp ?? 0) / xpRequired(f.level)) * 100));
   const shown = useRef({ hp, at: now });
   const [pops, setPops] = useState<{ id: number; n: number }[]>([]);
   useEffect(() => {
@@ -29,6 +30,9 @@ export function HealthTag({ f }: { f: Pick<GuildFighter, "hp" | "hp_frac" | "hp_
       ))}
       <span className="block h-[clamp(3px,0.7cqw,7px)] w-full bg-ink/85" role="progressbar" aria-label="Health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fr * 100)}>
         <span className={`block h-full ${fr < 0.3 ? "bg-ember" : "bg-leaf"}`} style={{ width: `${fr * 100}%` }} />
+      </span>
+      <span className="mt-[1px] block h-[clamp(2px,0.45cqw,5px)] w-full bg-ink/85" role="progressbar" aria-label="Experience" aria-valuemin={0} aria-valuemax={100} aria-valuenow={xpPct}>
+        <span className="block h-full bg-[#ff9a1f]" style={{ width: `${xpPct}%` }} />
       </span>
     </span>
   );

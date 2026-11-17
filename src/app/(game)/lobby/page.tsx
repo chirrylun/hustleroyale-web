@@ -21,6 +21,6 @@ async function Content() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const fighters = await loadFighters(supabase, user.id);
-  if (!fighters.some((f) => f.team_slot > 0)) redirect("/home?lobby=1"); // choose who to bring in the guild first
+  if (!fighters.length) redirect("/home");
   return <TownMap id="lobby" fighters={fighters} />;
 }

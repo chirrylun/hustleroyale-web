@@ -23,10 +23,10 @@ const OPEN_DURING_FIRST_JOB = ["jobs", "adventure"];
 const FIRST_JOB_NOTICE = "Complete your first quest on the job board first.";
 
 /** Tutorial job: kill a bat on Floor 1 (steps 6-8 of the tutorial); afterwards the board is "empty" until more jobs land. */
-export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0, enterLobby = false }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number; enterLobby?: boolean }) {
+export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number; enterLobby?: boolean }) {
   const router = useRouter();
   const [step, setStep] = useState(tutorialStep);
-  const [panel, setPanel] = useState<"jobs" | "adventure" | "party" | "lobby" | null>(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : enterLobby && tutorialStep >= 9 ? "lobby" : null);
+  const [panel, setPanel] = useState<"jobs" | "adventure" | "party" | null>(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
   const [floorSel, setFloorSel] = useState(enterFloor >= 1 ? enterFloor : 1);
   const [msg, setMsg] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
 
   // Coming back to the guild always starts at the hall, not on whatever panel was open when you left.
   useEffect(() => {
-    setPanel(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : enterLobby && tutorialStep >= 9 ? "lobby" : null);
+    setPanel(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
     setNotice(null);
     clearExpedition(); // resting at the guild heals everyone
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,7 +87,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
     if (a === "jobs") {
       if (step === 6) setTut(7);
       setPanel("jobs");
-    } else if (a === "lobby") setPanel("lobby");
+    } else if (a === "lobby") router.push("/lobby"); // your first equipped fighter goes in on their own
     else setPanel("adventure");
   };
 
@@ -157,9 +157,7 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
         {panel && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3 short:p-2">
             <div className="pixel-box card-reveal max-h-[94dvh] w-full max-w-lg overflow-y-auto bg-night p-5 short:max-w-3xl short:p-3">
-              {panel === "lobby" ? (
-                <PartyPanel fighters={fighters} kicker="Meet other players" title="Main Lobby" goLabel="Enter the lobby" startWithOne onBack={() => setPanel(null)} onGo={() => router.push("/lobby")} />
-              ) : panel === "party" ? (
+              {panel === "party" ? (
                 <PartyPanel floorNo={floorSel} fighters={fighters} onBack={() => setPanel("adventure")} onGo={() => router.push(`/floor/${floorSel}`)} />
               ) : panel === "adventure" ? (
                 <>

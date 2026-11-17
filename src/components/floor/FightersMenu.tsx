@@ -1,0 +1,78 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { FighterCard } from "@/components/pack/FighterCard";
+import { ClassActions } from "@/components/guild/ClassActions";
+import { ROSTER_CAP, loadFighters, type GuildFighter } from "@/lib/guild";
+import { createClient } from "@/lib/supabase/client";
+import { UiIcon } from "@/components/ui/UiIcon";
+
+type Tab = "fighters";
+
+/** Your fighters from anywhere: the same cards as My Fighters in the guild. Equipment gets its own tab later. */
+export function FightersMenu({ onClose }: { onClose: () => void }) {
+  const [list, setList] = useState<GuildFighter[] | null>(null);
+  const [error, setError] = useState(false);
+  const [tab] = useState<Tab>("fighters");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const sb = createClient();
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) { if (live) setError(true); return; }
+      const f = await loadFighters(sb, user.id);
+      if (live) setList(f);
+    })().catch(() => { if (live) setError(true); });
+    return () => { live = false; };
+  }, []);
+
+  return (
+    <div data-ui className="fixed inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-3 short:p-2" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label="My Fighters" className="pixel-box flex max-h-full w-full max-w-md flex-col bg-night sm:max-w-3xl">
+        <div className="flex items-stretch gap-1 border-b-2 border-steel p-2">
+          <button type="button" role="tab" aria-selected={tab === "fighters"} className="flex flex-1 items-center justify-center gap-2 bg-gold px-2 py-1 text-xl uppercase text-ink">
+            My Fighters{list && <span className="min-w-6 bg-ink/20 px-1 text-base">{list.length}/{ROSTER_CAP}</span>}
+          </button>
+          <button type="button" aria-label="Close" onClick={onClose} className="w-10 bg-panel text-2xl text-paper">✕</button>
+        </div>
+        <div className="min-h-48 overflow-y-auto p-3 short:min-h-24 short:p-2">
+          {error ? <p role="alert" className="text-xl text-ember">Couldn&apos;t load your fighters. Try again.</p>
+            : list === null ? <div className="h-40 animate-pulse bg-panel" aria-busy="true" />
+            : list.length === 0 ? <p className="text-xl text-paper">No fighters yet.</p>
+            : (
+              <div className="grid gap-3 sm:grid-cols-2 short:grid-cols-3">
+                {list.map((f, i) => (
+                  <div key={f.id} className="flex flex-col gap-1.5">
+                    <FighterCard fighter={f} delayMs={i * 80} compact />
+                    <Link href={`/team/${f.id}`} className="pixel-btn bg-panel px-3 py-0.5 text-center text-base uppercase text-paper">Skills ({f.skill_points ?? 0} points)</Link>
+                    <ClassActions id={f.id} level={f.level} role={f.template.role} archetype={f.template.archetype} rarity={f.template.rarity} />
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The roster icon button; sits with the bag button. */
+export function FightersButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button" aria-label="My Fighters" onClick={onClick}
+      onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
+      className="pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90 text-2xl leading-none"
+    >
+      <UiIcon name="crown" size={30} />
+    </button>
+  );
+}

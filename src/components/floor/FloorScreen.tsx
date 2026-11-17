@@ -9,7 +9,7 @@ import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { FX_COLS, FX_ROWS, mobScale } from "@/lib/sprites/designs";
 import { artOf, type FxArt } from "@/lib/skill-art";
 import { playSkill, skillSoundUrl, warmSounds } from "@/lib/sfx";
-import type { GuildFighter } from "@/lib/guild";
+import { xpRequired, type GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
 import { findPath, buildNav, clearLine, nearestRoomy, nearestWalkable, roomy, walkable, standable, type Pt } from "@/lib/guild-nav";
 import type { Stance } from "@/lib/battle";
@@ -20,6 +20,7 @@ import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { BagMenu } from "@/components/floor/BagMenu";
+import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
 import { itemImage, itemName } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
@@ -88,7 +89,7 @@ const toFSkill = (s: EquippedSkill): FSkill => {
 };
 
 const makeAg = (side: Ag["side"], p: Partial<Ag> & Pick<Ag, "id" | "sprite" | "name" | "level" | "x" | "y" | "hp" | "atk" | "def" | "kind">): Ag => ({
-  role: "dps", max: p.hp, magic: 0, skills: [], en: 0, maxEn: 0, regen: 0, gcd: 0, shield: 0, shieldUntil: 0, buffUntil: 0, weakUntil: 0, dodge: 0, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false, provoked: false,
+  role: "dps", xp: 0, max: p.hp, magic: 0, skills: [], en: 0, maxEn: 0, regen: 0, gcd: 0, shield: 0, shieldUntil: 0, buffUntil: 0, weakUntil: 0, dodge: 0, path: [], target: null, cd: 0, repath: 0, dead: false, boss: false, held: false, provoked: false,
   look: { rest: "idle", flip: false, act: null, n: 0 }, side,
   slot: 0, speedMul: 1, nudgeAt: -1, nudging: false, delay: 0, sway: [0, 0], swayAt: 0, angle: Math.random() * Math.PI * 2, home: [p.x, p.y, 2], wanderAt: 0, born: -1e9, deadAt: 0,
   movedAt: 0, skipId: "", skipUntil: 0,
@@ -130,6 +131,8 @@ interface Ag {
   bar?: HTMLDivElement | null;
   hpEl?: HTMLDivElement | null;
   mpEl?: HTMLDivElement | null;
+  /** Allies: xp into the current level, and the bar showing it. */
+  xp: number; xpEl?: HTMLDivElement | null;
   /** Allies: place in the formation (0 leads). */
   slot: number;
   /** Walking pace relative to the others, so a group never moves in lockstep. */
@@ -191,6 +194,9 @@ function Unit({ a, party }: { a: Ag; party: number }) {
           {a.side === "ally" && a.maxEn > 0 && (
             <div className="absolute left-0 top-full h-1 w-full bg-ink/80"><div ref={(el) => { a.mpEl = el; }} className="h-full w-full bg-sky" /></div>
           )}
+          {a.side === "ally" && (
+            <div className={`absolute left-0 h-1 w-full bg-ink/80 ${a.maxEn > 0 ? "top-[calc(100%+4px)]" : "top-full"}`}><div ref={(el) => { a.xpEl = el; }} className="h-full bg-[#ff9a1f]" style={{ width: `${Math.min(100, (a.xp / xpRequired(a.level)) * 100)}%` }} /></div>
+          )}
           <span
             className={`absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-bold leading-none ${a.side === "foe" ? levelTone(a.level - party) : "text-steel"}`}
             style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}
@@ -244,6 +250,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const [stance, setStanceState] = useState<Stance>("neutral");
   const stanceRef = useRef<Stance>("neutral");
   const [bagOpen, setBagOpen] = useState(false);
+  const [fightersOpen, setFightersOpen] = useState(false);
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
   const [stock, setStock] = useState<Record<string, number>>({});
   const [picking, setPicking] = useState<number | null>(null);
@@ -366,7 +373,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       const at = clearOfLight(nav, fromAbove ? [floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), floor.exit[1] + 0.9] : [floor.start[0], floor.start[1] + 0.9], fromAbove ? -1 : 1, off);
       return makeAg("ally", {
         id: f.id, sprite: f.template.sprite_key, role: f.template.role, name: f.template.name, level: f.level,
-        x: at[0], y: at[1], hp: f.hp, atk: f.atk, def: f.def, kind: "fighter", slot, speedMul: rnd(0.93, 1.07),
+        x: at[0], y: at[1], xp: f.xp ?? 0, hp: f.hp, atk: f.atk, def: f.def, kind: "fighter", slot, speedMul: rnd(0.93, 1.07),
         magic: f.magic, maxEn: f.stamina * 5, en: f.stamina * 5, regen: 2 + f.stamina * 0.2,
         skills: (f.skills ?? []).filter((s) => s.slot >= 2 && s.name && s.kind).sort((x, y) => x.slot - y.slot).map(toFSkill),
       });
@@ -569,6 +576,9 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       const a = allies.current.find((u) => u.id === w.id);
       if (!a || w.gained <= 0) continue;
       overHead(a, `+${w.gained} XP`, "text-leaf", 1200);
+      a.xp += w.gained;
+      for (let g = 0, lv = a.level - w.levels_gained; g < w.levels_gained; g++, lv++) a.xp -= xpRequired(lv);
+      a.xp = Math.max(0, a.xp);
       if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
     }
   };
@@ -914,6 +924,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           u.fx.style.transition = u.el.style.transition;
         }
         if (u.hpEl) u.hpEl.style.width = `${(u.hp / u.max) * 100}%`;
+        if (u.xpEl) u.xpEl.style.width = `${Math.min(100, (u.xp / xpRequired(u.level)) * 100)}%`;
         if (u.mpEl && u.maxEn > 0) u.mpEl.style.width = `${(u.en / u.maxEn) * 100}%`;
         if (u.path.length > 0 && !u.dead) u.movedAt = now;
         const moving = !u.dead && now - u.movedAt < 220; // short pauses between hops don't flicker to idle
@@ -1100,7 +1111,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     if (e.pointerType === "mouse") {
       // Edge scrolling is only for the bare map: not over buttons or menus, and not while the bag is open.
       const onUi = !!(e.target as HTMLElement).closest("button, [role=dialog], [role=group], [data-ui]");
-      if (onUi || bagOpen || picking !== null) { c.px = -1; return; }
+      if (onUi || bagOpen || fightersOpen || picking !== null) { c.px = -1; return; }
       c.px = p.x; c.py = p.y;
       const atEdge = p.x < EDGE || p.y < EDGE || p.x > c.vw - EDGE || p.y > c.vh - EDGE;
       if (atEdge && !c.free) { c.free = true; setFree(true); }
@@ -1278,13 +1289,17 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                 </span>
               </button>
             ))}
-            <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/ui/bag.png" alt="" className="h-8 w-8" draggable={false} />
-            </button>
+            <div className="flex gap-2 max-sm:flex-row sm:flex-col short:flex-row short:gap-1">
+              <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/ui/bag.png" alt="" className="h-8 w-8" draggable={false} />
+              </button>
+              <FightersButton onClick={() => setFightersOpen(true)} />
+            </div>
           </div>
         )}
 
+        {fightersOpen && <FightersMenu onClose={() => setFightersOpen(false)} />}
         {bagOpen && <BagMenu onUse={drinkSlug} onClose={() => { setBagOpen(false); loadStock(); }} />}
 
         {state === "play" && (
