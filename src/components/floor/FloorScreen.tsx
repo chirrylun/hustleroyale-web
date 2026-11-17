@@ -371,7 +371,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       });
     });
     // Load the party's skill sounds now, so the first cast is on time.
-    warmSounds([...new Set(allies.current.flatMap((a) => a.skills.map((sk) => skillSoundUrl(sk.name))))]);
+    warmSounds([...new Set([skillSoundUrl("Basic Strike"), ...allies.current.flatMap((a) => a.skills.map((sk) => skillSoundUrl(sk.name)))])]);
     // Health and who is still up carry over from the last floor of this expedition.
     for (const f of squad) {
       const a = allies.current.find((x) => x.id === f.id);
@@ -769,7 +769,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             } else {
               a.path = [];
               a.look.flip = t.x < a.x;
-              if (a.cd <= 0) { a.cd = 0.9 * rnd(0.92, 1.15); hurt(a, t, now); }
+              if (a.cd <= 0) { a.cd = 0.9 * rnd(0.92, 1.15); playSkill("Basic Strike"); hurt(a, t, now); }
             }
           } else if (hold || a !== lead) {
             // Nothing to fight: keep a loose formation around the leader (or around the held ground). Each fighter

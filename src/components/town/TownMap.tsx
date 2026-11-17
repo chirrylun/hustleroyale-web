@@ -19,9 +19,9 @@ import { ATLAS, NPC_HEIGHT, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type 
 const SPEED = 2.6; // tiles per second
 const FRAME = 3.4; // a fighter's sprite frame, in tiles
 /** Tiles across the screen at the default zoom (the picture is zoomed in so the player has to explore). */
-const VIEW_TILES = 26;
-const ZOOM_CAP = 1.7;
-const ZOOM_MIN = 0.4;
+const VIEW_TILES = 15; // same framing as the floors
+const ZOOM_CAP = 2.3;
+const ZOOM_MIN = 0.5; // the base view; pulling in goes up to 1
 const FORMATION: Pt[] = [[0, 0], [-0.9, 0.6], [0.9, 0.6]];
 /** A tapped sign sends the party to it; this close to it counts as arrived. */
 const ARRIVE = 1.7;
@@ -81,7 +81,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
   const dirty = useRef(true);
   const view = useRef<HTMLDivElement>(null);
   const world = useRef<HTMLDivElement>(null);
-  const cam = useRef({ x: 0, y: 0, vw: 800, vh: 600, z: 1, zu: 1 });
+  const cam = useRef({ x: 0, y: 0, vw: 800, vh: 600, z: 1, zu: ZOOM_MIN });
   const WW = town.w * SCALE, WH = town.h * SCALE; // the picture on screen, in px
   const fitZoom = () => { const c = cam.current; c.z = Math.min(ZOOM_CAP, Math.max(1, c.vw / (T * VIEW_TILES))) * c.zu; };
   const marker = useRef<HTMLDivElement>(null);
@@ -274,7 +274,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
         className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
         onPointerDown={(e) => { down.current = { ...local(e), t: performance.now() }; }}
         onPointerUp={onUp}
-        onWheel={(e) => { const c = cam.current; c.zu = Math.min(1.3, Math.max(ZOOM_MIN, c.zu + (e.deltaY > 0 ? -0.07 : 0.07))); fitZoom(); }}
+        onWheel={(e) => { const c = cam.current; c.zu = Math.min(1, Math.max(ZOOM_MIN, c.zu + (e.deltaY > 0 ? -0.07 : 0.07))); fitZoom(); }}
       >
         <div ref={world} className="absolute left-0 top-0 origin-top-left" style={{ width: WW, height: WH }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
