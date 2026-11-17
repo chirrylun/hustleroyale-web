@@ -16,12 +16,28 @@ NAMES = [
 ]
 
 
+POTION_NAMES = [
+    "hp_potion", "hp_potion_m", "hp_potion_l", "hp_potion_max", "revive_potion",
+    "mp_potion", "mp_potion_m", "mp_potion_l", "mp_potion_max", "teleport_stone",
+]
+
+
 def main():
+    """  python3 tools/build_items.py <drops sheet png>            monster drops (5 x 2)
+      python3 tools/build_items.py --potions <potions sheet png>  potions, revive potion, teleport stone (5 x 2)
+    Either way the list of available art (src/lib/item-art.json) is rebuilt."""
+    import json
     out = ROOT / "public" / "items"
     out.mkdir(parents=True, exist_ok=True)
-    for name, art in icon_cells(Path(sys.argv[1]), NAMES, cols=5, rows=2):
+    if sys.argv[1] == "--potions":
+        cells = icon_cells(Path(sys.argv[2]), POTION_NAMES, cols=5, rows=2)
+    else:
+        cells = icon_cells(Path(sys.argv[1]), NAMES, cols=5, rows=2)
+    for name, art in cells:
         save_icon(name, art, out)
         print("item", name)
+    names = sorted(p.stem for p in out.glob("*.png"))
+    (ROOT / "src" / "lib" / "item-art.json").write_text(json.dumps(names, indent=1) + "\n")
 
 
 if __name__ == "__main__":

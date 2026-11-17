@@ -4,12 +4,12 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { UiIcon } from "@/components/ui/UiIcon";
-import { RARITY, itemImage } from "@/lib/items";
+import { POTION_SLUGS, RARITY, itemImage } from "@/lib/items";
 
 interface Item { slug: string; name: string; rarity: string; qty: number; blurb: string }
 
 export const BAG_MAX = 100;
-const USABLE = ["hp_potion", "mp_potion"];
+const USABLE = POTION_SLUGS;
 type Ask = { kind: "use" | "discard"; n: number };
 interface Obj { idx: number; text: string; have: number; need: number }
 interface Job { slug: string; title: string; done: boolean; objs: Obj[]; coins: number; xp: number }

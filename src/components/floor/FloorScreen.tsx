@@ -21,7 +21,7 @@ import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { BagMenu } from "@/components/floor/BagMenu";
 import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
-import { itemImage, itemName } from "@/lib/items";
+import { POTIONS, POTION_SLUGS, itemImage, itemName } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
@@ -172,7 +172,7 @@ const levelTone = (gap: number) => (gap >= 5 ? "text-ember" : gap >= 2 ? "text-g
 const MOB_NAME: Record<string, string> = { direwolf: "Dire Wolf" };
 const mobName = (kind: string) => MOB_NAME[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 
-const POTIONS = ["hp_potion", "mp_potion"];
+const POTION_LIST = POTION_SLUGS;
 
 function Unit({ a, party }: { a: Ag; party: number }) {
   const [look, setLook] = useState(a.look);
@@ -456,12 +456,12 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   }, [floor]);
 
   const loadStock = () => {
-    createClient().from("player_items").select("item_slug, qty").in("item_slug", POTIONS).then(({ data }) => {
+    createClient().from("player_items").select("item_slug, qty").in("item_slug", POTION_LIST).then(({ data }) => {
       setStock(Object.fromEntries((data ?? []).map((r) => [r.item_slug as string, r.qty as number])));
     });
   };
   useEffect(() => {
-    try { const v = JSON.parse(localStorage.getItem("hr_item_slots") ?? "null"); if (Array.isArray(v) && v.length === 3) setSlots(v.map((x) => (POTIONS.includes(x) ? x : null))); } catch {}
+    try { const v = JSON.parse(localStorage.getItem("hr_item_slots") ?? "null"); if (Array.isArray(v) && v.length === 3) setSlots(v.map((x) => (POTION_LIST.includes(x) ? x : null))); } catch {}
     loadStock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -473,9 +473,11 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   /** Drinks a slotted potion on whichever fighter needs it most. */
   const drinkPotion = async (i: number) => { const slug = slots[i]; if (slug) await drinkSlug(slug); };
   const drinkSlug = async (slug: string): Promise<boolean> => {
-    if (!POTIONS.includes(slug) || usingPotion.current) return false;
-    const live = allies.current.filter((u) => !u.dead);
-    const need = (u: Ag) => (slug === "hp_potion" ? 1 - u.hp / u.max : u.maxEn > 0 ? 1 - u.en / u.maxEn : 0);
+    if (!POTION_LIST.includes(slug) || usingPotion.current) return false;
+    const pot = POTIONS[slug];
+    const revive = pot.kind === "revive";
+    const live = allies.current.filter((u) => (revive ? u.dead : !u.dead));
+    const need = (u: Ag) => (revive ? 1 : pot.kind === "hp" ? 1 - u.hp / u.max : u.maxEn > 0 ? 1 - u.en / u.maxEn : 0);
     const t = [...live].sort((p, q) => need(q) - need(p))[0];
     if (!t || need(t) < 0.02) { setPicking(null); return false; }
     usingPotion.current = true;
@@ -483,12 +485,18 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       const { error } = await createClient().rpc("use_item", { p_slug: slug });
       if (error) { loadStock(); return false; }
       setStock((m) => ({ ...m, [slug]: Math.max(0, (m[slug] ?? 1) - 1) }));
+      if (revive) {
+        if (!t.dead) return true;
+        t.dead = false; t.hp = Math.max(1, Math.round(t.max * pot.frac)); t.path = []; t.target = null; t.born = performance.now();
+        spawnFx({ sheet: "support", row: 0 }, t.x, t.y); overHead(t, "Revived!", "text-gold", 1200);
+        return true;
+      }
       if (t.dead) return true;
-      if (slug === "hp_potion") {
-        const amt = Math.max(1, Math.round(t.max * 0.4)); t.hp = Math.min(t.max, t.hp + amt);
+      if (pot.kind === "hp") {
+        const amt = Math.max(1, Math.round(t.max * pot.frac)); t.hp = Math.min(t.max, t.hp + amt);
         spawnFx({ sheet: "support", row: 0 }, t.x, t.y); overHead(t, `+${amt}`, "text-leaf", 900);
       } else {
-        const amt = Math.max(1, Math.round(t.maxEn * 0.5)); t.en = Math.min(t.maxEn, t.en + amt);
+        const amt = Math.max(1, Math.round(t.maxEn * pot.frac)); t.en = Math.min(t.maxEn, t.en + amt);
         overHead(t, `+${amt} MP`, "text-sky", 900);
       }
       return true;
@@ -1312,8 +1320,9 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
               return (
                 <div key={i} className="relative">
                   {picking === i && (
-                    <div className="pixel-box absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-2 bg-night/95 p-2">
-                      {POTIONS.map((p) => (
+                    <div className="pixel-box absolute bottom-full left-1/2 mb-2 flex max-w-[17rem] -translate-x-1/2 flex-wrap justify-center gap-2 bg-night/95 p-2">
+                      {POTION_LIST.every((p) => (stock[p] ?? 0) <= 0) && <span className="px-2 text-base text-paper">No potions yet. Buy some at the market.</span>}
+                      {POTION_LIST.filter((p) => (stock[p] ?? 0) > 0).map((p) => (
                         <button key={p} type="button" aria-label={itemName(p)} disabled={(stock[p] ?? 0) <= 0} onClick={() => setSlot(i, p)} className="pixel-box relative h-12 w-12 bg-night disabled:opacity-40">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={itemImage(p)} alt="" className="h-10 w-10 [image-rendering:pixelated]" draggable={false} />

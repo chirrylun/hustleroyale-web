@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { StoragePanel } from "@/components/lobby/StoragePanel";
+import { MarketPanel } from "@/components/lobby/MarketPanel";
 import { Npc, npcRatio, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { Speech, SpeechActions } from "@/components/room/Speech";
@@ -321,7 +322,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
       </div>
 
       {talk && (
-        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} onClose={close}>
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage" || talk === "merchant"} onClose={close}>
           {talk === "arena" && (
             <>
               <p>Think your fighters are tough? Test them against other guilds.</p>
@@ -346,9 +347,9 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
           )}
           {talk === "merchant" && (
             <>
-              <p>Welcome! The stalls aren&apos;t open just yet.</p>
-              <p className="text-steel">Soon you&apos;ll buy and sell fighters with other players here, and buy upgrades for your guild.</p>
-              <SpeechActions><PixelButton variant="ghost" onClick={close}>Okay</PixelButton></SpeechActions>
+              <p className="text-steel">Potions bought and sold here. Fighters and gear are coming soon.</p>
+              <MarketPanel />
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
             </>
           )}
           {talk === "armourer" && (
