@@ -25,9 +25,27 @@ Every other class sheet already has a class outfit and weapon painted into it, w
 2. For these two, generate a **bare base sheet** first (prompt A0). Gear overlays are drawn on the bare base, and the game shows the bare base when nothing is equipped in a slot.
 3. Class sheets (paladin, mage, and so on) get the same treatment later, once the novice set looks right. The prompts below work for them unchanged; only the reference image changes.
 
-### A0. Bare base (once per body)
+### A0. Bare base (once per body sheet)
 
-> Attach `novice_male.png` (or `novice_female.png`). Redraw **exactly the same sheet**, same 1248 x 1248 canvas, same 6 x 6 grid, same poses, same frame positions, same body size and the same feet baseline in every frame, but the fighter **wears only plain cloth underclothes**: a short-sleeved off-white undershirt, simple brown shorts to the knee, bare feet, **no hat, no gloves, no belt, no weapon, hands empty and slightly curled** where a weapon would be held. Keep hair, face and skin identical. Plain flat magenta (#FF00FF) background. Crisp hard pixel edges, no anti-aliasing, 1px dark outline, no shadow.
+Run this once for **every body sheet that will wear gear**. Do the two novices first, then one class at a time.
+
+> Attach the body sheet (for example `public/sprites/paladin_common.png`). Redraw **exactly the same sheet**: same 1248 x 1248 canvas, same 6 x 6 grid of 208 px cells, same poses, same frame positions, same body size and the **same feet baseline in every frame**. The fighter keeps their own **face, hair, skin tone, build and height** (copy them from the reference), but is **stripped to plain cloth underclothes**: a short-sleeved off-white undershirt and simple brown shorts to the knee, **bare feet, no hat or hood, no armour, no cape, no gloves, no belt or pouches, no jewellery, no weapon, no shield, no instrument or book**. Hands are **empty and slightly curled** wherever they held something, and the attack, cast and windup rows keep the same arm motion, as if swinging or casting with an empty hand. **Nothing that was in the original may remain** (no glowing orbs, no capes, no particle effects). Plain flat magenta (#FF00FF) background, crisp hard pixel edges, no anti-aliasing, 1px dark outline, no shadow, no ground, no text.
+
+Per sheet, tell the generator what to keep (the face and hair are what players recognise):
+
+| Sheet | Keep from the reference | Remove |
+|---|---|---|
+| `novice_male`, `novice_female` | face, hair, build | (already plain; just strip any hat, belt or weapon) |
+| `paladin_common/uncommon/rare/legendary` | stern face, short hair, broad build | plate armour, helm, cape, tabard, sword, mace, shield |
+| `magical_dps_*` (mage) | face, hair, slim build | robe, hat, cape, staff or wand, orb and glow |
+| `healer_*`, `bard_*` | face, hair, build | robe, vestments, hood, staff, holy symbol, lute or instrument |
+| `marksman_*` | face, hair, lean build | hooded cloak, quiver, bow, gloves, bandolier |
+| `rogue_*` | face, hair, agile build | hood, mask, cloak, daggers, belts |
+| `necromancer_*` | face, hair, thin build | dark robe, hood, staff, skull trinkets, glow |
+| `tank_*`, `dps_*` (fallback sheets) | face, hair, build | all armour, helms, weapons, shields |
+| `recruit_fighter`, `recruit_acolyte`, `recruit_thief` | face, hair, build | everything but the underclothes |
+
+Do **one rarity of a class first** (for example `paladin_common`), compare it with `tools/gear_preview.py`, then repeat for the other three rarities. Rarity sheets of one class share a face and build, so once the first looks right the rest go quickly. Save as `public/sprites/bare/<sheet name>.png`.
 
 ### Shared preamble (paste at the top of every item below)
 

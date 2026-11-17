@@ -148,7 +148,6 @@ LOBBY = {
 }
 
 MW, MH = 2640, 1860
-STALLS = [(0, "merchant"), (1, "merchant"), (2, "armourer"), (3, "merchant"), (4, "merchant"), (5, "merchant")]
 MARKET = {
     "title": "Marketplace", "ground": "/town/market.webp", "w": MW, "h": MH, "online": False,
     "floor": [130, 330, MW - 130, MH - 160],
@@ -157,14 +156,14 @@ MARKET = {
     "props": [],
     "npcs": [],
 }
-for k, (idx, act) in enumerate(STALLS):
-    x = 400 + k * 370
-    MARKET["props"].append(P(idx, x, 620))
-    # The trader stands at the side of the stall, facing the street.
-    MARKET["npcs"].append(N("guard" if act == "armourer" else "merchant", "front", x + 125, 650, act))
+# Two stalls (potions, armour), then the storage keeper with his crates, centred on the street.
+MARKET["props"] += [P(1, 840, 620), P(2, 1230, 620)]
+MARKET["npcs"] += [N("merchant", "front", 965, 650, "merchant"), N("guard", "front", 1355, 650, "armourer")]
+MARKET["npcs"].append(N("storage_keeper", "front", 1700, 650, "storage"))
+MARKET["props"] += [P(20, 1550, 640), P(22, 1500, 700), P(21, 1870, 640), P(20, 2040, 650), P(22, 1960, 705)]
 MARKET["props"] += [
-    P(11, 330, 790), P(11, 1000, 790), P(11, 1640, 790), P(11, 2310, 790),
-    P(9, 215, 420), P(10, MW - 215, 420), P(6, 420, 800 + 0),
+    P(11, 650, 790), P(11, 1040, 790), P(11, 1440, 790), P(11, 1990, 790),
+    P(9, 215, 420), P(10, MW - 215, 420), P(6, 420, 800 + 0), P(14, 470, 600), P(14, MW - 330, 600),
     # South of the street: the fountain square with benches, the well and the tavern corner.
     P(7, MW // 2, 1440), P(12, MW // 2 - 300, 1470), P(12, MW // 2 + 300, 1470), P(13, MW // 2 - 160, 1250), P(13, MW // 2 + 160, 1250),
     P(8, 2200, 1400), P(21, 2380, 1530), P(19, 2150, 1650), P(30, 560, 1280), P(27, 520, 1500), P(29, 760, 1550),
@@ -173,7 +172,6 @@ MARKET["props"] += [
     P(16, 215, 940, "Lobby", "/lobby"), P(16, MW - 215, 940, "Guild hall", "/home"),
 ]
 MARKET["npcs"].append(N("guard", "left", MW - 330, 1030, "guard"))
-MARKET["npcs"].append(N("storage_keeper", "left", MW - 330, 1180, "storage"))
 
 
 def main():
