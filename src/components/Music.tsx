@@ -29,15 +29,16 @@ export function Music({ track }: { track: Track }) {
     const me = cur!;
     const a = me.a;
     const target = () => (isMuted() ? 0 : VOLUME[track]);
-    const start = () => { if (a.paused) a.play().then(() => { window.removeEventListener("pointerdown", start); window.removeEventListener("keydown", start); }, () => {}); };
+    // Browsers only unlock audio on a real click, touch end or key press (a mouse pointerdown does not count), so listen for all of them.
+    const unlock = ["pointerdown", "pointerup", "click", "touchend", "keydown"];
+    const off = () => unlock.forEach((e) => window.removeEventListener(e, start));
+    function start() { if (a.paused) a.play().then(off, () => {}); else off(); }
     start();
-    window.addEventListener("pointerdown", start);
-    window.addEventListener("keydown", start);
+    unlock.forEach((e) => window.addEventListener(e, start));
     const tick = setInterval(() => { const t = target(); a.volume = Math.max(0, Math.min(1, a.volume + Math.sign(t - a.volume) * Math.min(0.03, Math.abs(t - a.volume)))); }, 60);
     return () => {
       clearInterval(tick);
-      window.removeEventListener("pointerdown", start);
-      window.removeEventListener("keydown", start);
+      off();
       // Wait a moment: the next screen may want the same song.
       me.stop = setTimeout(() => { if (cur === me) { cur = null; } fadeOut(a); }, 400);
     };

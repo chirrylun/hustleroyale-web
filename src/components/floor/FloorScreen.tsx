@@ -1297,7 +1297,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                 </span>
               </button>
             ))}
-            <div className="flex gap-2 max-sm:flex-row sm:flex-col short:flex-row short:gap-1">
+            <div className="flex flex-col gap-2 short:gap-1">
               <button type="button" aria-label="Bag" onClick={() => setBagOpen(true)} className="pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/ui/bag.png" alt="" className="h-8 w-8" draggable={false} />

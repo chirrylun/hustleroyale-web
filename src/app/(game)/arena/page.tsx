@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 /** Same pattern as /home: request data (the session) is read inside <Suspense> so the shell prerenders. */
 export default function ArenaPage() {
   return (
-    <PageShell title="Find a Match">
+    <PageShell title="Find a Match" music={false}>
       <Suspense fallback={<div className="h-64 animate-pulse bg-panel" aria-busy="true" />}>
         <ArenaContent />
       </Suspense>
