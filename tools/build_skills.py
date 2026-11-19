@@ -170,9 +170,11 @@ def icon_cells(path: Path, names, cols=4, rows=6):
             yield name, art.crop(box)
 
 
-def save_icon(name: str, art: Image.Image, out: Path):
+def save_icon(name: str, art: Image.Image, out: Path, fit: bool = True):
+    """fit=False keeps the art's own size (already scaled by the caller) and only shrinks it if it would not fit the tile."""
     s = (ICON * 0.88) / max(art.size)
-    art = resize(art, (max(1, round(art.width * s)), max(1, round(art.height * s))))
+    if fit or s < 1:
+        art = resize(art, (max(1, round(art.width * s)), max(1, round(art.height * s))))
     tile = Image.new("RGBA", (ICON, ICON), (0, 0, 0, 0))
     tile.alpha_composite(art, ((ICON - art.width) // 2, (ICON - art.height) // 2))
     tile.save(out / f"{name}.png", optimize=True)

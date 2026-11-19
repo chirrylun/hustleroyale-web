@@ -8,6 +8,8 @@ removed and each icon found with the same blob detection the skill icons use (se
 import sys
 from pathlib import Path
 
+from PIL import Image
+
 from build_skills import ROOT, icon_cells, save_icon
 
 NAMES = [
@@ -33,8 +35,16 @@ def main():
         cells = icon_cells(Path(sys.argv[2]), POTION_NAMES, cols=5, rows=2)
     else:
         cells = icon_cells(Path(sys.argv[1]), NAMES, cols=5, rows=2)
+    # Potions keep their relative sizes (S < M < L < Max), softened so the small ones stay readable at 40 px.
+    cells = list(cells)
+    big = max(max(a.size) for _, a in cells)
     for name, art in cells:
-        save_icon(name, art, out)
+        if sys.argv[1] == "--potions":
+            k = 112 * (max(art.size) / big) ** 0.5 / max(art.size)  # the biggest icon fills 112 px of the 128 tile
+            art = art.resize((max(1, round(art.width * k)), max(1, round(art.height * k))), Image.NEAREST)
+            save_icon(name, art, out, fit=False)
+        else:
+            save_icon(name, art, out)
         print("item", name)
     names = sorted(p.stem for p in out.glob("*.png"))
     (ROOT / "src" / "lib" / "item-art.json").write_text(json.dumps(names, indent=1) + "\n")

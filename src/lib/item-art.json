@@ -6,9 +6,17 @@
  "golem_heart",
  "golem_shard",
  "hp_potion",
+ "hp_potion_l",
+ "hp_potion_m",
+ "hp_potion_max",
  "marsh_cap",
  "mp_potion",
+ "mp_potion_l",
+ "mp_potion_m",
+ "mp_potion_max",
+ "revive_potion",
  "slime_gel",
  "spore_cap",
+ "teleport_stone",
  "wolf_fang"
 ]
