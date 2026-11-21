@@ -1,6 +1,7 @@
 "use client";
 
 import { Music } from "@/components/Music";
+import { ArmouryPanel } from "@/components/gear/ArmouryPanel";
 import { BagButton } from "@/components/floor/BagButton";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -354,8 +355,9 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
           )}
           {talk === "armourer" && (
             <>
-              <p>The armoury is still being stocked. Come back when the stalls open.</p>
-              <SpeechActions><PixelButton variant="ghost" onClick={close}>Okay</PixelButton></SpeechActions>
+              <p className="text-steel">Weapons, shields and armour sets. Higher ranks need a higher level, and each set is made for one class.</p>
+              <ArmouryPanel />
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
             </>
           )}
           {talk === "guard" && (

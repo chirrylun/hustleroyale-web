@@ -7,14 +7,15 @@ import { ClassActions } from "@/components/guild/ClassActions";
 import { ROSTER_CAP, loadFighters, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
 import { UiIcon } from "@/components/ui/UiIcon";
+import { EquipmentTab } from "@/components/gear/EquipmentTab";
 
-type Tab = "fighters";
+type Tab = "fighters" | "equipment";
 
-/** Your fighters from anywhere: the same cards as My Fighters in the guild. Equipment gets its own tab later. */
+/** Your fighters from anywhere: the same cards as My Fighters in the guild, and a tab to equip them. */
 export function FightersMenu({ onClose }: { onClose: () => void }) {
   const [list, setList] = useState<GuildFighter[] | null>(null);
   const [error, setError] = useState(false);
-  const [tab] = useState<Tab>("fighters");
+  const [tab, setTab] = useState<Tab>("fighters");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -38,13 +39,15 @@ export function FightersMenu({ onClose }: { onClose: () => void }) {
     <div data-ui className="fixed inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-3 short:p-2" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()}>
       <div role="dialog" aria-modal="true" aria-label="My Fighters" className="pixel-box flex max-h-full w-full max-w-md flex-col bg-night sm:max-w-3xl">
         <div className="flex items-stretch gap-1 border-b-2 border-steel p-2">
-          <button type="button" role="tab" aria-selected={tab === "fighters"} className="flex flex-1 items-center justify-center gap-2 bg-gold px-2 py-1 text-xl uppercase text-ink">
+          <button type="button" role="tab" aria-selected={tab === "fighters"} onClick={() => setTab("fighters")} className={`flex flex-1 items-center justify-center gap-2 px-2 py-1 text-xl uppercase ${tab === "fighters" ? "bg-gold text-ink" : "bg-panel text-paper"}`}>
             My Fighters{list && <span className="min-w-6 bg-ink/20 px-1 text-base">{list.length}/{ROSTER_CAP}</span>}
           </button>
+          <button type="button" role="tab" aria-selected={tab === "equipment"} onClick={() => setTab("equipment")} className={`flex flex-1 items-center justify-center px-2 py-1 text-xl uppercase ${tab === "equipment" ? "bg-gold text-ink" : "bg-panel text-paper"}`}>Equipment</button>
           <button type="button" aria-label="Close" onClick={onClose} className="w-10 bg-panel text-2xl text-paper">✕</button>
         </div>
         <div className="min-h-48 overflow-y-auto p-3 short:min-h-24 short:p-2">
-          {error ? <p role="alert" className="text-xl text-ember">Couldn&apos;t load your fighters. Try again.</p>
+          {tab === "equipment" ? <EquipmentTab />
+            : error ? <p role="alert" className="text-xl text-ember">Couldn&apos;t load your fighters. Try again.</p>
             : list === null ? <div className="h-40 animate-pulse bg-panel" aria-busy="true" />
             : list.length === 0 ? <p className="text-xl text-paper">No fighters yet.</p>
             : (
