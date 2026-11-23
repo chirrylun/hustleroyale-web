@@ -13,3 +13,17 @@ Make **two** sheets, male then female (attach the approved male when making the 
 **Checks before sending:** every frame's feet sit on y = 187; the head does not bob more than 2 px in idle; shirt and shorts stay within 3 px of the body outline (armour is drawn over this, so keep it slim); magenta fully removed when imported.
 
 **Save as** `public/sprites/novice_male.png` and `public/sprites/novice_female.png` (replacing the current ones), and also keep copies in `public/sprites/bare/`. Once they arrive I will make this the default look for novices and for any fighter with no armour equipped; weapons come in with the weapon sheets afterwards.
+
+---
+
+## Starter armour (novice, rank 1 only)
+
+Novices get one set, **rank 1, enhanceable to level 10, no evolving**. It is worn over the bare novice above, so only the clothing changes. Make male, then female (attach the matching approved bare sheet each time).
+
+> 2D pixel-art **character sprite sheet** in the style of Chained Echoes and 16-bit JRPGs. Attached is the plain novice sheet (**1248 x 1248 px canvas, 208 px cells, same frames and rows as attached**). **Redraw exactly the same sheet, the same character, wearing a simple beginner's adventurer set** and nothing else new. Keep **pixel-identical**: every pose and frame count, the **head size and position (head top y = 66)**, **feet baseline y = 187**, body centre x = 104, body height 122 px, the face, hair, skin tone, and the arm and leg motion of each frame, **including the same empty fists** (no weapon, no shield, no glow, no slash trails).
+>
+> The set: a **quilted tan-and-brown leather jerkin** over the same off-white undershirt (short sleeves still showing at the arms), a **plain brown leather belt** with a small buckle, **leather forearm wraps**, **simple brown cloth trousers kept to the knee** with **low brown leather boots** (this replaces the bare feet), and **no helmet, hood or cape**. Humble and slightly worn, clearly "first gear": one colour family (warm browns and tan, a single muted red-brown stitch accent), about 14 colours.
+>
+> The armour **hugs the body outline**: at most 3 px of bulk on any limb and 5 px at the shoulders, and nothing hangs more than 6 px outside the base silhouette. Flat **magenta #FF00FF** background, crisp hard pixel edges, **no anti-aliasing**, 1 px dark outline, no shadow, no ground, no text.
+
+**Save as** `armor_novice_1_male.png` and `armor_novice_1_female.png` (the pipeline builds `armor_novice_1.png` and the shop/inventory icon from them). One rank only, so there is no rank 2-4 art for this set. Levels 1-10 change the stats, not the look.
