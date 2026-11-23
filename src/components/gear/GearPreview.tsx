@@ -1,12 +1,14 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { GearIcon } from "@/components/gear/GearIcon";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { MAX_LEVEL, RANK_TEXT, classLabel, enhanceCost, evolveCost, maxRankOf, minLevel, rankName, statsAt, type GearBase } from "@/lib/gear";
 
 const STATS = [["ATK", "atk"], ["DEF", "def"], ["MAG", "magic"], ["HP", "hp"], ["SPD", "spd"]] as const;
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-paper/10 py-1 text-lg last:border-0">
       <span className="shrink-0 text-steel">{label}</span>
