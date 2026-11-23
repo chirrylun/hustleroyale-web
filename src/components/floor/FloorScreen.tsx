@@ -24,7 +24,7 @@ import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
 import { POTIONS, POTION_SLUGS, itemImage, itemName } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
-import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
+import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, hitDamage, type Floor } from "@/lib/world/floor";
 
 const T = 34; // one tile, in px, before the camera zoom (tiles, props and sprites are all drawn at this scale)
 const FRAME = 2.7; // a sprite frame, in tiles
@@ -614,9 +614,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     let spawnId = 0;
     const hurt = (from: Ag, to: Ag, now: number, mult = 1, magical = false, skill = "Basic Strike") => {
       if (to.dodge > 0) { to.dodge--; spawnText(to.x, to.y, "Dodge", "text-steel"); return; }
-      const power = from.side === "ally" ? (magical && from.magic ? from.magic : from.atk) * (now < from.buffUntil ? 1.25 : 1) : from.atk;
-      const raw = (from.side === "ally" ? power - to.def * 0.5 : power * (now < from.weakUntil ? 0.7 : 1) - to.def * 0.45) * mult;
-      let dmg = Math.max(2, Math.round(raw * (0.9 + Math.random() * 0.2)));
+      const power = (from.side === "ally" ? (magical && from.magic ? from.magic : from.atk) * (now < from.buffUntil ? 1.25 : 1) : from.atk * (now < from.weakUntil ? 0.7 : 1)) * mult;
+      let dmg = hitDamage(power, to.def, to.level, 0.9 + Math.random() * 0.2);
       if (to.shield > 0 && now < to.shieldUntil) { const soak = Math.min(to.shield, dmg); to.shield -= soak; dmg -= soak; }
       to.hp = Math.max(0, to.hp - dmg);
       if (from.side === "ally" && to.side === "foe") {

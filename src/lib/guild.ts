@@ -55,6 +55,7 @@ interface Row {
   xp: number;
   gender: string;
   skill_points?: number;
+  gear?: GearRows;
   team_slot: number | null;
   hp: number; hp_frac?: number; hp_at?: string; atk: number; def: number; spd: number; stamina: number; magic: number;
   template: StarterFighter["template"];
@@ -67,12 +68,21 @@ export type GuildFighter = StarterFighter & { xp: number; skill_points?: number;
 export async function loadFighters(supabase: SupabaseClient, userId: string): Promise<GuildFighter[]> {
   const { data } = await supabase
     .from("fighters")
-    .select("id, grade, level, xp, gender, skill_points, team_slot, hp, hp_frac, hp_at, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), fighter_skills(slot, skill:skills(name, kind, damage_type, power, cooldown_ms, stamina_cost, description))")
+    .select("id, grade, level, xp, gender, skill_points, team_slot, hp, hp_frac, hp_at, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), fighter_skills(slot, skill:skills(name, kind, damage_type, power, cooldown_ms, stamina_cost, description)), gear:fighter_gear(item:gear_items(atk, def, magic, hp, spd))")
     .eq("owner_id", userId)
     .order("team_slot", { ascending: true, nullsFirst: false });
-  return ((data ?? []) as unknown as Row[]).map((f) => ({
+  return ((data ?? []) as unknown as Row[]).map((f) => { const gb = gearTotals(f.gear); return ({
     id: f.id, grade: f.grade, level: f.level, xp: f.xp, skill_points: f.skill_points, team_slot: f.team_slot ?? 0,
-    hp: f.hp, hp_frac: f.hp_frac, hp_at: f.hp_at, atk: f.atk, def: f.def, spd: f.spd, stamina: f.stamina, magic: f.magic, template: f.template.archetype === "novice" ? { ...f.template, sprite_key: `novice_${f.gender}` } : f.template,
+    hp: f.hp + gb.hp, hp_frac: f.hp_frac, hp_at: f.hp_at, atk: f.atk + gb.atk, def: f.def + gb.def, spd: f.spd + gb.spd, stamina: f.stamina, magic: f.magic + gb.magic, template: f.template.archetype === "novice" ? { ...f.template, sprite_key: `novice_${f.gender}` } : f.template,
     skills: (f.fighter_skills ?? []).map((s) => ({ slot: s.slot, name: s.skill?.name ?? "", kind: s.skill?.kind, damage_type: s.skill?.damage_type, power: s.skill ? Number(s.skill.power) : undefined, cooldown_ms: s.skill?.cooldown_ms, stamina_cost: s.skill?.stamina_cost, description: s.skill?.description })).sort((a, b) => a.slot - b.slot),
-  }));
+  }); });
+}
+
+type GearRows = { item: Stat5 | Stat5[] | null }[] | null | undefined;
+type Stat5 = { atk: number; def: number; magic: number; hp: number; spd: number };
+/** What a fighter's worn gear adds (same sum the game server uses for rooms and battles). */
+function gearTotals(rows: GearRows): Stat5 {
+  const t = { atk: 0, def: 0, magic: 0, hp: 0, spd: 0 };
+  for (const r of rows ?? []) { const i = Array.isArray(r.item) ? r.item[0] : r.item; if (i) { t.atk += i.atk; t.def += i.def; t.magic += i.magic; t.hp += i.hp; t.spd += i.spd; } }
+  return t;
 }

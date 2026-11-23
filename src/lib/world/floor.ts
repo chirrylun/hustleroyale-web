@@ -114,12 +114,16 @@ function rng(seed: number) {
   };
 }
 
-/** Mob numbers by level. Placeholder balance: tune with play. */
+/** Mob numbers by level. Fighters grow +9% HP and +7% ATK/DEF per level (database), so these keep pace with them. */
 export const mobStats = (level: number, boss: boolean) => ({
-  hp: Math.round((40 + 22 * level) * (boss ? 6 : 1)),
-  atk: Math.round((7 + 3.2 * level) * (boss ? 1.4 : 1)),
-  def: Math.round(2 + 1.2 * level),
+  hp: Math.round((30 + 12 * level) * (boss ? 6 : 1)),
+  atk: Math.round((5 + 1.6 * level) * (boss ? 1.4 : 1)),
+  def: Math.round(2 + 0.9 * level),
 });
+/** Share of a hit that gets through `def` on something of `level` (same curve for fighters and mobs, so defence never stops mattering or becomes immunity). */
+export const hitShare = (def: number, level: number) => { const k = 30 + 5 * Math.max(1, level); return k / (k + Math.max(0, def)); };
+/** One hit: attack power through the defender's armour, never below 2. `roll` is 0.9 to 1.1. */
+export const hitDamage = (power: number, def: number, defLevel: number, roll = 1) => Math.max(2, Math.round(power * hitShare(def, defLevel) * roll));
 
 /** How many ordinary mobs a floor holds for one player; also how many kills open the portal. Bosses are extra. */
 export const baseMobCount = (n: number) => Math.min(9, 4 + Math.floor((((n - 1) % 10) + 1) / 2));

@@ -1,0 +1,6 @@
+-- Balance pass (already applied to the project as balance_growth_xp_quests + fix_xp_multiplier_table).
+-- 1. Level growth: base_* keep the level-1 stats; award_xp sets stats = base x (1 + rate x (level-1)); HP 9%, ATK/DEF/MAG 7%.
+-- 2. XP: xp_multiplier (0.2 far below ... 1.15 same level ... 1.45 two above, 1.6 three+), mob_base_xp kills per level 4+0.5L (was 6+0.9L), bosses x8.
+-- 3. Quests: reward_xp x3.
+-- Mob stats and the shared defence curve live in src/lib/world/floor.ts (mobStats, hitDamage), synced to the server.
+-- (The SQL itself is in the Supabase migration history under those two names.)
