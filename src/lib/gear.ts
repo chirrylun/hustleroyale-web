@@ -6,6 +6,8 @@ export type GearSlot = "weapon" | "offhand" | "armor";
 export interface GearBase {
   slug: string; name: string; slot: GearSlot; kind: string; classes: string[];
   atk: number; def: number; magic: number; hp: number; spd: number; base_price: number; sort: number;
+  /** The highest rank this piece evolves to (the Starter Armor stops at 1). */
+  max_rank?: number;
 }
 /** A piece a player owns: the gear_items row (stats already worked out for its rank and level). */
 export interface GearItem {
@@ -16,6 +18,7 @@ export type Stats = { atk: number; def: number; magic: number; hp: number; spd: 
 
 export const MAX_RANK = 4;
 export const MAX_LEVEL = 10;
+export const maxRankOf = (b: { max_rank?: number }) => Math.min(MAX_RANK, b.max_rank ?? MAX_RANK);
 const RANK_MULT = [0, 1, 2.2, 4.2, 7];
 const RANK_VALUE = [0, 1, 4, 16, 60];
 const RANK_MIN_LEVEL = [0, 1, 15, 30, 45];
@@ -82,4 +85,4 @@ export const GEAR_MESSAGES: Record<string, string> = {
 export const gearError = (message: string) => GEAR_MESSAGES[Object.keys(GEAR_MESSAGES).find((k) => message.includes(k)) ?? ""] ?? "That didn't work. Try again.";
 
 /** "male" or "female", read from a novice's sprite key (class sprites are one look, so the default is fine). */
-export const genderOf = (f?: { template: { sprite_key: string } } | null) => (f?.template.sprite_key.endsWith("female") ? "female" : "male");
+export const genderOf = (f?: { gender?: string; template: { sprite_key: string } } | null) => (f?.gender ?? (f?.template.sprite_key.endsWith("female") ? "female" : "male"));
