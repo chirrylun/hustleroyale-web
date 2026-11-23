@@ -4,14 +4,15 @@ import { BagButton } from "@/components/floor/BagButton";
 import { Music } from "@/components/Music";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
 import { MAX_FLOOR, themeOf } from "@/lib/world/floor";
 import { Npc } from "@/components/npc/Npc";
 import { GuildHall } from "./GuildHall";
-import { clearExpedition } from "@/lib/world/expedition";
+import { clearExpedition, readLastHealth } from "@/lib/world/expedition";
+import { gameApi } from "@/lib/api";
 import { itemImage, itemName } from "@/lib/items";
 import hallLayout from "./layout.json";
 import { InfoBox } from "./InfoBox";
@@ -23,7 +24,7 @@ const OPEN_DURING_FIRST_JOB = ["jobs", "adventure"];
 const FIRST_JOB_NOTICE = "Complete your first quest on the job board first.";
 
 /** Tutorial job: kill a bat on Floor 1 (steps 6-8 of the tutorial); afterwards the board is "empty" until more jobs land. */
-export function GuildScreen({ username, coins, level, fighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number; enterLobby?: boolean }) {
+export function GuildScreen({ username, coins, level, fighters: dbFighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number; enterLobby?: boolean }) {
   const router = useRouter();
   const [step, setStep] = useState(tutorialStep);
   const [panel, setPanel] = useState<"jobs" | "adventure" | "party" | null>(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
@@ -31,11 +32,26 @@ export function GuildScreen({ username, coins, level, fighters, tutorialStep, fl
   const [msg, setMsg] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, start] = useTransition();
+  // What the party's health was when they left the floor (kept by this browser). If the database copy is older or missing, use this one.
+  const [carried, setCarried] = useState<{ at: number; fracs: Record<string, number> } | null>(null);
+  const fighters = useMemo(() => !carried ? dbFighters : dbFighters.map((f) => {
+    const fr = carried.fracs[f.id];
+    if (fr === undefined) return f;
+    const dbAt = f.hp_at ? new Date(f.hp_at).getTime() : 0;
+    return carried.at > dbAt ? { ...f, hp_frac: fr, hp_at: new Date(carried.at).toISOString() } : f;
+  }), [dbFighters, carried]);
 
   // Coming back to the guild always starts at the hall, not on whatever panel was open when you left.
   useEffect(() => {
     setPanel(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
     setNotice(null);
+    const last = readLastHealth();
+    if (last) {
+      setCarried(last);
+      // Make sure the server has it too (the floor's own save may not have landed).
+      const ids = Object.keys(last.fracs).slice(0, 3);
+      if (ids.length) gameApi("/floor/hp", { ids, fracs: ids.map((i) => Math.min(1, Math.max(0, last.fracs[i]))) }).catch(() => { /* fine, this tab still shows it */ });
+    }
     clearExpedition(); // resting at the guild heals everyone
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

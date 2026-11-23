@@ -348,7 +348,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     const saveDb = () => {
       const A = allies.current;
       if (!A.length) return;
-      gameApi("/floor/hp", { ids: A.map((a) => a.id), fracs: A.map((a) => (a.dead ? 0 : Math.max(0.01, a.hp / a.max))) }, { keepalive: true }).catch(() => { /* the next save will catch up */ });
+      gameApi("/floor/hp", { ids: A.map((a) => a.id), fracs: A.map((a) => { const f = a.hp / a.max; return a.dead ? 0 : Number.isFinite(f) ? Math.min(1, Math.max(0.01, f)) : 1; }) }, { keepalive: true }).catch((e) => { console.warn("health save failed", e); /* the next save will catch up */ });
     };
     const save = () => { if (allies.current.length) { writeExpedition(sig, allies.current); const n = Date.now(); if (n - lastDb > 3000) { lastDb = n; saveDb(); } } };
     const t = setInterval(save, 1000);
