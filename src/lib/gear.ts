@@ -56,3 +56,6 @@ export const GEAR_MESSAGES: Record<string, string> = {
   wrong_class: "That fighter's class can't use this.", level_too_low: "That fighter's level is too low.", not_your_fighter: "That isn't your fighter.",
 };
 export const gearError = (message: string) => GEAR_MESSAGES[Object.keys(GEAR_MESSAGES).find((k) => message.includes(k)) ?? ""] ?? "That didn't work. Try again.";
+
+/** "male" or "female", read from a novice's sprite key (class sprites are one look, so the default is fine). */
+export const genderOf = (f?: { template: { sprite_key: string } } | null) => (f?.template.sprite_key.endsWith("female") ? "female" : "male");

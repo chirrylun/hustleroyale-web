@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GearIcon } from "@/components/gear/GearIcon";
+import { GearPreview } from "@/components/gear/GearPreview";
 import { loadFighters, type GuildFighter } from "@/lib/guild";
 import { ARCHETYPE_LABEL } from "@/lib/guild";
-import { RANK_NAME, RANK_TEXT, SLOT_LABEL, classLabel, gearError, statLine, whyNot, type GearItem, type GearSlot } from "@/lib/gear";
+import { RANK_NAME, RANK_TEXT, SLOT_LABEL, classLabel, gearError, genderOf, statLine, whyNot, type GearItem, type GearSlot } from "@/lib/gear";
 import { createClient } from "@/lib/supabase/client";
 
 const SLOTS: GearSlot[] = ["weapon", "offhand", "armor"];
@@ -19,6 +20,7 @@ export function EquipmentTab() {
   const [slot, setSlot] = useState<GearSlot>("weapon");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<GearItem | null>(null);
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -76,7 +78,7 @@ export function EquipmentTab() {
           return (
             <button key={s} type="button" onClick={() => setSlot(s)} className={`pixel-box flex flex-col items-center gap-1 p-1.5 text-center ${slot === s ? "bg-night ring-2 ring-gold" : "bg-panel"}`}>
               <span className="text-sm uppercase text-steel">{SLOT_LABEL[s]}</span>
-              {it ? <GearIcon kind={it.kind} rank={it.rank} /> : <span className="flex h-10 w-10 items-center justify-center border-2 border-dashed border-steel/50 text-steel">–</span>}
+              {it ? <GearIcon slug={it.slug} kind={it.kind} rank={it.rank} /> : <span className="flex h-10 w-10 items-center justify-center border-2 border-dashed border-steel/50 text-steel">–</span>}
               <span className={`w-full truncate text-sm ${it ? RANK_TEXT[it.rank] : "text-steel"}`}>{it ? it.name : "Empty"}</span>
             </button>
           );
@@ -94,18 +96,22 @@ export function EquipmentTab() {
             const blocked = why ?? (spare < 1 && !here ? "All copies are worn by other fighters" : null);
             return (
               <div key={i.slug} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
-                <GearIcon kind={i.kind} rank={i.rank} />
+                <GearIcon slug={i.slug} kind={i.kind} rank={i.rank} />
                 <div className="min-w-0 flex-1 leading-tight">
                   <p className="truncate text-xl text-paper">{i.name}<span className="ml-1 text-base text-steel">×{owned[i.slug]}</span></p>
                   <p className="truncate text-base text-steel"><span className={RANK_TEXT[i.rank]}>{RANK_NAME[i.rank]}</span> · Lv {i.min_level}+ · {classLabel(i)}</p>
                   <p className="truncate text-base text-leaf">{statLine(i)}</p>
                   {blocked && <p className="truncate text-sm text-ember">{blocked}</p>}
                 </div>
-                <button type="button" disabled={busy || !!blocked || here} onClick={() => call(i.slug, null)} className="shrink-0 bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">{here ? "Worn" : "Equip"}</button>
+                <div className="flex shrink-0 flex-col gap-1">
+                  <button type="button" disabled={busy || !!blocked || here} onClick={() => call(i.slug, null)} className="bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">{here ? "Worn" : "Equip"}</button>
+                  <button type="button" onClick={() => setView(i)} className="bg-night px-3 py-0.5 text-base uppercase text-paper">Preview</button>
+                </div>
               </div>
             );
           })}
       </div>
+      {view && <GearPreview item={view} gender={genderOf(fighter)} onClose={() => setView(null)} />}
     </div>
   );
 }

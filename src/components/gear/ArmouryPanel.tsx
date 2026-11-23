@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GearIcon } from "@/components/gear/GearIcon";
+import { GearPreview } from "@/components/gear/GearPreview";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { loadFighters, type GuildFighter } from "@/lib/guild";
-import { RANK_NAME, RANK_TEXT, SLOT_LABEL, classLabel, gearError, statLine, whyNot, type GearItem, type GearSlot } from "@/lib/gear";
+import { RANK_NAME, RANK_TEXT, SLOT_LABEL, classLabel, gearError, genderOf, statLine, whyNot, type GearItem, type GearSlot } from "@/lib/gear";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "buy" | "sell";
@@ -21,6 +22,7 @@ export function ArmouryPanel() {
   const [slot, setSlot] = useState<GearSlot | "all">("all");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<GearItem | null>(null);
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -56,7 +58,7 @@ export function ArmouryPanel() {
   const rows = useMemo(() => (items ?? []).filter((i) => (slot === "all" || i.slot === slot) && (mode === "buy" || (owned[i.slug] ?? 0) - (worn[i.slug] ?? 0) > 0)), [items, slot, mode, owned, worn]);
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex items-center justify-between text-xl text-paper">
         <span className="flex items-center gap-1"><UiIcon name="coins" size={24} /> {coins ?? "…"}</span>
         <span className="text-base text-steel">Equip gear from My Fighters</span>
@@ -72,7 +74,7 @@ export function ArmouryPanel() {
         ))}
       </div>
       {error && <p role="alert" className="text-lg text-ember">{error}</p>}
-      <div className="max-h-[42dvh] space-y-1.5 overflow-y-auto pr-1 short:max-h-[34dvh]">
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
         {items === null ? <div className="h-32 animate-pulse bg-panel" aria-busy="true" />
           : rows.length === 0 ? <p className="text-xl text-paper">{mode === "sell" ? "You have no spare gear to sell." : "Nothing here."}</p>
           : rows.map((i) => {
@@ -82,20 +84,24 @@ export function ArmouryPanel() {
             const fits = fighters.filter((f) => !whyNot(i, f));
             return (
               <div key={i.slug} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
-                <GearIcon kind={i.kind} rank={i.rank} />
+                <GearIcon slug={i.slug} kind={i.kind} rank={i.rank} />
                 <div className="min-w-0 flex-1 leading-tight">
                   <p className="truncate text-xl text-paper">{i.name}{(owned[i.slug] ?? 0) > 0 && <span className="ml-1 text-base text-steel">×{owned[i.slug]}</span>}</p>
                   <p className="truncate text-base text-steel"><span className={RANK_TEXT[i.rank]}>{RANK_NAME[i.rank]}</span> · Lv {i.min_level}+ · {classLabel(i)}</p>
                   <p className="truncate text-base text-leaf">{statLine(i)}</p>
                   {mode === "buy" && <p className={`truncate text-sm ${fits.length ? "text-leaf" : "text-ember"}`}>{fits.length ? `Fits ${fits.slice(0, 2).map((f) => f.template.name).join(", ")}${fits.length > 2 ? ` +${fits.length - 2}` : ""}` : "None of your fighters can wear this yet"}</p>}
                 </div>
-                <button type="button" disabled={!can} onClick={() => deal(i)} className={`flex shrink-0 items-center gap-1 px-3 py-1 text-xl uppercase text-ink disabled:opacity-40 ${mode === "buy" ? "bg-leaf" : "bg-gold"}`}>
-                  {mode === "buy" ? "Buy" : "Sell"} <span>{price}</span><UiIcon name="coins" size={18} />
-                </button>
+                <div className="flex shrink-0 flex-col gap-1">
+                  <button type="button" disabled={!can} onClick={() => deal(i)} className={`flex items-center justify-center gap-1 px-3 py-1 text-xl uppercase text-ink disabled:opacity-40 ${mode === "buy" ? "bg-leaf" : "bg-gold"}`}>
+                    {mode === "buy" ? "Buy" : "Sell"} <span>{price}</span><UiIcon name="coins" size={18} />
+                  </button>
+                  <button type="button" onClick={() => setView(i)} className="bg-night px-3 py-0.5 text-base uppercase text-paper">Preview</button>
+                </div>
               </div>
             );
           })}
       </div>
+      {view && <GearPreview item={view} gender={genderOf(fighters[0])} onClose={() => setView(null)} />}
     </div>
   );
 }

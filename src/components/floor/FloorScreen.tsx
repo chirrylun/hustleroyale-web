@@ -130,6 +130,7 @@ interface Ag {
   el?: HTMLDivElement | null;
   bar?: HTMLDivElement | null;
   hpEl?: HTMLDivElement | null;
+  arrowEl?: HTMLSpanElement | null;
   mpEl?: HTMLDivElement | null;
   /** Allies: xp into the current level, and the bar showing it. */
   xp: number; xpEl?: HTMLDivElement | null;
@@ -189,6 +190,7 @@ function Unit({ a, party }: { a: Ag; party: number }) {
       </div>
       {/* Drawn on its own layer so a tree or another fighter in front can never cover the bar, the tag or a level-up. */}
       <div ref={(el) => { a.fx = el; }} className="pointer-events-none absolute left-0 top-0 will-change-transform" style={{ ...box, zIndex: 9000 }}>
+        {a.side === "foe" && <span ref={(el) => { a.arrowEl = el; }} aria-hidden="true" className="absolute left-1/2 top-0 hidden -translate-x-1/2 -translate-y-[170%] animate-bounce text-2xl leading-none text-gold" style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}>▼</span>}
         <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
           <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
           {a.side === "ally" && a.maxEn > 0 && (
@@ -919,8 +921,10 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       }
 
       // Draw.
+      const aimed = new Set<Ag | null>(A.filter((a) => !a.dead).map((a) => a.target)); // the monsters our party is going after
       for (const u of [...A, ...F, ...mates.current]) {
         if (!u.el) continue;
+        if (u.arrowEl) u.arrowEl.style.display = !u.dead && aimed.has(u) ? "block" : "none";
         u.el.style.transform = `translate(${u.x * T}px, ${u.y * T}px)`;
         u.el.style.zIndex = String(depth(u.y));
         const op = u.dead ? "0" : String(Math.min(1, (now - u.born) / 800)); // new arrivals fade in

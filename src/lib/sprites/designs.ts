@@ -37,6 +37,8 @@ export const mobScale = (spriteKey: string): number => {
 
 /** Keys look like `<archetype>_<rarity>`. Archetypes without art yet wear their class sheet at the same rarity. */
 export const sheetUrl = (key: string, role: Role) => {
+  if (key.startsWith("armor_")) return `/sprites/${key}.png`; // a full armour set: the item slug is the sprite key
+  if (key.startsWith("gear_")) return `/gear/preview/${key.slice(5)}.png`; // a weapon or shield overlay, drawn over a fighter's sheet
   if (key === "skeleton" || key === "novice_male" || key === "novice_female" || key.startsWith("mob_") || key.startsWith("recruit_")) return `/sprites/${key}.png`;
   const i = key.lastIndexOf("_");
   const rarity = key.slice(i + 1);
@@ -55,6 +57,7 @@ const ARCH_SCALE: Record<string, number> = { novice: 0.9, paladin: 1.1, recruit:
 const SHEET_SCALE: Record<string, number> = { healer_legendary: 0.92, tank_legendary: 0.95, tank_rare: 1.04, tank_uncommon: 1.07, necromancer_legendary: 1.07, marksman_legendary: 1.05, healer_uncommon: 1.04 };
 export const heroScale = (spriteKey: string, role: Role): number => {
   if (spriteKey.startsWith("mob_") || spriteKey === "skeleton") return 1;
+  if (spriteKey.startsWith("gear_")) return ARCH_SCALE.novice; // overlays are drawn over the novice, so they share its size
   const url = sheetUrl(spriteKey, role).replace("/sprites/", "").replace(".png", "");
   const arch = url.split("_")[0];
   return (SHEET_SCALE[url] ?? 1) * (ARCH_SCALE[arch] ?? 1);

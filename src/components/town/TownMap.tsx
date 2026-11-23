@@ -323,7 +323,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
       </div>
 
       {talk && (
-        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage" || talk === "merchant"} onClose={close}>
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer"} onClose={close}>
           {talk === "arena" && (
             <>
               <p>Think your fighters are tough? Test them against other guilds.</p>

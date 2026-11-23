@@ -55,7 +55,7 @@ export function MarketPanel() {
   const carried = Object.values(owned).reduce((s, n) => s + n, 0);
   const rows = (goods ?? []).filter((g) => mode === "buy" || (owned[g.slug] ?? 0) > 0);
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex items-center justify-between text-xl text-paper">
         <span className="flex items-center gap-1"><UiIcon name="coins" size={24} /> {coins ?? "…"}</span>
         <span className="text-base text-steel">Bag {carried}/{BAG_MAX}</span>
@@ -66,7 +66,7 @@ export function MarketPanel() {
         ))}
       </div>
       {error && <p role="alert" className="text-lg text-ember">{error}</p>}
-      <div className="max-h-[46dvh] space-y-1.5 overflow-y-auto pr-1 short:max-h-[40dvh]">
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
         {goods === null ? <div className="h-32 animate-pulse bg-panel" aria-busy="true" />
           : rows.length === 0 ? <p className="text-xl text-paper">You have nothing the merchant wants.</p>
           : rows.map((g) => {
