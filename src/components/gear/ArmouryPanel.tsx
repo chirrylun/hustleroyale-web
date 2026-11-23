@@ -5,57 +5,60 @@ import { GearIcon } from "@/components/gear/GearIcon";
 import { GearPreview } from "@/components/gear/GearPreview";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { loadFighters, type GuildFighter } from "@/lib/guild";
-import { RANK_NAME, RANK_TEXT, SLOT_LABEL, classLabel, gearError, genderOf, statLine, whyNot, type GearItem, type GearSlot } from "@/lib/gear";
+import { MAX_LEVEL, RANK_TEXT, SLOT_LABEL, classLabel, gearError, genderOf, minLevel, rankName, sellPrice, statLine, whyNot, type GearBase, type GearItem, type GearSlot } from "@/lib/gear";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "buy" | "sell";
 const SLOTS: (GearSlot | "all")[] = ["all", "weapon", "offhand", "armor"];
 
-/** The armoury: buy weapons, shields and armour sets with coins, or sell spares. Every rule (price, class, level) is the database's. */
+/** The armoury: buy rank 1 weapons, shields and armour sets with coins, or sell spare pieces. Every rule (price, class, level) is the database's.
+ *  Rank and level upgrades come from the enhancer. */
 export function ArmouryPanel() {
-  const [items, setItems] = useState<GearItem[] | null>(null);
-  const [owned, setOwned] = useState<Record<string, number>>({});
-  const [worn, setWorn] = useState<Record<string, number>>({});
+  const [bases, setBases] = useState<GearBase[] | null>(null);
+  const [items, setItems] = useState<GearItem[]>([]);
+  const [wornIds, setWornIds] = useState<Set<string>>(new Set());
   const [fighters, setFighters] = useState<GuildFighter[]>([]);
   const [coins, setCoins] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("buy");
   const [slot, setSlot] = useState<GearSlot | "all">("all");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<GearItem | null>(null);
+  const [view, setView] = useState<{ base: GearBase; rank: number; level: number } | null>(null);
 
   const load = useCallback(async () => {
     const sb = createClient();
     const { data: { user } } = await sb.auth.getUser();
     if (!user) { setError("Please sign in again."); return; }
     const [t, inv, w, prof, fs] = await Promise.all([
-      sb.from("equipment_templates").select("*").order("sort"),
-      sb.from("player_gear").select("item_slug, qty"),
-      sb.from("fighter_gear").select("item_slug"),
+      sb.from("equipment_bases").select("*").order("sort"),
+      sb.from("gear_items").select("id, base_slug, rank, level, atk, def, magic, hp, spd").order("created_at"),
+      sb.from("fighter_gear").select("item_id"),
       sb.from("profiles").select("coins").single(),
       loadFighters(sb, user.id),
     ]);
     if (t.error || inv.error || w.error || prof.error) { setError("Couldn't open the armoury. Try again."); return; }
-    setItems((t.data ?? []) as GearItem[]);
-    setOwned(Object.fromEntries((inv.data ?? []).map((r) => [r.item_slug as string, r.qty as number])));
-    const wc: Record<string, number> = {};
-    for (const r of w.data ?? []) wc[r.item_slug as string] = (wc[r.item_slug as string] ?? 0) + 1;
-    setWorn(wc);
+    setBases((t.data ?? []) as GearBase[]);
+    setItems((inv.data ?? []) as GearItem[]);
+    setWornIds(new Set((w.data ?? []).map((r) => r.item_id as string)));
     setCoins(Number(prof.data?.coins));
     setFighters(fs);
   }, []);
   useEffect(() => { void load(); }, [load]);
 
-  const deal = async (it: GearItem) => {
+  const baseOf = useMemo(() => new Map((bases ?? []).map((b) => [b.slug, b])), [bases]);
+  const ownedCount = (slug: string) => items.filter((i) => i.base_slug === slug).length;
+
+  const run = async (fn: string, args: Record<string, string>) => {
     if (busy) return;
     setBusy(true); setError(null);
-    const { error: e } = await createClient().rpc(mode === "buy" ? "gear_buy" : "gear_sell", { p_slug: it.slug });
+    const { error: e } = await createClient().rpc(fn, args);
     if (e) setError(gearError(e.message));
     await load();
     setBusy(false);
   };
 
-  const rows = useMemo(() => (items ?? []).filter((i) => (slot === "all" || i.slot === slot) && (mode === "buy" || (owned[i.slug] ?? 0) - (worn[i.slug] ?? 0) > 0)), [items, slot, mode, owned, worn]);
+  const buyRows = useMemo(() => (bases ?? []).filter((b) => slot === "all" || b.slot === slot), [bases, slot]);
+  const sellRows = useMemo(() => items.filter((i) => !wornIds.has(i.id) && (slot === "all" || baseOf.get(i.base_slug)?.slot === slot)), [items, wornIds, slot, baseOf]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -75,33 +78,48 @@ export function ArmouryPanel() {
       </div>
       {error && <p role="alert" className="text-lg text-ember">{error}</p>}
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-        {items === null ? <div className="h-32 animate-pulse bg-panel" aria-busy="true" />
-          : rows.length === 0 ? <p className="text-xl text-paper">{mode === "sell" ? "You have no spare gear to sell." : "Nothing here."}</p>
-          : rows.map((i) => {
-            const spare = (owned[i.slug] ?? 0) - (worn[i.slug] ?? 0);
-            const price = mode === "buy" ? i.buy_price : i.sell_price;
-            const can = !busy && (mode === "buy" ? (coins ?? 0) >= price : spare > 0);
-            const fits = fighters.filter((f) => !whyNot(i, f));
+        {bases === null ? <div className="h-32 animate-pulse bg-panel" aria-busy="true" />
+          : mode === "buy" ? (buyRows.length === 0 ? <p className="text-xl text-paper">Nothing here.</p> : buyRows.map((b) => {
+            const fits = fighters.filter((f) => !whyNot(b, 1, f));
+            const can = !busy && (coins ?? 0) >= b.base_price;
             return (
-              <div key={i.slug} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
-                <GearIcon slug={i.slug} kind={i.kind} rank={i.rank} />
+              <div key={b.slug} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
+                <GearIcon base={b.slug} kind={b.kind} rank={1} />
                 <div className="min-w-0 flex-1 leading-tight">
-                  <p className="truncate text-xl text-paper">{i.name}{(owned[i.slug] ?? 0) > 0 && <span className="ml-1 text-base text-steel">×{owned[i.slug]}</span>}</p>
-                  <p className="truncate text-base text-steel"><span className={RANK_TEXT[i.rank]}>{RANK_NAME[i.rank]}</span> · Lv {i.min_level}+ · {classLabel(i)}</p>
-                  <p className="truncate text-base text-leaf">{statLine(i)}</p>
-                  {mode === "buy" && <p className={`truncate text-sm ${fits.length ? "text-leaf" : "text-ember"}`}>{fits.length ? `Fits ${fits.slice(0, 2).map((f) => f.template.name).join(", ")}${fits.length > 2 ? ` +${fits.length - 2}` : ""}` : "None of your fighters can wear this yet"}</p>}
+                  <p className="truncate text-xl text-paper">{b.name}{ownedCount(b.slug) > 0 && <span className="ml-1 text-base text-steel">×{ownedCount(b.slug)}</span>}</p>
+                  <p className="truncate text-base text-steel"><span className={RANK_TEXT[1]}>{rankName(1)}</span> · Lv 1/{MAX_LEVEL} · {classLabel(b)}</p>
+                  <p className="truncate text-base text-leaf">{statLine(b)}</p>
+                  <p className={`truncate text-sm ${fits.length ? "text-leaf" : "text-ember"}`}>{fits.length ? `Fits ${fits.slice(0, 2).map((f) => f.template.name).join(", ")}${fits.length > 2 ? ` +${fits.length - 2}` : ""}` : "None of your fighters can wear this yet"}</p>
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
-                  <button type="button" disabled={!can} onClick={() => deal(i)} className={`flex items-center justify-center gap-1 px-3 py-1 text-xl uppercase text-ink disabled:opacity-40 ${mode === "buy" ? "bg-leaf" : "bg-gold"}`}>
-                    {mode === "buy" ? "Buy" : "Sell"} <span>{price}</span><UiIcon name="coins" size={18} />
-                  </button>
-                  <button type="button" onClick={() => setView(i)} className="bg-night px-3 py-0.5 text-base uppercase text-paper">Preview</button>
+                  <button type="button" disabled={!can} onClick={() => run("gear_buy", { p_base: b.slug })} className="flex items-center justify-center gap-1 bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Buy <span>{b.base_price}</span><UiIcon name="coins" size={18} /></button>
+                  <button type="button" onClick={() => setView({ base: b, rank: 1, level: 1 })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">Preview</button>
+                </div>
+              </div>
+            );
+          }))
+          : sellRows.length === 0 ? <p className="text-xl text-paper">You have no spare gear to sell.</p>
+          : sellRows.map((i) => {
+            const b = baseOf.get(i.base_slug);
+            if (!b) return null;
+            const price = sellPrice(b, i.rank, i.level);
+            return (
+              <div key={i.id} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
+                <GearIcon base={b.slug} kind={b.kind} rank={i.rank} />
+                <div className="min-w-0 flex-1 leading-tight">
+                  <p className="truncate text-xl text-paper">{b.name}</p>
+                  <p className="truncate text-base text-steel"><span className={RANK_TEXT[i.rank]}>{rankName(i.rank)}</span> · Lv {i.level}/{MAX_LEVEL} · wear at Lv {minLevel(i.rank)}+</p>
+                  <p className="truncate text-base text-leaf">{statLine(i)}</p>
+                </div>
+                <div className="flex shrink-0 flex-col gap-1">
+                  <button type="button" disabled={busy} onClick={() => run("gear_sell", { p_item: i.id })} className="flex items-center justify-center gap-1 bg-gold px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Sell <span>{price}</span><UiIcon name="coins" size={18} /></button>
+                  <button type="button" onClick={() => setView({ base: b, rank: i.rank, level: i.level })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">Preview</button>
                 </div>
               </div>
             );
           })}
       </div>
-      {view && <GearPreview item={view} gender={genderOf(fighters[0])} onClose={() => setView(null)} />}
+      {view && <GearPreview base={view.base} rank={view.rank} level={view.level} gender={genderOf(fighters[0])} onClose={() => setView(null)} />}
     </div>
   );
 }
