@@ -165,13 +165,13 @@ interface Ag {
 interface WireMob { id: number; kind: string; rarity: string; sprite: string; level: number; boss: boolean; x: number; y: number; hp: number; max: number; home: [number, number, number]; dead?: boolean }
 interface WireFighter { id: string; sprite: string; name: string; role: "tank" | "healer" | "dps"; level: number; max: number; x?: number; y?: number; frac?: number; dead?: boolean }
 interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
-interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[] }
+interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; gear?: { name: string; rank: number; level: number } | null }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** Colour of a monster's tag, by how far it is above the party's best fighter: ordinary ones stay plain, tougher ones warn. */
 const levelTone = (gap: number) => (gap >= 5 ? "text-ember" : gap >= 2 ? "text-gold" : "text-paper");
-const MOB_NAME: Record<string, string> = { direwolf: "Dire Wolf" };
+const MOB_NAME: Record<string, string> = { direwolf: "Dire Wolf", boar: "Thornback Boar", weaver: "Cave Weaver", wisp: "Frost Wisp", beetle: "Stone Beetle", slimeking: "Slime King", broodmother: "Broodmother", rimewarden: "Rimewarden" };
 const mobName = (kind: string) => MOB_NAME[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 
 const POTION_LIST = POTION_SLUGS;
@@ -1046,9 +1046,11 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     };
     const onPaid = (k: PaidKill) => {
       paid(k, k.kind, k.boss);
+      if (k.gear) showToast(`${mobName(k.kind)} dropped ${k.gear.name} (rank ${k.gear.rank}, lv ${k.gear.level})!`);
       if (k.throttled) return;
       if (k.boss) progress.current.boss = true; else progress.current.kills++;
     };
+    const onMini = (j: { kind: string }) => showToast(`${mobName(j.kind)} has appeared on this floor!`);
     const onJoined = (j: { player?: WirePlayer; n: number }) => {
       if (j.player && j.player.uid !== me) { mates.current.push(...netMates(j.player)); rerender(); }
       setRoom((cur) => (cur ? { ...cur, n: j.n } : cur));
@@ -1084,7 +1086,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     const onFail = () => { if (nt.mode === "pending") nt.mode = "off"; };
     sock.on("connect", onConnect);
     sock.on("connect_error", onFail);
-    sock.on("s", onSnap); sock.on("hit", onHit); sock.on("k", onPaid); sock.on("joined", onJoined); sock.on("left", onLeft);
+    sock.on("s", onSnap); sock.on("hit", onHit); sock.on("k", onPaid); sock.on("joined", onJoined); sock.on("left", onLeft); sock.on("mini", onMini);
     if (sock.connected) onConnect(); else sock.connect();
 
     raf = requestAnimationFrame(tick);
@@ -1093,7 +1095,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       clearTimeout(give);
       sock.emit("leave");
       sock.off("connect", onConnect); sock.off("connect_error", onFail);
-      sock.off("s", onSnap); sock.off("hit", onHit); sock.off("k", onPaid); sock.off("joined", onJoined); sock.off("left", onLeft);
+      sock.off("s", onSnap); sock.off("hit", onHit); sock.off("k", onPaid); sock.off("joined", onJoined); sock.off("left", onLeft); sock.off("mini", onMini);
       sock.disconnect();
       nt.mode = "pending"; nt.sock = null; mates.current = [];
     };

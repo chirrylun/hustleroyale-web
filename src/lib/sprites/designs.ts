@@ -30,7 +30,7 @@ const ARCHETYPE_ART = new Set<string>(["paladin", "bard", "marksman", "necromanc
  * three times as wide. This scales each kind to a believable size next to a fighter (about 1.8 m, 120 px
  * of a frame): slimes knee-high, bats the size of bats, a wolf long and low. Bosses keep the full size.
  */
-const MOB_SCALE: Record<string, number> = { slime: 0.3, bat: 0.35, mushroom: 0.5, goblin: 0.6, direwolf: 0.62, golem: 1 };
+const MOB_SCALE: Record<string, number> = { slime: 0.3, bat: 0.35, mushroom: 0.5, goblin: 0.6, direwolf: 0.62, golem: 1, boar: 0.55, weaver: 0.55, wisp: 0.45, beetle: 0.45, slimeking: 0.8, broodmother: 1, rimewarden: 1 };
 export const mobScale = (spriteKey: string): number => {
   const m = /^mob_([a-z]+)_/.exec(spriteKey);
   return m ? (MOB_SCALE[m[1]] ?? 1) : 1;
