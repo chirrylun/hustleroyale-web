@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import { useState } from "react";
+import motion from "@/lib/spriteMotion.json";
 import { ANIMS, COLS, heroScale, sheetUrl, type Role } from "@/lib/sprites/designs";
 
 export type Action = "attack" | "cast" | "hurt";
@@ -21,8 +22,12 @@ export function FighterSprite({
   const [done, setDone] = useState(-1);
   const once = action && done !== actionKey ? action : null;
   const name = once ?? (rest === "stun" ? "hurt" : rest);
-  const row = ANIMS.findIndex((a) => a.name === name);
+  // Sheets with no drawn casting row borrow the attack swing; sheets with a still walk row get a procedural step.
+  const sheet = sheetUrl(spriteKey, role).replace("/sprites/", "").replace(".png", "");
+  const sprite = name === "cast" && (motion.staticCast as string[]).includes(sheet) ? "attack" : name;
+  const row = ANIMS.findIndex((a) => a.name === sprite);
   const n = ANIMS[row].n;
+  const step = name === "walk" && !still && (motion.stiffWalk as string[]).includes(sheet);
   const ms = BASE_MS[name] * (name === "walk" ? 1 / tempo : 1) * (rest === "stun" && !once ? 2 : 1);
 
   return (
@@ -38,7 +43,7 @@ export function FighterSprite({
         backgroundRepeat: "no-repeat",
         transform: `${flip ? "scaleX(-1) " : ""}scale(${heroScale(spriteKey, role)})`,
         transformOrigin: "50% 90%",
-        animation: still ? undefined : `spr ${ms}ms steps(${n}, jump-none) ${once ? "1 forwards" : "infinite"}`,
+        animation: still ? undefined : `spr ${ms}ms steps(${n}, jump-none) ${once ? "1 forwards" : "infinite"}${step ? `, spr-step ${ms}ms linear infinite` : ""}`,
         ["--to" as string]: `${((n - 1) / (COLS - 1)) * 100}%`,
       }}
     />
