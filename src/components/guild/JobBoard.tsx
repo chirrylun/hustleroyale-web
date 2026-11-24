@@ -119,7 +119,7 @@ export function JobBoard({ onChanged }: { onChanged: () => void }) {
                 })}
               </ul>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-base text-gold">🪙 {q.reward_coins} · {q.reward_xp} XP{q.special ? ` · Gear rank ${Math.min(4, 1 + Math.ceil(q.floor / 10))} (lv ${Math.min(10, 1 + ((q.floor - 1) % 10))})` : ""}</p>
+                <p className="text-base text-gold">🪙 {q.reward_coins} · {q.reward_xp} XP{q.special ? ` · Gear rank ${Math.min(4, Math.max(1, Math.ceil(q.floor / 10)))} (lv ${Math.min(10, 1 + ((q.floor - 1) % 10))})` : ""}</p>
                 {status === "active" ? (
                   <PixelButton className="text-base" disabled={!complete || busy === q.slug} onClick={() => act("claim_quest", q.slug)}>{complete ? "Claim" : "In progress"}</PixelButton>
                 ) : blocked ? (
