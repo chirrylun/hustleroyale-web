@@ -93,7 +93,7 @@ export function ArmouryPanel() {
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
                   <button type="button" disabled={!can} onClick={() => run("gear_buy", { p_base: b.slug })} className="flex items-center justify-center gap-1 bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Buy <span>{b.base_price}</span><UiIcon name="coins" size={18} /></button>
-                  <button type="button" onClick={() => setView({ base: b, rank: 1, level: 1 })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">Preview</button>
+                  <button type="button" onClick={() => setView({ base: b, rank: 1, level: 1 })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">View</button>
                 </div>
               </div>
             );
@@ -113,7 +113,7 @@ export function ArmouryPanel() {
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
                   <button type="button" disabled={busy} onClick={() => run("gear_sell", { p_item: i.id })} className="flex items-center justify-center gap-1 bg-gold px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Sell <span>{price}</span><UiIcon name="coins" size={18} /></button>
-                  <button type="button" onClick={() => setView({ base: b, rank: i.rank, level: i.level })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">Preview</button>
+                  <button type="button" onClick={() => setView({ base: b, rank: i.rank, level: i.level })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">View</button>
                 </div>
               </div>
             );

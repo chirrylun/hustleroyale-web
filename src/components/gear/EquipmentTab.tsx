@@ -7,6 +7,8 @@ import { loadFighters, type GuildFighter } from "@/lib/guild";
 import { ARCHETYPE_LABEL } from "@/lib/guild";
 import { MAX_LEVEL, RANK_TEXT, SLOT_LABEL, classLabel, gearError, genderOf, minLevel, rankName, statLine, whyNot, type GearBase, type GearItem, type GearSlot } from "@/lib/gear";
 import { createClient } from "@/lib/supabase/client";
+import { LiveSprite } from "@/components/sprites/LiveSprite";
+import { setLook } from "@/lib/lookStore";
 
 const SLOTS: GearSlot[] = ["weapon", "offhand", "armor"];
 
@@ -38,6 +40,7 @@ export function EquipmentTab() {
     setItems((inv.data ?? []) as GearItem[]);
     setWorn((w.data ?? []) as { fighter_id: string; slot: GearSlot; item_id: string }[]);
     setSel((cur) => cur ?? fs[0]?.id ?? null);
+    return fs;
   }, []);
   useEffect(() => { void load(); }, [load]);
 
@@ -52,7 +55,9 @@ export function EquipmentTab() {
     setBusy(true); setError(null);
     const { error: e } = await createClient().rpc("gear_equip", { p_fighter: sel, p_item, p_slot });
     if (e) setError(gearError(e.message));
-    await load();
+    const fs = await load();
+    const f = fs?.find((x) => x.id === sel);
+    if (f) setLook(f.id, f.template.sprite_key); // every screen redraws this fighter now
     setBusy(false);
   };
 
@@ -70,7 +75,12 @@ export function EquipmentTab() {
           <button key={f.id} type="button" onClick={() => setSel(f.id)} className={`px-2 py-0.5 text-lg ${sel === f.id ? "bg-gold text-ink" : "bg-panel text-paper"}`}>{f.template.name}</button>
         ))}
       </div>
-      {fighter && <p className="text-base text-steel">{ARCHETYPE_LABEL[fighter.template.archetype] ?? fighter.template.archetype} · Lv {fighter.level}{bonusText && <span className="text-leaf"> · Gear: {bonusText}</span>}</p>}
+      {fighter && (
+        <div className="flex items-center gap-2">
+          <div className="h-20 w-20 shrink-0 bg-panel"><LiveSprite id={fighter.id} spriteKey={fighter.template.sprite_key} role={fighter.template.role} still /></div>
+          <p className="min-w-0 text-base text-steel">{ARCHETYPE_LABEL[fighter.template.archetype] ?? fighter.template.archetype} · Lv {fighter.level}{bonusText && <span className="text-leaf"> · Gear: {bonusText}</span>}</p>
+        </div>
+      )}
       {error && <p role="alert" className="text-lg text-ember">{error}</p>}
       <div className="grid grid-cols-3 gap-1.5">
         {SLOTS.map((s) => {
@@ -109,7 +119,7 @@ export function EquipmentTab() {
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
                   <button type="button" disabled={busy || !!why || here} onClick={() => call(i.id, null)} className="bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">{here ? "Worn" : "Equip"}</button>
-                  <button type="button" onClick={() => setView({ base: b, rank: i.rank, level: i.level })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">Preview</button>
+                  <button type="button" onClick={() => setView({ base: b, rank: i.rank, level: i.level })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">View</button>
                 </div>
               </div>
             );

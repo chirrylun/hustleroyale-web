@@ -24,6 +24,7 @@ import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
 import { POTIONS, POTION_SLUGS, itemImage, itemName } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
+import { useLook } from "@/lib/lookStore";
 import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, hitDamage, type Floor } from "@/lib/world/floor";
 
 const T = 34; // one tile, in px, before the camera zoom (tiles, props and sprites are all drawn at this scale)
@@ -178,13 +179,14 @@ const POTION_LIST = POTION_SLUGS;
 function Unit({ a, party }: { a: Ag; party: number }) {
   const [look, setLook] = useState(a.look);
   // Bosses are drawn large on purpose; everything else is scaled to a realistic size next to a fighter.
+  const liveSprite = useLook(a.id, a.sprite);
   const size = FRAME * T * (a.boss ? 1.5 : mobScale(a.sprite));
   const box = { width: size, height: size, marginLeft: -size / 2, marginTop: -size * 0.86 };
   return (
     <>
       <div ref={(el) => { a.el = el; a.setLook = setLook; }} className="absolute left-0 top-0 will-change-transform" style={box}>
         <FighterSprite
-          spriteKey={a.sprite} role={a.role} flip={look.flip} rest={look.rest}
+          spriteKey={liveSprite} role={a.role} flip={look.flip} rest={look.rest}
           action={look.act} actionKey={look.n}
         />
       </div>

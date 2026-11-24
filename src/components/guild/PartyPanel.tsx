@@ -1,8 +1,8 @@
 "use client";
 
+import { LiveSprite } from "@/components/sprites/LiveSprite";
 import { useEffect, useMemo, useState } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
-import { FighterSprite } from "@/components/sprites/FighterSprite";
 import type { GuildFighter } from "@/lib/guild";
 import { restedFrac } from "@/lib/rest";
 import { createClient } from "@/lib/supabase/client";
@@ -68,7 +68,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo, title, kicker, goL
               <span className={`absolute left-0.5 top-0.5 z-10 px-1 text-sm leading-4 ${i === 0 ? "bg-gold text-ink" : "bg-ink/80 text-steel"}`}>{i === 0 ? "Leader" : i + 1}</span>
               {i > 0 && <button type="button" onClick={() => lead(f.id)} aria-label={`Make ${f.template.name} the leader`} className="absolute bottom-0.5 right-0.5 z-10 bg-ink/80 px-1 text-sm leading-4 text-gold">★</button>}
               <button type="button" onClick={() => remove(f.id)} aria-label={`Remove ${f.template.name}`} className="absolute right-0.5 top-0.5 z-10 h-5 w-5 bg-ink/80 text-base leading-5 text-ember">×</button>
-              <div className="-mb-3 -mt-1 h-20 w-20 short:h-[4.5rem] short:w-[4.5rem]"><FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} /></div>
+              <div className="-mb-3 -mt-1 h-20 w-20 short:h-[4.5rem] short:w-[4.5rem]"><LiveSprite id={f.id} spriteKey={f.template.sprite_key} role={f.template.role} /></div>
               <div className="w-full">
                 <p className="truncate text-base leading-4 text-gold">{f.template.name}</p>
                 <p className="text-sm leading-4 text-steel">Lv {f.level} · {ROLE_LABEL[f.template.role]}</p>
@@ -103,7 +103,7 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo, title, kicker, goL
                 aria-pressed={on} aria-label={`${f.template.name}, level ${f.level}`}
                 className={`relative flex min-w-0 flex-col items-center border-2 px-0.5 pb-1 pt-0.5 text-center enabled:hover:brightness-125 disabled:opacity-40 ${on ? "border-gold bg-gold/15" : "border-steel/40 bg-panel"}`}
               >
-                <div className="-mb-2 -mt-1 h-14 w-14 short:h-11 short:w-11"><FighterSprite spriteKey={f.template.sprite_key} role={f.template.role} still /></div>
+                <div className="-mb-2 -mt-1 h-14 w-14 short:h-11 short:w-11"><LiveSprite id={f.id} spriteKey={f.template.sprite_key} role={f.template.role} still /></div>
                 <span className="w-full truncate text-sm leading-4 text-paper">{f.template.name}</span>
                 <span className="text-sm leading-4 text-steel">Lv {f.level}</span>
                 <HpBar f={f} now={now} compact />

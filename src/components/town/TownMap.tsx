@@ -1,5 +1,6 @@
 "use client";
 
+import { LiveSprite } from "@/components/sprites/LiveSprite";
 import { Music } from "@/components/Music";
 import { ArmouryPanel } from "@/components/gear/ArmouryPanel";
 import { BagButton } from "@/components/floor/BagButton";
@@ -11,7 +12,6 @@ import { MarketPanel } from "@/components/lobby/MarketPanel";
 import { Npc, npcRatio, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { Speech, SpeechActions } from "@/components/room/Speech";
-import { FighterSprite } from "@/components/sprites/FighterSprite";
 import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, type Pt } from "@/lib/guild-nav";
 import { getFloorSocket } from "@/lib/socket";
@@ -54,7 +54,7 @@ function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite
     >
       {tag && <span className={`absolute left-1/2 top-[14%] -translate-x-1/2 whitespace-nowrap px-1 text-sm ${own ? "bg-gold text-ink" : "bg-ink/80 text-paper"}`}>{tag}</span>}
       <span className="absolute left-1/2 top-[24%] -translate-x-1/2 whitespace-nowrap bg-ink/80 px-1 text-sm text-paper">Lv {level}</span>
-      <FighterSprite spriteKey={sprite} role={role} flip={look.flip} rest={look.walking ? "walk" : "idle"} />
+      <LiveSprite id={id} spriteKey={sprite} role={role} flip={look.flip} rest={look.walking ? "walk" : "idle"} />
     </div>
   );
 }
