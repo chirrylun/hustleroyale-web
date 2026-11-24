@@ -1,5 +1,5 @@
 """Finds sprite sheets whose walk or cast row is just the idle pose repeated (or barely moves), so the game can add a procedural step
-bounce and borrow the attack row for casting until the art is redrawn.  Writes src/lib/spriteMotion.json.   python3 tools/sprite_motion.py"""
+bounce and borrow the attack row for casting until the art is redrawn.  Writes src/lib/spriteMotion.json (the cast list is informational: casting keeps its own row).   python3 tools/sprite_motion.py"""
 import glob, json
 from pathlib import Path
 import numpy as np

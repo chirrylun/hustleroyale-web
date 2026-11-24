@@ -22,9 +22,9 @@ export function FighterSprite({
   const [done, setDone] = useState(-1);
   const once = action && done !== actionKey ? action : null;
   const name = once ?? (rest === "stun" ? "hurt" : rest);
-  // Sheets with no drawn casting row borrow the attack swing; sheets with a still walk row get a procedural step.
+  // Row 2 of every sheet is the walk. Sheets whose walk row is a repeated still pose get a procedural step on top.
   const sheet = sheetUrl(spriteKey, role).replace("/sprites/", "").replace(".png", "");
-  const sprite = name === "cast" && (motion.staticCast as string[]).includes(sheet) ? "attack" : name;
+  const sprite = name;
   const row = ANIMS.findIndex((a) => a.name === sprite);
   const n = ANIMS[row].n;
   const step = name === "walk" && !still && (motion.stiffWalk as string[]).includes(sheet);
