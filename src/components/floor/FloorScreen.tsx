@@ -53,11 +53,13 @@ const LEASH = 14; // the farthest any mob will go from home
  * you walk away. Higher floors notice you from further off and chase for longer. Kinds differ a little
  * (slimes and mushrooms are placid, wolves are edgy); bosses guard their ring at every floor.
  */
-const TEMPER: Record<string, number> = { slime: 0.5, mushroom: 0.5, golem: 0.8, goblin: 1.1, bat: 1.2, direwolf: 1.4 };
+const TEMPER: Record<string, number> = { slime: 0.5, mushroom: 0.5, golem: 0.8, goblin: 1.1, bat: 1.2, direwolf: 1.4, boar: 1.8 };
 /** Distance at which an unprovoked mob goes for you (tiles). Floors 1-2: never. */
 const aggroRange = (floor: number, kind: string, boss: boolean) => {
   if (boss) return 6;
   const base = floor <= 2 ? 0 : floor <= 10 ? 1.5 + (floor - 3) * 0.35 : Math.min(6.5, 4 + (floor - 11) * 0.1);
+  // Boars are short-tempered: they charge anything that wanders near, even on the calm first floors.
+  if (kind === "boar") return Math.max(base * TEMPER.boar, 3);
   return base * (TEMPER[kind] ?? 1);
 };
 /** How far from home it will chase, and how far its target can get before it gives up. */
