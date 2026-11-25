@@ -29,24 +29,19 @@ export const RECRUITS: Record<Role, { id: string; blurb: string }> = {
 export const RECRUIT_ADVANCE_LEVEL = 20;
 export const isRecruit = (archetype: string) => archetype.startsWith("recruit_");
 
+/** First-tier classes only: the second tier (Paladin, Debuff Tank, Warden, Bard, Marksman, Necromancer) is reached later through the class changer in town. */
 export const CLASSES: Record<Role, { id: string; blurb: string }[]> = {
   tank: [
     { id: "shield_tank", blurb: "Soaks hits and shields the team." },
     { id: "fighter_tank", blurb: "Tough brawler that taunts enemies." },
-    { id: "debuff_tank", blurb: "Weakens enemies and reflects damage." },
-    { id: "paladin", blurb: "Holy knight that guards and heals allies." },
   ],
   healer: [
     { id: "pure_healer", blurb: "The strongest healing in the guild." },
     { id: "healer_fighter", blurb: "Fights in the front line and heals." },
-    { id: "healer_tank", blurb: "Sturdy warden that cleanses and shields." },
-    { id: "bard", blurb: "Boosts allies and slows enemies with song." },
   ],
   dps: [
     { id: "rogue", blurb: "Fast striker with dodges and finishing blows." },
     { id: "magical_dps", blurb: "Ranged mage with stuns and area spells." },
-    { id: "marksman", blurb: "Long-range archer with poison and volleys." },
-    { id: "necromancer", blurb: "Drains life, curses foes and raises skeletons." },
   ],
 };
 

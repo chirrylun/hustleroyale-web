@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 const ERRORS: Record<string, string> = {
   level_too_low: "Not high enough level yet.",
   sold_out: "That rank is sold out right now.",
-  already_has_class: "This fighter already has a class.", recruit_first: "Novices become Recruits first.", class_not_available: "That class isn't available.",
+  already_has_class: "This fighter already has a class.", recruit_first: "Novices become Recruits first.", class_not_available: "That class isn't available.", class_locked: "Train the first class before this one.",
 };
 
 /** Under a fighter card: pick a class at level 10, then climb the job ranks. */
@@ -72,7 +72,7 @@ export function ClassActions({ id, level, role, archetype, rarity }: { id: strin
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-base text-steel">You start at {RANK_LABEL.common}. This can't be undone.</p>
+            <p className="mt-2 text-base text-steel">You start at {RANK_LABEL.common}. More classes open up at the class changer in town.</p>
           </div>
         )}
         {error && <p role="alert" className="text-base text-ember">{error}</p>}

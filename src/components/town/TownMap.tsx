@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { StoragePanel } from "@/components/lobby/StoragePanel";
 import { MarketPanel } from "@/components/lobby/MarketPanel";
+import { AlchemistPanel } from "@/components/town/AlchemistPanel";
+import { ClassChangerPanel } from "@/components/town/ClassChangerPanel";
 import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { Speech, SpeechActions } from "@/components/room/Speech";
@@ -41,8 +43,8 @@ interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
 /** How the loop reaches a figure's element and its look state, by id. */
 type Rig = Map<string, { el: HTMLDivElement | null; set: (l: Look) => void }>;
 
-type Talk = "arena" | "classes" | "storage" | "merchant" | "armourer" | "guard";
-const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", classes: "class_changer", storage: "storage_keeper", merchant: "merchant", armourer: "guard", guard: "guard" };
+type Talk = "arena" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "guard";
+const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", guard: "guard" };
 
 function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite: string; role: Role; level: number; tag: string | null; own: boolean; rig: Rig }) {
   const [look, setLook] = useState<Look>({ walking: false, flip: false });
@@ -325,7 +327,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
       </div>
 
       {talk && (
-        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer"} onClose={close}>
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer" || talk === "alchemist"} onClose={close}>
           {talk === "arena" && (
             <>
               <p>Think your fighters are tough? Test them against other guilds.</p>
@@ -337,9 +339,16 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
           )}
           {talk === "classes" && (
             <>
-              <p>I help fighters take up a new calling.</p>
-              <p className="text-steel">Coming soon: change a fighter&apos;s class here.</p>
-              <SpeechActions><PixelButton variant="ghost" onClick={close}>Okay</PixelButton></SpeechActions>
+              <p className="text-steel">I help fighters take up a new calling. Second-tier classes need their first class.</p>
+              <ClassChangerPanel />
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
+            </>
+          )}
+          {talk === "alchemist" && (
+            <>
+              <p className="text-steel">Bring me monster parts and I&apos;ll brew potions, or buy the parts off you.</p>
+              <AlchemistPanel />
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
             </>
           )}
           {talk === "storage" && (
@@ -378,5 +387,5 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
 }
 
 const TITLE: Record<Talk, string> = {
-  arena: "The Arena", classes: "Class Changer", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", guard: "Guild Guard",
+  arena: "The Arena", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", guard: "Guild Guard",
 };
