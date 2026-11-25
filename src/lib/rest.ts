@@ -1,5 +1,5 @@
 /** Fighters heal by themselves while they are away from a fight: this share of their health every second. */
-export const REST_PCT_PER_SEC = 0.03;
+export const REST_PCT_PER_SEC = 0.1;
 
 /**
  * Healing starts this many seconds after the last save. The last save is made on the floor, and getting back to the
