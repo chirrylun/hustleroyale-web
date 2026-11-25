@@ -28,6 +28,7 @@ export function MarketPanel() {
   const [mode, setMode] = useState<Mode>("buy");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qty, setQty] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -72,20 +73,29 @@ export function MarketPanel() {
           : rows.map((g) => {
             const have = owned[g.slug] ?? 0;
             const price = mode === "buy" ? g.buy : g.sell;
-            const can = !busy && (mode === "buy" ? (coins ?? 0) >= price && carried < BAG_MAX : have > 0);
+            // How many can be dealt at once: what you can afford and fit in the bag, or what you carry (the server allows 99 a time).
+            const most = Math.max(0, Math.min(99, mode === "buy" ? Math.min(Math.floor((coins ?? 0) / price), BAG_MAX - carried) : have));
+            const n = Math.min(Math.max(1, qty[g.slug] ?? 1), Math.max(1, most));
+            const can = !busy && most >= 1;
+            const set = (v: number) => setQty((q) => ({ ...q, [g.slug]: Math.min(Math.max(1, v), Math.max(1, most)) }));
             return (
-              <div key={g.slug} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
+              <div key={g.slug} className="pixel-box flex flex-wrap items-center gap-x-2 gap-y-1 bg-panel p-1.5">
                 <img src={itemImage(g.slug)} alt="" width={40} height={40} className="h-10 w-10 shrink-0 [image-rendering:pixelated]" draggable={false} />
-                <div className="min-w-0 flex-1 leading-tight">
-                  <p className="truncate text-xl text-paper">{itemName(g.slug)}{have > 0 && <span className="ml-1 text-base text-steel">×{have}</span>}</p>
+                <div className="min-w-0 flex-1 basis-32 leading-tight">
+                  <p className="truncate text-xl text-paper">{itemName(g.slug)}</p>
                   <p className="truncate text-base text-steel">{EFFECT(g.slug)}</p>
+                  <p className="text-base text-gold">You have {have}</p>
                 </div>
-                <button type="button" disabled={!can} onClick={() => deal(g.slug, 1)} className={`flex shrink-0 items-center gap-1 px-3 py-1 text-xl uppercase text-ink disabled:opacity-40 ${mode === "buy" ? "bg-leaf" : "bg-gold"}`}>
-                  {mode === "buy" ? "Buy" : "Sell"} <span>{price}</span><UiIcon name="coins" size={18} />
+                <div className="flex shrink-0 items-center gap-1">
+                  <button type="button" aria-label="Fewer" disabled={!can || n <= 1} onClick={() => set(n - 1)} className="h-8 w-8 bg-night text-xl text-paper disabled:opacity-40">−</button>
+                  <input aria-label={`Amount of ${itemName(g.slug)}`} inputMode="numeric" value={n} disabled={!can}
+                    onChange={(e) => set(parseInt(e.target.value.replace(/\D/g, ""), 10) || 1)} className="h-8 w-12 bg-night text-center text-xl text-paper" />
+                  <button type="button" aria-label="More" disabled={!can || n >= most} onClick={() => set(n + 1)} className="h-8 w-8 bg-night text-xl text-paper disabled:opacity-40">+</button>
+                  <button type="button" disabled={!can || n >= most} onClick={() => set(most)} className="h-8 bg-night px-2 text-base uppercase text-gold disabled:opacity-40">Max</button>
+                </div>
+                <button type="button" disabled={!can} onClick={() => { void deal(g.slug, n).then(() => setQty((q) => ({ ...q, [g.slug]: 1 }))); }} className={`flex shrink-0 items-center gap-1 px-3 py-1 text-xl uppercase text-ink disabled:opacity-40 ${mode === "buy" ? "bg-leaf" : "bg-gold"}`}>
+                  {mode === "buy" ? "Buy" : "Sell"} {n > 1 ? `×${n}` : ""} <span>{price * n}</span><UiIcon name="coins" size={18} />
                 </button>
-                {mode === "sell" && have > 1 && (
-                  <button type="button" disabled={busy} onClick={() => deal(g.slug, have)} className="shrink-0 bg-night px-2 py-1 text-base uppercase text-gold disabled:opacity-40">All</button>
-                )}
               </div>
             );
           })}

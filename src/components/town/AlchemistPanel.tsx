@@ -74,7 +74,7 @@ export function AlchemistPanel() {
               <div key={r.slug} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
                 <img src={itemImage(r.output)} alt="" width={40} height={40} className="h-10 w-10 shrink-0 [image-rendering:pixelated]" draggable={false} />
                 <div className="min-w-0 flex-1 leading-tight">
-                  <p className="truncate text-xl text-paper">{itemName(r.output)}{(owned[r.output] ?? 0) > 0 && <span className="ml-1 text-base text-steel">×{owned[r.output]}</span>}</p>
+                  <p className="truncate text-xl text-paper">{itemName(r.output)}{(owned[r.output] ?? 0) > 0 && <span className="ml-1 text-base text-gold">You have {owned[r.output]}</span>}</p>
                   <p className="text-base text-steel">
                     {r.inputs.map((n, k) => (
                       <span key={n.item} className={(owned[n.item] ?? 0) >= n.qty ? "text-leaf" : "text-ember"}>{k ? " + " : ""}{n.qty} {itemName(n.item)}</span>
@@ -91,7 +91,7 @@ export function AlchemistPanel() {
           : sellable.map((s) => (
             <div key={s} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
               <img src={itemImage(s)} alt="" width={40} height={40} className="h-10 w-10 shrink-0 [image-rendering:pixelated]" draggable={false} />
-              <p className="min-w-0 flex-1 truncate text-xl text-paper">{itemName(s)} <span className="text-base text-steel">×{owned[s]}</span></p>
+              <p className="min-w-0 flex-1 truncate text-xl text-paper">{itemName(s)} <span className="text-base text-gold">You have {owned[s]}</span></p>
               <button type="button" disabled={busy} onClick={() => run("alchemist_sell", { p_slug: s, p_qty: 1 }, `Sold ${itemName(s)}.`)} className="flex shrink-0 items-center gap-1 bg-gold px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Sell <span>{prices[s]}</span><UiIcon name="coins" size={18} /></button>
               {owned[s] > 1 && <button type="button" disabled={busy} onClick={() => run("alchemist_sell", { p_slug: s, p_qty: Math.min(99, owned[s]) }, `Sold ${Math.min(99, owned[s])} ${itemName(s)}.`)} className="shrink-0 bg-night px-2 py-1 text-base uppercase text-gold disabled:opacity-40">All</button>}
             </div>

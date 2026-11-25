@@ -18,6 +18,7 @@ export const ARCHETYPE_LABEL: Record<string, string> = {
   shield_tank: "Shield Tank", fighter_tank: "Fighter Tank", debuff_tank: "Debuff Tank", paladin: "Paladin",
   pure_healer: "Pure Healer", healer_fighter: "Battle Medic", healer_tank: "Warden", bard: "Bard",
   rogue: "Rogue", magical_dps: "Mage", marksman: "Marksman", necromancer: "Necromancer",
+  ninja: "Ninja", samurai: "Samurai", soldier: "Soldier", sharpshooter: "Sharpshooter", ranger: "Ranger", whitemage: "White Mage", blackmage: "Black Mage",
 };
 
 /** Level 10: a Novice becomes a Recruit of its role. Level 20: a Recruit specialises (CLASSES). */
