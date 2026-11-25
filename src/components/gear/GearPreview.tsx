@@ -1,5 +1,6 @@
 "use client";
 
+<<<<<<< Updated upstream
 import { useState, type ReactNode } from "react";
 
 import { GearIcon, hasGearArt } from "@/components/gear/GearIcon";
@@ -32,6 +33,17 @@ export function GearPreview({ base, rank = 1, level = 1, gender = "male", onClos
   const drawn = hasGearArt(base.slug, rank);
   const armour = base.slot === "armor";
   const sheet = base.slug === "armor_novice" ? `${artSlug(base.slug, rank)}_${g}` : artSlug(base.slug, rank);
+=======
+import { hasGearArt } from "@/components/gear/GearIcon";
+import { FighterSprite } from "@/components/sprites/FighterSprite";
+import { RANK_NAME, RANK_TEXT, classLabel, statLine, type GearItem } from "@/lib/gear";
+
+/** Shows a fighter wearing the item: an armour set is a whole character; a weapon or shield is drawn over the novice. */
+export function GearPreview({ item, gender = "male", onClose }: { item: GearItem; gender?: string; onClose: () => void }) {
+  const g = gender === "female" ? "female" : "male";
+  const armour = item.slot === "armor";
+  const drawn = hasGearArt(item.slug);
+>>>>>>> Stashed changes
   return (
     <div className="fixed inset-0 z-[9800] flex items-center justify-center bg-ink/80 p-3" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={`${base.name} details`} className="pixel-box card-reveal flex max-h-[94dvh] w-full max-w-sm flex-col gap-2 overflow-y-auto bg-night p-3 text-paper">
@@ -43,6 +55,7 @@ export function GearPreview({ base, rank = 1, level = 1, gender = "male", onClos
           </div>
           <button type="button" aria-label="Close" onClick={onClose} className="h-9 w-9 shrink-0 bg-panel text-2xl">✕</button>
         </div>
+<<<<<<< Updated upstream
 
         {look ? (
           <>
@@ -73,6 +86,25 @@ export function GearPreview({ base, rank = 1, level = 1, gender = "male", onClos
             <button type="button" onClick={() => setLook(true)} className="bg-gold px-3 py-1 text-xl uppercase text-ink">Preview</button>
           </>
         )}
+=======
+        <div className="relative mx-auto aspect-square w-56 max-w-full bg-panel short:w-40" role="img" aria-label={drawn ? `A fighter wearing ${item.name}` : `${item.name} preview coming soon`}>
+          {drawn ? (
+            armour ? (
+              <FighterSprite spriteKey={item.slug} role="dps" still />
+            ) : (
+              <>
+                <div className="absolute inset-0"><FighterSprite spriteKey={`novice_${g}`} role="dps" still /></div>
+                <div className="absolute inset-0"><FighterSprite spriteKey={`gear_${item.slug}_${g}`} role="dps" still /></div>
+              </>
+            )
+          ) : (
+            <div className="absolute inset-0"><FighterSprite spriteKey={`novice_${g}`} role="dps" still /></div>
+          )}
+        </div>
+        {!drawn && <p className="text-center text-base text-steel">This item&apos;s art isn&apos;t drawn yet.</p>}
+        <p className="text-center text-base text-steel"><span className={RANK_TEXT[item.rank]}>{RANK_NAME[item.rank]}</span> · Lv {item.min_level}+ · {classLabel(item)}</p>
+        <p className="text-center text-lg text-leaf">{statLine(item)}</p>
+>>>>>>> Stashed changes
       </div>
     </div>
   );
