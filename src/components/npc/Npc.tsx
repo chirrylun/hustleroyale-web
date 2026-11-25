@@ -28,3 +28,8 @@ export function Npc({ name, facing = "front", className = "", style }: { name: N
 
 /** Width/height of one frame, to size an NPC from how tall it should stand. */
 export const npcRatio = (name: NpcName) => npcs[name].w / npcs[name].h;
+
+/** Height of the whole frame that makes the NPC's body as tall as `bodyH` (a player's body in the same units), so NPCs and fighters share a scale. */
+export const npcFrameH = (name: NpcName, bodyH: number) => { const d = npcs[name] as { h: number; body?: number }; return bodyH * d.h / (d.body ?? d.h - 6); };
+/** A fighter's idle body as a share of its sprite frame (novice: 122 px of 208, drawn at 0.9). */
+export const BODY_OF_FRAME = 0.9 * 122 / 208;

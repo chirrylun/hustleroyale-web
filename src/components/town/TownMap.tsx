@@ -9,14 +9,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { StoragePanel } from "@/components/lobby/StoragePanel";
 import { MarketPanel } from "@/components/lobby/MarketPanel";
-import { Npc, npcRatio, type NpcName } from "@/components/npc/Npc";
+import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { Speech, SpeechActions } from "@/components/room/Speech";
 import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, type Pt } from "@/lib/guild-nav";
 import { getFloorSocket } from "@/lib/socket";
 import type { Role } from "@/lib/sprites/designs";
-import { ATLAS, NPC_HEIGHT, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
+import { ATLAS, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
 
 const SPEED = 2.6; // tiles per second
 const FRAME = 3.4; // a fighter's sprite frame, in tiles
@@ -29,6 +29,8 @@ const FORMATION: Pt[] = [[0, 0], [-0.9, 0.6], [0.9, 0.6]];
 const ARRIVE = 1.7;
 /** The figure inside an NPC's frame stands with its feet about this far down the frame. */
 const NPC_FEET = 0.97;
+/** NPC frame height, in picture pixels, so the body is as tall as a fighter standing in town. */
+const npcH = (name: string) => npcFrameH(name as NpcName, (FRAME * T * BODY_OF_FRAME) / SCALE);
 const zOf = (yTiles: number) => 10 + Math.round(yTiles * 10);
 
 interface Agent { x: number; y: number; path: Pt[]; tx?: number; ty?: number; walking: boolean; flip: boolean }
@@ -231,7 +233,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
     const px = (p.x / c.z + c.x) / SCALE, py = (p.y / c.z + c.y) / SCALE;
     // A tap on a person talks to them.
     const person = town.npcs.find((n) => {
-      const h = NPC_HEIGHT, w = h * npcRatio(n.npc as NpcName);
+      const h = npcH(n.npc), w = h * npcRatio(n.npc as NpcName);
       return Math.abs(px - n.x) < w * 0.4 && py < n.y + 12 && py > n.y - h * NPC_FEET;
     });
     if (person) { setTalk(person.action as Talk); return; }
@@ -307,7 +309,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
             </span>
           ))}
           {town.npcs.map((n, k) => {
-            const h = NPC_HEIGHT, w = h * npcRatio(n.npc as NpcName);
+            const h = npcH(n.npc), w = h * npcRatio(n.npc as NpcName);
             return (
               <Npc
                 key={k} name={n.npc as NpcName} facing={n.facing}

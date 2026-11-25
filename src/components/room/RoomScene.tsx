@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { Npc, npcRatio, type Facing, type NpcName } from "@/components/npc/Npc";
+import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type Facing, type NpcName } from "@/components/npc/Npc";
 
 export interface SceneProp {
   id: string;
@@ -59,7 +59,8 @@ export function RoomScene({ layout, onAction, innerRef, onPointerDown, children 
         return <div key={p.id} className="pointer-events-none absolute" style={box}>{art}</div>;
       })}
 
-      {layout.npcs.map((n) => {
+      {layout.npcs.map((n0) => {
+        const n = { ...n0, h: npcFrameH(n0.npc as NpcName, layout.frame * BODY_OF_FRAME) };
         const w = n.h * npcRatio(n.npc as NpcName);
         const box = { left: pct(n.x - w / 2, layout.cols), top: pct(n.y - n.h, layout.rows), width: pct(w, layout.cols), zIndex: depth(n.foot[3]) };
         const art = <Npc name={n.npc as NpcName} facing={n.facing as Facing} className="pointer-events-none w-full" />;

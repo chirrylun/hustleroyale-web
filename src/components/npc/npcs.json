@@ -2,36 +2,55 @@
  "gladiator": {
   "w": 123,
   "h": 161,
-  "rows": 3
+  "rows": 3,
+  "body": 150
  },
  "secretary": {
-  "w": 158,
-  "h": 329,
-  "rows": 3
+  "w": 201,
+  "h": 312,
+  "rows": 3,
+  "body": 300
  },
  "merchant": {
-  "w": 199,
-  "h": 345,
-  "rows": 3
+  "w": 297,
+  "h": 326,
+  "rows": 3,
+  "body": 302
  },
  "manager": {
-  "w": 236,
-  "h": 367,
-  "rows": 1
+  "w": 304,
+  "h": 322,
+  "rows": 1,
+  "body": 306
  },
  "class_changer": {
-  "w": 190,
-  "h": 381,
-  "rows": 3
+  "w": 244,
+  "h": 308,
+  "rows": 3,
+  "body": 301
  },
  "storage_keeper": {
-  "w": 207,
-  "h": 334,
-  "rows": 3
+  "w": 280,
+  "h": 315,
+  "rows": 3,
+  "body": 300
  },
  "guard": {
-  "w": 209,
-  "h": 380,
-  "rows": 3
+  "w": 290,
+  "h": 335,
+  "rows": 3,
+  "body": 328
+ },
+ "alchemist": {
+  "w": 229,
+  "h": 330,
+  "rows": 3,
+  "body": 323
+ },
+ "blacksmith": {
+  "w": 313,
+  "h": 344,
+  "rows": 3,
+  "body": 301
  }
 }

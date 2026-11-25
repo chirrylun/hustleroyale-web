@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { HealthTag } from "./HealthTag";
 import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, randomWalkable, type Pt } from "@/lib/guild-nav";
-import { Npc, npcRatio, type Facing, type NpcName } from "@/components/npc/Npc";
+import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type Facing, type NpcName } from "@/components/npc/Npc";
 import layout from "./layout.json";
 
 interface Prop {
@@ -247,7 +247,8 @@ export function GuildHall({
         return <div key={p.id} className="pointer-events-none absolute" style={box}>{art}</div>;
       })}
 
-      {npcList.map((n) => {
+      {npcList.map((n0) => {
+        const n = { ...n0, h: npcFrameH(n0.npc as NpcName, FRAME * BODY_OF_FRAME) };
         const w = n.h * npcRatio(n.npc as NpcName);
         const locked = !!isLocked?.(n.action ?? "");
         const box = { left: pct(n.x - w / 2, layout.cols), top: pct(n.y - n.h, layout.rows), width: pct(w, layout.cols), zIndex: depth(n.foot[3]) };
