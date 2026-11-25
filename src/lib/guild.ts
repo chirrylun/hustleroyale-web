@@ -1,3 +1,4 @@
+import { TUNE } from "@/lib/world/floor";
 import { lookKey } from "@/lib/look";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Rarity, Role, StarterFighter } from "./starter-pack";
@@ -72,7 +73,7 @@ export async function loadFighters(supabase: SupabaseClient, userId: string): Pr
     .select("id, grade, level, xp, gender, skill_points, team_slot, hp, hp_frac, hp_at, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), fighter_skills(slot, skill:skills(name, kind, damage_type, power, cooldown_ms, stamina_cost, description)), gear:fighter_gear(slot, item:gear_items(base_slug, rank, atk, def, magic, hp, spd))")
     .eq("owner_id", userId)
     .order("team_slot", { ascending: true, nullsFirst: false });
-  return ((data ?? []) as unknown as Row[]).map((f) => { const gb = gearTotals(f.gear); return ({
+  return ((data ?? []) as unknown as Row[]).map((f) => { const gb = gearTotals(f.gear, f as unknown as Stat5); return ({
     id: f.id, grade: f.grade, level: f.level, xp: f.xp, skill_points: f.skill_points, team_slot: f.team_slot ?? 0,
     hp: f.hp + gb.hp, hp_frac: f.hp_frac, hp_at: f.hp_at, atk: f.atk + gb.atk, def: f.def + gb.def, spd: f.spd + gb.spd, stamina: f.stamina, magic: f.magic + gb.magic, gender: f.gender, template: { ...f.template, sprite_key: lookKey(f.gender, f.gear) },
     skills: (f.fighter_skills ?? []).map((s) => ({ slot: s.slot, name: s.skill?.name ?? "", kind: s.skill?.kind, damage_type: s.skill?.damage_type, power: s.skill ? Number(s.skill.power) : undefined, cooldown_ms: s.skill?.cooldown_ms, stamina_cost: s.skill?.stamina_cost, description: s.skill?.description })).sort((a, b) => a.slot - b.slot),
@@ -82,8 +83,10 @@ export async function loadFighters(supabase: SupabaseClient, userId: string): Pr
 type GearRows = { slot: string; item: (Stat5 & { base_slug: string; rank: number }) | (Stat5 & { base_slug: string; rank: number })[] | null }[] | null | undefined;
 type Stat5 = { atk: number; def: number; magic: number; hp: number; spd: number };
 /** What a fighter's worn gear adds (same sum the game server uses for rooms and battles). */
-function gearTotals(rows: GearRows): Stat5 {
+function gearTotals(rows: GearRows, own?: Stat5): Stat5 {
   const t = { atk: 0, def: 0, magic: 0, hp: 0, spd: 0 };
   for (const r of rows ?? []) { const i = Array.isArray(r.item) ? r.item[0] : r.item; if (i) { t.atk += i.atk; t.def += i.def; t.magic += i.magic; t.hp += i.hp; t.spd += i.spd; } }
+  // Gear is a boost, not the whole fighter: at most 40% of a stat (TUNE.gearCap, mirrored on the server).
+  if (own) for (const k of ["hp", "atk", "def", "magic", "spd"] as const) t[k] = Math.min(t[k], Math.floor(own[k] * TUNE.gearCap));
   return t;
 }

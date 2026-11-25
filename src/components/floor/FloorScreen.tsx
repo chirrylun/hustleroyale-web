@@ -583,8 +583,9 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
 
   // The server rolls the xp (a range, not a fixed amount) and says what each fighter got: show it over their heads.
   const showXp = (data: unknown) => {
-    const res = data as { throttled?: boolean; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
+    const res = data as { throttled?: boolean; coins?: number; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
     if (!res?.awards || res.throttled) return;
+    if (res.coins && allies.current[0]) { const lead = allies.current.find((u) => !u.dead) ?? allies.current[0]; setTimeout(() => overHead(lead, `+${res.coins} coins`, "text-gold", 1200, undefined, "margin-bottom:2.4rem;"), 350); }
     let ups = 0; // party members levelling on the same kill take turns, each banner a step higher than the last
     for (const w of res.awards) {
       const a = allies.current.find((u) => u.id === w.id);
