@@ -21,12 +21,14 @@ from build_sprites import character, cut_background  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Folder name -> gear class id. The Armor zip's "rogue" is the Thief look; the second zip's "rogue" is the base Rogue.
+# Folder name -> gear class id, per zip (a later zip replaces an earlier one). The very first zip's "rogue" is the Thief look.
+SAME = {"battlemedic": "battle_medic", "darkmage": "blackmage", "fightertank": "fighter", "mage": "mage", "marksman": "marksman", "necromancer": "necromancer",
+        "ninja": "ninja", "paladin": "paladin", "purehealer": "pure_healer", "rogue": "rogue", "samurai": "samurai", "shieldtank": "shield_tank",
+        "sharpshooter": "sharpshooter", "soldier": "soldier", "warden": "warden", "whitemage": "whitemage", "healer": "healer", "bard": "bard", "ranger": "ranger"}
 FOLDERS = {
-    "armor": {"battlemedic": "battle_medic", "fightertank": "fighter", "healer": "healer", "mage": "mage", "marksman": "marksman", "necromancer": "necromancer",
-              "paladin": "paladin", "purehealer": "pure_healer", "rogue": "thief", "tank": "warrior"},
-    "new": {"darkmage": "blackmage", "marksman": "marksman", "ninja": "ninja", "ranger": "ranger", "rogue": "rogue", "samurai": "samurai",
-            "sharpshooter": "sharpshooter", "soldier": "soldier", "whitemage": "whitemage"},
+    "armor": {**SAME, "rogue": "thief", "tank": "warrior"},
+    "new": {**SAME, "rogue": "thief"},   # the second zip, its "rogue" repeats the Thief look
+    "all": SAME,                          # every later zip: "rogue" is the Rogue
 }
 CELL = 208
 ICON = 96
@@ -34,7 +36,10 @@ ICON = 96
 
 def rank_of(name: str):
     n = name.lower()
-    return 1 if "rook" in n else 2 if "soldier" in n else 3 if "knight" in n else 4 if ("rune" in n or "rank" in n) else None
+    d = [c for c in n if c.isdigit()]
+    if d and "rank" in n:
+        return int(d[0]) if d[0] in "1234" else None
+    return 1 if "rook" in n else 2 if "soldier" in n else 3 if "knight" in n else 4 if "rune" in n else None
 
 
 def icon_from(rgba: np.ndarray, dst: Path):
@@ -55,7 +60,7 @@ def armour(dirs):
     found = {}
     for d in dirs:
         d = Path(d)
-        maps = FOLDERS["new" if d.name == "new" else "armor"]
+        maps = FOLDERS["armor" if d.name == "armor" else "new" if (d.name == "new" and d.parent.name == "new") else "all"]
         for folder, cls in maps.items():
             for f in sorted((d / folder).glob("*")) if (d / folder).is_dir() else []:
                 if f.suffix.lower() not in (".jpg", ".jpeg", ".png"):

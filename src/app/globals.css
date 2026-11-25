@@ -309,6 +309,16 @@ canvas,
 
 /* Sprite-sheet player: stepped background-position, one row per animation. */
 @keyframes fx-appear { from { opacity: 0; } to { opacity: 1; } }
+/* A step for sheets whose walk row is a still pose: a bounce and sway on the six walk beats (uses the separate translate/rotate properties, so it adds to the sprite's own transform). */
+@keyframes spr-step {
+  0%, 100% { translate: 0 0; rotate: 0deg; }
+  17% { translate: 0 -3.5%; rotate: 1.8deg; }
+  33% { translate: 0 0; rotate: 0deg; }
+  50% { translate: 0 0; rotate: 0deg; }
+  67% { translate: 0 -3.5%; rotate: -1.8deg; }
+  83% { translate: 0 0; rotate: 0deg; }
+}
+
 @keyframes spr {
   from {
     background-position-x: 0%;

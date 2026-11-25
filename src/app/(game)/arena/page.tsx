@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { lookKey, type WornRows } from "@/lib/look";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { ArenaScreen, type TeamFighter } from "@/components/battle/ArenaScreen";
@@ -27,6 +28,8 @@ type Row = {
   spd: number;
   stamina: number;
   magic: number;
+  gender?: string;
+  gear?: WornRows;
   template: TeamFighter["template"] | TeamFighter["template"][] | null;
   skills: { slot: number; skill: { name: string } | { name: string }[] | null }[] | null;
 };
@@ -47,7 +50,7 @@ async function ArenaContent() {
     supabase
       .from("fighters")
       .select(
-        "id, grade, level, team_slot, hp, atk, def, spd, stamina, magic, template:fighter_templates(name, role, archetype, rarity, sprite_key), skills:fighter_skills(slot, skill:skills(name))",
+        "id, grade, level, team_slot, hp, atk, def, spd, stamina, magic, gender, template:fighter_templates(name, role, archetype, rarity, sprite_key), skills:fighter_skills(slot, skill:skills(name)), gear:fighter_gear(slot, item:gear_items(base_slug, rank))",
       )
       .not("team_slot", "is", null)
       .order("team_slot", { ascending: true }),
@@ -76,7 +79,7 @@ async function ArenaContent() {
         spd: r.spd,
         stamina: r.stamina,
         magic: r.magic,
-        template,
+        template: { ...template, sprite_key: lookKey(r.gender, r.gear) },
         skills: [...(r.skills ?? [])]
           .sort((a, b) => a.slot - b.slot)
           .flatMap((s) => {

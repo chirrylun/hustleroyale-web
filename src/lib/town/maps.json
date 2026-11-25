@@ -229,6 +229,13 @@
      "action": "merchant"
     },
     {
+     "npc": "alchemist",
+     "facing": "front",
+     "x": 1160,
+     "y": 650,
+     "action": "alchemist"
+    },
+    {
      "npc": "guard",
      "facing": "front",
      "x": 1355,

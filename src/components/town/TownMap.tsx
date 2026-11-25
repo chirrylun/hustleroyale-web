@@ -1,5 +1,6 @@
 "use client";
 
+import { LiveSprite } from "@/components/sprites/LiveSprite";
 import { Music } from "@/components/Music";
 import { ArmouryPanel } from "@/components/gear/ArmouryPanel";
 import { BagButton } from "@/components/floor/BagButton";
@@ -8,15 +9,16 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { StoragePanel } from "@/components/lobby/StoragePanel";
 import { MarketPanel } from "@/components/lobby/MarketPanel";
-import { Npc, npcRatio, type NpcName } from "@/components/npc/Npc";
+import { AlchemistPanel } from "@/components/town/AlchemistPanel";
+import { ClassChangerPanel } from "@/components/town/ClassChangerPanel";
+import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { Speech, SpeechActions } from "@/components/room/Speech";
-import { FighterSprite } from "@/components/sprites/FighterSprite";
 import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, type Pt } from "@/lib/guild-nav";
 import { getFloorSocket } from "@/lib/socket";
 import type { Role } from "@/lib/sprites/designs";
-import { ATLAS, NPC_HEIGHT, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
+import { ATLAS, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
 
 const SPEED = 2.6; // tiles per second
 const FRAME = 3.4; // a fighter's sprite frame, in tiles
@@ -29,6 +31,8 @@ const FORMATION: Pt[] = [[0, 0], [-0.9, 0.6], [0.9, 0.6]];
 const ARRIVE = 1.7;
 /** The figure inside an NPC's frame stands with its feet about this far down the frame. */
 const NPC_FEET = 0.97;
+/** NPC frame height, in picture pixels, so the body is as tall as a fighter standing in town. */
+const npcH = (name: string) => npcFrameH(name as NpcName, (FRAME * T * BODY_OF_FRAME) / SCALE);
 const zOf = (yTiles: number) => 10 + Math.round(yTiles * 10);
 
 interface Agent { x: number; y: number; path: Pt[]; tx?: number; ty?: number; walking: boolean; flip: boolean }
@@ -39,8 +43,8 @@ interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
 /** How the loop reaches a figure's element and its look state, by id. */
 type Rig = Map<string, { el: HTMLDivElement | null; set: (l: Look) => void }>;
 
-type Talk = "arena" | "classes" | "storage" | "merchant" | "armourer" | "guard";
-const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", classes: "class_changer", storage: "storage_keeper", merchant: "merchant", armourer: "guard", guard: "guard" };
+type Talk = "arena" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "guard";
+const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", guard: "guard" };
 
 function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite: string; role: Role; level: number; tag: string | null; own: boolean; rig: Rig }) {
   const [look, setLook] = useState<Look>({ walking: false, flip: false });
@@ -54,7 +58,7 @@ function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite
     >
       {tag && <span className={`absolute left-1/2 top-[14%] -translate-x-1/2 whitespace-nowrap px-1 text-sm ${own ? "bg-gold text-ink" : "bg-ink/80 text-paper"}`}>{tag}</span>}
       <span className="absolute left-1/2 top-[24%] -translate-x-1/2 whitespace-nowrap bg-ink/80 px-1 text-sm text-paper">Lv {level}</span>
-      <FighterSprite spriteKey={sprite} role={role} flip={look.flip} rest={look.walking ? "walk" : "idle"} />
+      <LiveSprite id={id} spriteKey={sprite} role={role} flip={look.flip} rest={look.walking ? "walk" : "idle"} />
     </div>
   );
 }
@@ -231,7 +235,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
     const px = (p.x / c.z + c.x) / SCALE, py = (p.y / c.z + c.y) / SCALE;
     // A tap on a person talks to them.
     const person = town.npcs.find((n) => {
-      const h = NPC_HEIGHT, w = h * npcRatio(n.npc as NpcName);
+      const h = npcH(n.npc), w = h * npcRatio(n.npc as NpcName);
       return Math.abs(px - n.x) < w * 0.4 && py < n.y + 12 && py > n.y - h * NPC_FEET;
     });
     if (person) { setTalk(person.action as Talk); return; }
@@ -307,7 +311,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
             </span>
           ))}
           {town.npcs.map((n, k) => {
-            const h = NPC_HEIGHT, w = h * npcRatio(n.npc as NpcName);
+            const h = npcH(n.npc), w = h * npcRatio(n.npc as NpcName);
             return (
               <Npc
                 key={k} name={n.npc as NpcName} facing={n.facing}
@@ -323,7 +327,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
       </div>
 
       {talk && (
-        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer"} onClose={close}>
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer" || talk === "alchemist"} onClose={close}>
           {talk === "arena" && (
             <>
               <p>Think your fighters are tough? Test them against other guilds.</p>
@@ -335,9 +339,16 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
           )}
           {talk === "classes" && (
             <>
-              <p>I help fighters take up a new calling.</p>
-              <p className="text-steel">Coming soon: change a fighter&apos;s class here.</p>
-              <SpeechActions><PixelButton variant="ghost" onClick={close}>Okay</PixelButton></SpeechActions>
+              <p className="text-steel">I help fighters take up a new calling. Second-tier classes need their first class.</p>
+              <ClassChangerPanel />
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
+            </>
+          )}
+          {talk === "alchemist" && (
+            <>
+              <p className="text-steel">Bring me monster parts and I&apos;ll brew potions, or buy the parts off you.</p>
+              <AlchemistPanel />
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
             </>
           )}
           {talk === "storage" && (
@@ -376,5 +387,5 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
 }
 
 const TITLE: Record<Talk, string> = {
-  arena: "The Arena", classes: "Class Changer", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", guard: "Guild Guard",
+  arena: "The Arena", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", guard: "Guild Guard",
 };

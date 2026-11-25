@@ -24,7 +24,8 @@ import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
 import { POTIONS, POTION_SLUGS, itemImage, itemName } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
-import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, type Floor } from "@/lib/world/floor";
+import { useLook } from "@/lib/lookStore";
+import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, hitDamage, type Floor } from "@/lib/world/floor";
 
 const T = 34; // one tile, in px, before the camera zoom (tiles, props and sprites are all drawn at this scale)
 const FRAME = 2.7; // a sprite frame, in tiles
@@ -52,11 +53,13 @@ const LEASH = 14; // the farthest any mob will go from home
  * you walk away. Higher floors notice you from further off and chase for longer. Kinds differ a little
  * (slimes and mushrooms are placid, wolves are edgy); bosses guard their ring at every floor.
  */
-const TEMPER: Record<string, number> = { slime: 0.5, mushroom: 0.5, golem: 0.8, goblin: 1.1, bat: 1.2, direwolf: 1.4 };
+const TEMPER: Record<string, number> = { slime: 0.5, mushroom: 0.5, golem: 0.8, goblin: 1.1, bat: 1.2, direwolf: 1.4, boar: 1.8 };
 /** Distance at which an unprovoked mob goes for you (tiles). Floors 1-2: never. */
 const aggroRange = (floor: number, kind: string, boss: boolean) => {
   if (boss) return 6;
   const base = floor <= 2 ? 0 : floor <= 10 ? 1.5 + (floor - 3) * 0.35 : Math.min(6.5, 4 + (floor - 11) * 0.1);
+  // Boars are short-tempered: they charge anything that wanders near, even on the calm first floors.
+  if (kind === "boar") return Math.max(base * TEMPER.boar, 3);
   return base * (TEMPER[kind] ?? 1);
 };
 /** How far from home it will chase, and how far its target can get before it gives up. */
@@ -164,13 +167,13 @@ interface Ag {
 interface WireMob { id: number; kind: string; rarity: string; sprite: string; level: number; boss: boolean; x: number; y: number; hp: number; max: number; home: [number, number, number]; dead?: boolean }
 interface WireFighter { id: string; sprite: string; name: string; role: "tank" | "healer" | "dps"; level: number; max: number; x?: number; y?: number; frac?: number; dead?: boolean }
 interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
-interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[] }
+interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; gear?: { name: string; rank: number; level: number } | null }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** Colour of a monster's tag, by how far it is above the party's best fighter: ordinary ones stay plain, tougher ones warn. */
 const levelTone = (gap: number) => (gap >= 5 ? "text-ember" : gap >= 2 ? "text-gold" : "text-paper");
-const MOB_NAME: Record<string, string> = { direwolf: "Dire Wolf" };
+const MOB_NAME: Record<string, string> = { direwolf: "Dire Wolf", boar: "Thornback Boar", weaver: "Cave Weaver", wisp: "Frost Wisp", beetle: "Stone Beetle", slimeking: "Slime King", broodmother: "Broodmother", rimewarden: "Rimewarden" };
 const mobName = (kind: string) => MOB_NAME[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 
 const POTION_LIST = POTION_SLUGS;
@@ -178,13 +181,14 @@ const POTION_LIST = POTION_SLUGS;
 function Unit({ a, party }: { a: Ag; party: number }) {
   const [look, setLook] = useState(a.look);
   // Bosses are drawn large on purpose; everything else is scaled to a realistic size next to a fighter.
+  const liveSprite = useLook(a.id, a.sprite);
   const size = FRAME * T * (a.boss ? 1.5 : mobScale(a.sprite));
   const box = { width: size, height: size, marginLeft: -size / 2, marginTop: -size * 0.86 };
   return (
     <>
       <div ref={(el) => { a.el = el; a.setLook = setLook; }} className="absolute left-0 top-0 will-change-transform" style={box}>
         <FighterSprite
-          spriteKey={a.sprite} role={a.role} flip={look.flip} rest={look.rest}
+          spriteKey={liveSprite} role={a.role} flip={look.flip} rest={look.rest}
           action={look.act} actionKey={look.n}
         />
       </div>
@@ -579,8 +583,9 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
 
   // The server rolls the xp (a range, not a fixed amount) and says what each fighter got: show it over their heads.
   const showXp = (data: unknown) => {
-    const res = data as { throttled?: boolean; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
+    const res = data as { throttled?: boolean; coins?: number; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
     if (!res?.awards || res.throttled) return;
+    if (res.coins && allies.current[0]) { const lead = allies.current.find((u) => !u.dead) ?? allies.current[0]; setTimeout(() => overHead(lead, `+${res.coins} coins`, "text-gold", 1200, undefined, "margin-bottom:2.4rem;"), 350); }
     let ups = 0; // party members levelling on the same kill take turns, each banner a step higher than the last
     for (const w of res.awards) {
       const a = allies.current.find((u) => u.id === w.id);
@@ -614,9 +619,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     let spawnId = 0;
     const hurt = (from: Ag, to: Ag, now: number, mult = 1, magical = false, skill = "Basic Strike") => {
       if (to.dodge > 0) { to.dodge--; spawnText(to.x, to.y, "Dodge", "text-steel"); return; }
-      const power = from.side === "ally" ? (magical && from.magic ? from.magic : from.atk) * (now < from.buffUntil ? 1.25 : 1) : from.atk;
-      const raw = (from.side === "ally" ? power - to.def * 0.5 : power * (now < from.weakUntil ? 0.7 : 1) - to.def * 0.45) * mult;
-      let dmg = Math.max(2, Math.round(raw * (0.9 + Math.random() * 0.2)));
+      const power = (from.side === "ally" ? (magical && from.magic ? from.magic : from.atk) * (now < from.buffUntil ? 1.25 : 1) : from.atk * (now < from.weakUntil ? 0.7 : 1)) * mult;
+      let dmg = hitDamage(power, to.def, to.level, 0.9 + Math.random() * 0.2);
       if (to.shield > 0 && now < to.shieldUntil) { const soak = Math.min(to.shield, dmg); to.shield -= soak; dmg -= soak; }
       to.hp = Math.max(0, to.hp - dmg);
       if (from.side === "ally" && to.side === "foe") {
@@ -1045,9 +1049,11 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     };
     const onPaid = (k: PaidKill) => {
       paid(k, k.kind, k.boss);
+      if (k.gear) showToast(`${mobName(k.kind)} dropped ${k.gear.name} (rank ${k.gear.rank}, lv ${k.gear.level})!`);
       if (k.throttled) return;
       if (k.boss) progress.current.boss = true; else progress.current.kills++;
     };
+    const onMini = (j: { kind: string }) => showToast(`${mobName(j.kind)} has appeared on this floor!`);
     const onJoined = (j: { player?: WirePlayer; n: number }) => {
       if (j.player && j.player.uid !== me) { mates.current.push(...netMates(j.player)); rerender(); }
       setRoom((cur) => (cur ? { ...cur, n: j.n } : cur));
@@ -1083,7 +1089,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     const onFail = () => { if (nt.mode === "pending") nt.mode = "off"; };
     sock.on("connect", onConnect);
     sock.on("connect_error", onFail);
-    sock.on("s", onSnap); sock.on("hit", onHit); sock.on("k", onPaid); sock.on("joined", onJoined); sock.on("left", onLeft);
+    sock.on("s", onSnap); sock.on("hit", onHit); sock.on("k", onPaid); sock.on("joined", onJoined); sock.on("left", onLeft); sock.on("mini", onMini);
     if (sock.connected) onConnect(); else sock.connect();
 
     raf = requestAnimationFrame(tick);
@@ -1092,7 +1098,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       clearTimeout(give);
       sock.emit("leave");
       sock.off("connect", onConnect); sock.off("connect_error", onFail);
-      sock.off("s", onSnap); sock.off("hit", onHit); sock.off("k", onPaid); sock.off("joined", onJoined); sock.off("left", onLeft);
+      sock.off("s", onSnap); sock.off("hit", onHit); sock.off("k", onPaid); sock.off("joined", onJoined); sock.off("left", onLeft); sock.off("mini", onMini);
       sock.disconnect();
       nt.mode = "pending"; nt.sock = null; mates.current = [];
     };

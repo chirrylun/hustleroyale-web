@@ -19,6 +19,7 @@ export const POTION_SLUGS = Object.keys(POTIONS);
 export const itemImage = (slug: string) => {
   if ((ART as string[]).includes(slug)) return `/items/${slug}.png`;
   const k = POTIONS[slug]?.kind;
+  if (!k) return "/items/golem_shard.png"; // monster parts that have no picture yet
   return `/items/${k === "mp" ? "mp_potion" : "hp_potion"}.png`;
 };
 

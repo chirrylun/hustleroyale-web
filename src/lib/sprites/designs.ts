@@ -1,3 +1,4 @@
+import armorScale from "@/lib/armorScale.json";
 export type Role = "tank" | "healer" | "dps";
 /** Effect sheets: 4 rows (one effect each) x 4 frames. hit: physical, heavy, magic, crit. support: heal, shield, buff, debuff. shot: dart, magic, fire, holy. status: stun, death, shield break, danger. */
 export type FxSheet = "hit" | "support" | "shot" | "status" | "shot2" | "support2" | "ground"
@@ -29,7 +30,7 @@ const ARCHETYPE_ART = new Set<string>(["paladin", "bard", "marksman", "necromanc
  * three times as wide. This scales each kind to a believable size next to a fighter (about 1.8 m, 120 px
  * of a frame): slimes knee-high, bats the size of bats, a wolf long and low. Bosses keep the full size.
  */
-const MOB_SCALE: Record<string, number> = { slime: 0.3, bat: 0.35, mushroom: 0.5, goblin: 0.6, direwolf: 0.62, golem: 1 };
+const MOB_SCALE: Record<string, number> = { slime: 0.3, bat: 0.35, mushroom: 0.3, goblin: 0.6, direwolf: 0.62, golem: 1, boar: 0.85, weaver: 0.55, wisp: 0.45, beetle: 0.45, slimeking: 0.8, broodmother: 1, rimewarden: 1 };
 export const mobScale = (spriteKey: string): number => {
   const m = /^mob_([a-z]+)_/.exec(spriteKey);
   return m ? (MOB_SCALE[m[1]] ?? 1) : 1;
@@ -57,6 +58,7 @@ const ARCH_SCALE: Record<string, number> = { novice: 0.9, paladin: 1.1, recruit:
 const SHEET_SCALE: Record<string, number> = { healer_legendary: 0.92, tank_legendary: 0.95, tank_rare: 1.04, tank_uncommon: 1.07, necromancer_legendary: 1.07, marksman_legendary: 1.05, healer_uncommon: 1.04 };
 export const heroScale = (spriteKey: string, role: Role): number => {
   if (spriteKey.startsWith("mob_") || spriteKey === "skeleton") return 1;
+  if (spriteKey.startsWith("armor_")) return ARCH_SCALE.novice * ((armorScale as Record<string, number>)[spriteKey] ?? 1); // armour sheets were cut at different sizes: bring each to the novice's
   if (spriteKey.startsWith("gear_")) return ARCH_SCALE.novice; // overlays are drawn over the novice, so they share its size
   const url = sheetUrl(spriteKey, role).replace("/sprites/", "").replace(".png", "");
   const arch = url.split("_")[0];

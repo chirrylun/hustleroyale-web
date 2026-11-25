@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { createClient } from "@/lib/supabase/client";
 
-interface Quest { slug: string; title: string; blurb: string; kind: "kill" | "fetch" | "reach"; floor: number; unlocks_floor: number | null; reward_coins: number; reward_xp: number; sort: number }
+interface Quest { slug: string; title: string; blurb: string; kind: "kill" | "fetch" | "reach"; floor: number; unlocks_floor: number | null; reward_coins: number; reward_xp: number; sort: number; special?: boolean }
 interface Objective { quest_slug: string; idx: number; kind: "kill" | "fetch" | "reach"; target_kind: string | null; target_boss: boolean; item_slug: string | null; qty: number }
 interface Board {
   quests: Quest[]; objectives: Objective[];
@@ -33,7 +33,7 @@ export function JobBoard({ onChanged }: { onChanged: () => void }) {
   const load = useCallback(async () => {
     const sb = createClient();
     const [q, o, pq, pp, it, inv, prof] = await Promise.all([
-      sb.from("quests").select("slug, title, blurb, kind, floor, unlocks_floor, reward_coins, reward_xp, sort").order("sort"),
+      sb.from("quests").select("slug, title, blurb, kind, floor, unlocks_floor, reward_coins, reward_xp, sort, special").order("sort"),
       sb.from("quest_objectives").select("quest_slug, idx, kind, target_kind, target_boss, item_slug, qty"),
       sb.from("player_quests").select("quest_slug, status"),
       sb.from("player_quest_progress").select("quest_slug, idx, progress"),
@@ -58,8 +58,8 @@ export function JobBoard({ onChanged }: { onChanged: () => void }) {
     const { data, error: e } = await createClient().rpc(fn, { p_slug: slug });
     if (e) setError(ERRORS[Object.keys(ERRORS).find((k) => e.message.includes(k)) ?? ""] ?? "That didn't work. Try again.");
     else if (fn === "claim_quest") {
-      const r = data as { coins: number; xp: number; unlocked: number | null };
-      setNote(`+${r.coins} coins, +${r.xp} XP${r.unlocked ? ` · Floor ${r.unlocked} is open!` : ""}`);
+      const r = data as { coins: number; xp: number; unlocked: number | null; gear?: { name: string; rank: number; level: number } | null };
+      setNote(`+${r.coins} coins, +${r.xp} XP${r.gear ? ` · ${r.gear.name} (rank ${r.gear.rank}, lv ${r.gear.level})` : ""}${r.unlocked ? ` · Floor ${r.unlocked} is open!` : ""}`);
       onChanged();
     }
     await load();
@@ -75,13 +75,14 @@ export function JobBoard({ onChanged }: { onChanged: () => void }) {
     if (o.kind === "reach") return Math.min(o.qty, b.reached);
     return status === "done" ? o.qty : Math.min(o.qty, b.items[o.item_slug ?? ""] ?? 0);
   };
+  const MINI: Record<string, string> = { slimeking: "Slime King", broodmother: "Broodmother", rimewarden: "Rimewarden" };
   const label = (o: Objective) =>
-    o.kind === "kill" ? `Defeat ${o.target_boss ? `the ${cap(o.target_kind ?? "")} boss` : `${cap(o.target_kind ?? "")}s`}` : o.kind === "reach" ? `Reach Floor ${o.qty}` : `Bring ${b.names[o.item_slug ?? ""] ?? o.item_slug}`;
+    o.kind === "kill" ? `Defeat ${MINI[o.target_kind ?? ""] ? `the ${MINI[o.target_kind ?? ""]}` : o.target_boss ? `the ${cap(o.target_kind ?? "")} boss` : `${cap(o.target_kind ?? "")}s`}` : o.kind === "reach" ? `Reach Floor ${o.qty}` : `Bring ${b.names[o.item_slug ?? ""] ?? o.item_slug}`;
   const killDone = (q: Quest) => b.quests.some((k) => k.kind === "kill" && k.unlocks_floor === q.unlocks_floor && b.taken[k.slug] === "done");
 
   const open = b.quests.filter((q) => q.floor <= b.unlocked && b.taken[q.slug] !== "done");
   // Taken jobs first, then the rest; a handful at a time so the board stays readable.
-  const list = [...open].sort((x, y) => Number(!!b.taken[y.slug]) - Number(!!b.taken[x.slug]) || x.sort - y.sort).slice(0, 6);
+  const list = [...open].sort((x, y) => Number(!!b.taken[y.slug]) - Number(!!b.taken[x.slug]) || Number(!!y.special) - Number(!!x.special) || x.sort - y.sort).slice(0, 6);
   const doneCount = b.quests.filter((q) => b.taken[q.slug] === "done").length;
 
   return (
@@ -101,9 +102,9 @@ export function JobBoard({ onChanged }: { onChanged: () => void }) {
           const complete = os.length > 0 && os.every((o) => have(q, o) >= o.qty);
           const blocked = q.kind === "fetch" && !status && !killDone(q);
           return (
-            <div key={q.slug} className="pixel-box bg-panel p-3 text-lg text-paper">
+            <div key={q.slug} className={`pixel-box bg-panel p-3 text-lg text-paper ${q.special ? "outline outline-2 outline-offset-2 outline-gold shadow-[0_0_10px_rgba(255,200,60,0.45)]" : ""}`}>
               <div className="flex items-start justify-between gap-2">
-                <p className="uppercase text-leaf">{q.title}</p>
+                <p className={`uppercase ${q.special ? "text-gold" : "text-leaf"}`}>{q.special ? "★ " : ""}{q.title}</p>
                 <p className="shrink-0 text-sm text-steel">Floor {q.kind === "reach" ? os[0]?.qty : q.floor}</p>
               </div>
               <p className="text-base text-steel">{q.blurb}</p>
@@ -118,7 +119,7 @@ export function JobBoard({ onChanged }: { onChanged: () => void }) {
                 })}
               </ul>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-base text-gold">🪙 {q.reward_coins} · {q.reward_xp} XP</p>
+                <p className="text-base text-gold">🪙 {q.reward_coins} · {q.reward_xp} XP{q.special ? ` · Gear rank ${Math.min(4, Math.max(1, Math.ceil(q.floor / 10)))} (lv ${Math.min(10, 1 + ((q.floor - 1) % 10))})` : ""}</p>
                 {status === "active" ? (
                   <PixelButton className="text-base" disabled={!complete || busy === q.slug} onClick={() => act("claim_quest", q.slug)}>{complete ? "Claim" : "In progress"}</PixelButton>
                 ) : blocked ? (
