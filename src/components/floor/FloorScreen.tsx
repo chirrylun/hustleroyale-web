@@ -21,7 +21,7 @@ import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { BagMenu } from "@/components/floor/BagMenu";
 import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
-import { POTIONS, POTION_SLUGS, itemImage, itemName } from "@/lib/items";
+import { POTIONS, POTION_SLUGS, itemImage, itemName, UI_CELLS, UI_SHEET } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
 import { useLook } from "@/lib/lookStore";
@@ -564,6 +564,23 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     setTimeout(() => d.remove(), ms + 20);
   };
 
+  /** "+N" with the coin picture, floating over a fighter. */
+  const coinPop = (a: Ag, n: number, ms = 1300) => {
+    const el = a.fx;
+    if (!el) return;
+    const [c, r] = UI_CELLS.coins, size = 22, cell = size * 1.16, off = (cell - size) / 2;
+    const d = document.createElement("div");
+    d.className = "over-head pointer-events-none absolute flex items-center gap-1 whitespace-nowrap text-xl font-bold text-gold";
+    d.style.cssText += `;animation:dmg ${ms}ms ease-out forwards;margin-bottom:2.4rem;text-shadow:0 2px 0 #000;`;
+    const ic = document.createElement("span");
+    ic.style.cssText = `display:inline-block;width:${size}px;height:${size}px;background-image:url(${UI_SHEET.src});background-size:${cell * UI_SHEET.cols}px ${cell * UI_SHEET.rows}px;background-position:${-c * cell - off}px ${-r * cell - off}px;`;
+    const t = document.createElement("span");
+    t.textContent = `+${n}`;
+    d.append(ic, t);
+    el.appendChild(d);
+    setTimeout(() => d.remove(), ms + 20);
+  };
+
   // A level-up: a golden aura behind the fighter, a ring spreading on the ground, a glow around their outline, and a
   // big banner overhead. All of it is attached to the fighter, so it follows them if they keep moving.
   const celebrate = (a: Ag, n = 0) => {
@@ -585,7 +602,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const showXp = (data: unknown) => {
     const res = data as { throttled?: boolean; coins?: number; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
     if (!res?.awards || res.throttled) return;
-    if (res.coins && allies.current[0]) { const lead = allies.current.find((u) => !u.dead) ?? allies.current[0]; setTimeout(() => overHead(lead, `+${res.coins} coins`, "text-gold", 1200, undefined, "margin-bottom:2.4rem;"), 350); }
+    if (res.coins && allies.current[0]) { const lead = allies.current.find((u) => !u.dead) ?? allies.current[0]; setTimeout(() => coinPop(lead, res.coins as number), 350); }
     let ups = 0; // party members levelling on the same kill take turns, each banner a step higher than the last
     for (const w of res.awards) {
       const a = allies.current.find((u) => u.id === w.id);
