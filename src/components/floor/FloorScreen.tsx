@@ -270,6 +270,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const stanceRef = useRef<Stance>("neutral");
   const [bagOpen, setBagOpen] = useState(false);
   const [fightersOpen, setFightersOpen] = useState(false);
+  const [potionUsed, setPotionUsed] = useState(false); // training: they have drunk a slotted potion
   const [armored, setArmored] = useState(false); // training: some fighter is wearing armour
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
   const [stock, setStock] = useState<Record<string, number>>({});
@@ -491,7 +492,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     try { localStorage.setItem("hr_item_slots", JSON.stringify(next)); } catch {}
   };
   /** Drinks a slotted potion on whichever fighter needs it most. */
-  const drinkPotion = async (i: number) => { const slug = slots[i]; if (slug) await drinkSlug(slug); };
+  const drinkPotion = async (i: number) => { const slug = slots[i]; if (slug && (await drinkSlug(slug))) setPotionUsed(true); };
   const drinkSlug = async (slug: string): Promise<boolean> => {
     if (!POTION_LIST.includes(slug) || usingPotion.current) return false;
     const pot = POTIONS[slug];
@@ -1300,6 +1301,13 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   }, [floor.n, tStep]);
   const lowest = allies.current.length ? Math.min(...allies.current.map((a) => a.level)) : 1;
   const recruits = squad.filter((f) => isRecruit(f.template.archetype)).length;
+  // Training quest 3: which shortcut slot or potion to press next (blinks) and what to say.
+  const emptyAt = slots.findIndex((x) => !x);
+  const filledAt = slots.findIndex(Boolean);
+  const slotGuide = trainOn && tStep === 4 && state === "play" && !bagOpen && !fightersOpen && !talkNpc ? (
+    filledAt < 0 ? (picking !== null ? { kind: "pick" as const, at: picking, text: "Tap the blinking potion to put it in the slot." } : { kind: "slot" as const, at: Math.max(0, emptyAt), text: "Tap the blinking empty slot at the bottom." })
+    : !potionUsed ? { kind: "use" as const, at: filledAt, text: "Tap the blinking slot to drink the potion. It works when a fighter is hurt. Then tell the Trainer." } : null
+  ) : null;
   const goal = trainOn ? objective(tStep, { kills: tKills, ready: allies.current.filter((a) => a.level >= 5).length, total: squad.length, potion: slots.some(Boolean), recruits, armored }) : "";
   const quest = tutorialStep === 8 && floor.n === 1;
   // Floors 1 to 3 open one by one as you clear them; from Floor 3 on, the job-board quests open the next floor.
@@ -1321,6 +1329,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         )}
       </div>
       {trainOn && state === "play" && goal && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">{goal}</p>}
+      {slotGuide && <p className="z-[9400] bg-night/95 px-3 py-1 text-center text-base text-gold">{slotGuide.text}</p>}
       {quest && !firstJobDone && state === "play" && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">First job: defeat a bat on this floor.</p>}
 
       <div
@@ -1433,7 +1442,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                     <div className="pixel-box absolute bottom-full left-1/2 mb-2 flex max-w-[17rem] -translate-x-1/2 flex-wrap justify-center gap-2 bg-night/95 p-2">
                       {POTION_LIST.every((p) => (stock[p] ?? 0) <= 0) && <span className="px-2 text-base text-paper">No potions yet. Buy some at the market.</span>}
                       {POTION_LIST.filter((p) => (stock[p] ?? 0) > 0).map((p) => (
-                        <button key={p} type="button" aria-label={itemName(p)} disabled={(stock[p] ?? 0) <= 0} onClick={() => setSlot(i, p)} className="pixel-box relative h-12 w-12 bg-night disabled:opacity-40">
+                        <button key={p} type="button" aria-label={itemName(p)} disabled={(stock[p] ?? 0) <= 0} onClick={() => setSlot(i, p)} className={`pixel-box relative h-12 w-12 bg-night disabled:opacity-40${slotGuide?.kind === "pick" && p === POTION_LIST.find((q) => (stock[q] ?? 0) > 0) ? " tut-blink" : ""}`}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={itemImage(p)} alt="" className="h-10 w-10 [image-rendering:pixelated]" draggable={false} />
                           <span className="absolute bottom-0 right-1 text-base font-bold text-paper">{stock[p] ?? 0}</span>
@@ -1444,7 +1453,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                   <button
                     type="button" aria-label={slug ? `Use ${itemName(slug)}` : "Empty item slot"}
                     onClick={() => (slug && n > 0 ? drinkPotion(i) : setPicking(picking === i ? null : i))}
-                    className={`pixel-box relative flex h-14 w-14 short:h-11 short:w-11 items-center justify-center bg-night/90 ${slug && n <= 0 ? "opacity-50" : ""}`}
+                    className={`pixel-box relative flex h-14 w-14 short:h-11 short:w-11 items-center justify-center bg-night/90 ${slug && n <= 0 ? "opacity-50" : ""}${slotGuide && slotGuide.kind !== "pick" && slotGuide.at === i ? " tut-blink" : ""}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {slug && <img src={itemImage(slug)} alt="" className="h-11 w-11 [image-rendering:pixelated]" draggable={false} />}

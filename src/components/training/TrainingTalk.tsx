@@ -68,11 +68,11 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
   // Step 1 is "take the first quest" (database step 2 is its goal), so quest 1 is open while step is 1 or 2.
   const status = (n: number): "done" | "active" | "locked" => (cur > n ? "done" : cur === n || (n === 2 && cur === 1) ? "active" : "locked");
   const QUESTS = [
-    { n: 2, title: "First Blood", blurb: "Tap a slime and your party attacks it. Slimes only fight back if you hit them.", goal: "Defeat a slime", have: Math.min(1, kills), need: 1, reward: "🪙 100 · 53 XP", ok: kills >= 1 },
-    { n: 3, title: "Grow Stronger", blurb: "Keep fighting slimes. Open the Fighters button on the left to see each level.", goal: "Every fighter at level 5", have: Math.min(total, ready), need: total, reward: "🪙 250 · 106 XP · 20 potions", ok: lowest >= 5 },
-    { n: 4, title: "Quick Hands", blurb: "Open the Bag on the left, pick a potion, then tap an empty slot at the bottom of the screen.", goal: "Put a potion in a shortcut slot", have: potionSet ? 1 : 0, need: 1, reward: "Drink it in one tap", ok: potionSet },
-    { n: 5, title: "Choose a Calling", blurb: "Tap the Rookie Class Changer. At level 5 each Novice can become a Recruit of their role, for free.", goal: "Every fighter a Recruit", have: Math.min(total, recruits), need: total, reward: "Recruit armour for everyone", ok: recruits >= total && total > 0 },
-    { n: 6, title: "Suit Up", blurb: "Open Fighters on the left, then Equipment. Put the armour on your first fighter; the blinking buttons will guide you. You can dress the others after.", goal: "Wear your armour", have: armored ? 1 : 0, need: 1, reward: "Armour on your back", ok: armored },
+    { n: 2, title: "", blurb: "Tap a slime and your party attacks it. Slimes only fight back if you hit them.", goal: "Defeat a slime", have: Math.min(1, kills), need: 1, reward: "🪙 100 · 53 XP", ok: kills >= 1 },
+    { n: 3, title: "", blurb: "Keep fighting slimes. Open the Fighters button on the left to see each level.", goal: "Every fighter at level 5", have: Math.min(total, ready), need: total, reward: "🪙 250 · 106 XP · 20 potions", ok: lowest >= 5 },
+    { n: 4, title: "", blurb: "Tap an empty slot at the bottom of the screen and pick a potion. Follow the blinking slot, then tap it to drink one when a fighter is hurt.", goal: "Put a potion in a shortcut slot", have: potionSet ? 1 : 0, need: 1, reward: "Drink it in one tap", ok: potionSet },
+    { n: 5, title: "", blurb: "Tap the Rookie Class Changer. At level 5 each Novice can become a Recruit of their role, for free.", goal: "Every fighter a Recruit", have: Math.min(total, recruits), need: total, reward: "Recruit armour for everyone", ok: recruits >= total && total > 0 },
+    { n: 6, title: "", blurb: "Open Fighters on the left, then Equipment. Put the armour on your first fighter; the blinking buttons will guide you. You can dress the others after.", goal: "Wear your armour", have: armored ? 1 : 0, need: 1, reward: "Armour on your back", ok: armored },
   ];
   const claim = (q: (typeof QUESTS)[number]) => advance(q.n === 4);
 
@@ -87,7 +87,7 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
             const first = q.n === 2 && cur === 1; // the first quest has to be taken
             return (
               <div key={q.n} className={`pixel-box bg-panel p-3 text-lg text-paper ${st === "done" ? "opacity-60" : ""}`}>
-                <p className={`uppercase ${st === "locked" ? "text-steel" : "text-leaf"}`}>{q.title}</p>
+                <p className={`uppercase ${st === "locked" ? "text-steel" : "text-leaf"}`}>Training Quest {q.n - 1}</p>
                 <p className="text-base text-steel">{q.blurb}</p>
                 <ul className="my-1.5 text-base"><li className={st === "done" || q.ok ? "text-leaf" : undefined}>{st === "done" || q.ok ? "✓ " : "• "}{q.goal}{st === "locked" ? "" : ` ${st === "done" ? q.need : q.have}/${q.need}`}</li></ul>
                 <div className="flex items-center justify-between gap-2">
