@@ -1358,7 +1358,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           {isTraining(floor.n) && floor.npcs.map((n) => {
             const sheet = NPC_SHEET[n.id];
             const h = npcFrameH(sheet, FRAME * BODY_OF_FRAME), w = h * npcRatio(sheet);
-            const next = trainOn && nextTalk(tStep) === n.id;
+            const next = trainOn && nextTalk(tStep, { recruits, total: squad.length }) === n.id;
             return (
               <div key={n.id} className="pointer-events-none absolute" style={{ left: (n.x - w / 2) * T, top: (n.y - h * 0.97) * T, width: w * T, zIndex: depth(n.y) }}>
                 <Npc name={sheet} still className="w-full" />

@@ -7,8 +7,10 @@ export const NPC_TAG: Record<TrainingNpc, string> = { manager: "Guild Manager", 
 export const NPC_SHEET = { manager: "manager", trainer: "trainer", changer: "class_changer" } as const;
 
 /** Who the player should speak to next, by step. */
-export const nextTalk = (step: number): TrainingNpc | null => {
+export const nextTalk = (step: number, p?: { recruits: number; total: number }): TrainingNpc | null => {
   if (step === 0 || step === 6) return "manager";
+  // The class quest is done at the Class Changer; once every fighter is a Recruit, report back to the Trainer.
+  if (step === 5 && p && !(p.total > 0 && p.recruits >= p.total)) return "changer";
   if (step >= 1 && step <= 5) return "trainer";
   return null;
 };
