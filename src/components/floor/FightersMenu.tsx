@@ -36,7 +36,7 @@ export function FightersMenu({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <div data-ui className="fixed inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-3 short:p-2" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()}>
+    <div data-ui className="fixed inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-3 short:p-2" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerMove={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
       <div role="dialog" aria-modal="true" aria-label="My Fighters" className="pixel-box flex max-h-full w-full max-w-md flex-col bg-night sm:max-w-3xl">
         <div className="flex items-stretch gap-1 border-b-2 border-steel p-2">
           <button type="button" role="tab" aria-selected={tab === "fighters"} onClick={() => setTab("fighters")} className={`flex flex-1 items-center justify-center gap-2 px-2 py-1 text-xl uppercase ${tab === "fighters" ? "bg-gold text-ink" : "bg-panel text-paper"}`}>

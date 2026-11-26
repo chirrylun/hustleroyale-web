@@ -10,7 +10,7 @@ export function Speech({ npc, title, onClose, children, wide = false, shop = fal
   return (
     <div
       className="fixed inset-0 z-[9700] flex items-end justify-center bg-ink/70 p-3 sm:items-center short:items-center short:p-2"
-      onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}
+      onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}
     >
       <div role="dialog" aria-modal="true" aria-label={title} className={`pixel-box card-reveal flex max-h-[94dvh] w-full flex-col overflow-y-auto bg-night p-4 short:max-w-2xl short:p-2.5 ${wide ? "max-w-xl" : "max-w-md"}`}>
         <div className="flex items-start gap-3">
@@ -40,7 +40,7 @@ function ShopSpeech({ npc, title, onClose, children }: { npc: NpcName; title: st
   return (
     <div
       className="fixed inset-0 z-[9700] flex items-end justify-center bg-ink/70 p-2 sm:items-center sm:p-3"
-      onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}
+      onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}
     >
       <div role="dialog" aria-modal="true" aria-label={title} className="pixel-box card-reveal flex h-[92dvh] w-full max-w-xl flex-col bg-night p-3 sm:h-auto sm:max-h-[90dvh] short:h-[96dvh] short:max-w-3xl short:p-2">
         <div className="flex shrink-0 items-center gap-3 pb-2 short:gap-2 short:pb-1">

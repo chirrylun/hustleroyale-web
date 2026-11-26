@@ -33,7 +33,7 @@ export function GearPreview({ base, rank = 1, level = 1, gender = "male", onClos
   const armour = base.slot === "armor";
   const sheet = base.slug === "armor_novice" ? `${artSlug(base.slug, rank)}_${g}` : artSlug(base.slug, rank);
   return (
-    <div className="fixed inset-0 z-[9800] flex items-center justify-center bg-ink/80 p-3" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-[9800] flex items-center justify-center bg-ink/80 p-3" onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}>
       <div role="dialog" aria-modal="true" aria-label={`${base.name} details`} className="pixel-box card-reveal flex max-h-[94dvh] w-full max-w-sm flex-col gap-2 overflow-y-auto bg-night p-3 text-paper">
         <div className="flex items-center gap-2">
           <GearIcon base={base.slug} kind={base.kind} rank={rank} size={48} />

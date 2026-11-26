@@ -110,6 +110,8 @@ const depth = (y: number) => 10 + Math.round(y * 10);
 /** One fighter or mob. Its position and state are updated by the loop, so moving costs no React renders. */
 interface Ag {
   id: string;
+  /** Training field: when the next second's healing lands. */
+  healAt?: number;
   side: "ally" | "foe";
   sprite: string;
   role: "tank" | "healer" | "dps";
@@ -665,7 +667,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       const power = (from.side === "ally" ? (magical && from.magic ? from.magic : from.atk) * (now < from.buffUntil ? 1.25 : 1) : from.atk * (now < from.weakUntil ? 0.7 : 1)) * mult;
       let dmg = hitDamage(power, to.def, to.level, 0.9 + Math.random() * 0.2);
       if (to.shield > 0 && now < to.shieldUntil) { const soak = Math.min(to.shield, dmg); to.shield -= soak; dmg -= soak; }
-      to.hp = Math.max(0, to.hp - dmg);
+      to.hp = Math.max(isTraining(floor.n) && to.side === "ally" ? 1 : 0, to.hp - dmg);
       if (from.side === "ally" && to.side === "foe") {
         to.provoked = true;
         if (!to.target || to.target.dead) { to.target = from; to.angle = Math.atan2(to.y - from.y, to.x - from.x) + rnd(-0.8, 0.8); to.path = []; }
@@ -803,6 +805,11 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         aliveA.forEach((a, i) => {
           a.cd = Math.max(0, a.cd - dt);
           a.repath -= dt;
+          // The training field heals everyone 10% of their health every second, so nobody can fall in the tutorial.
+          if (isTraining(floor.n) && now >= (a.healAt ?? 0)) {
+            a.healAt = now + 1000;
+            if (a.hp < a.max) { const n = Math.max(1, Math.min(a.max - a.hp, Math.round(a.max * 0.1))); a.hp += n; overHead(a, `+${n}`, "text-leaf", 900); }
+          }
           // MP doesn't come back on its own; only a Defend stance recovers it, slowly (a potion is far faster).
           if (hold) a.en = Math.min(a.maxEn, a.en + a.maxEn * 0.012 * dt);
           const spd = SPEED * a.speedMul;
@@ -1088,7 +1095,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       else {
         if (a.dodge > 0) { a.dodge--; spawnText(a.x, a.y, "Dodge", "text-steel"); return; }
         if (a.shield > 0 && now < a.shieldUntil) { const soak = Math.min(a.shield, d); a.shield -= soak; d -= soak; }
-        a.hp = Math.max(0, a.hp - d);
+        a.hp = Math.max(isTraining(floor.n) ? 1 : 0, a.hp - d);
         if (a.hp <= 0) { a.dead = true; a.path = []; a.deadAt = now; }
       }
       a.look.act = "hurt"; a.look.n++;
@@ -1454,7 +1461,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         )}
 
         {askNext && state === "play" && (
-          <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
+          <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}>
             <div className="pixel-box card-reveal w-full max-w-sm bg-night p-5 text-center">
               <h2 className="mb-2 text-3xl uppercase text-gold">Go to Floor {floor.n + 1}?</h2>
               <p className="mb-4 text-xl text-paper">Your party will take the golden light up.</p>
@@ -1467,7 +1474,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         )}
 
         {askBack && state === "play" && (
-          <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
+          <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}>
             <div className="pixel-box card-reveal w-full max-w-sm bg-night p-5 text-center">
               <h2 className="mb-2 text-3xl uppercase text-paper">{floor.n > 1 ? `Back to Floor ${floor.n - 1}?` : "Return to the guild?"}</h2>
               <p className="mb-4 text-xl text-paper">{floor.n > 1 ? "Your party will take the white light back down." : "This ends the expedition."}</p>
@@ -1480,7 +1487,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         )}
 
         {state !== "play" && (
-          <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
+          <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}>
             <div className="pixel-box card-reveal w-full max-w-sm bg-night p-5 text-center">
                 <>
                   <FirstTip tip="wipe" title="Your party was wiped out" when={state === "lost"}>

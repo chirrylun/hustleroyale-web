@@ -18,6 +18,8 @@ export type Stats = { atk: number; def: number; magic: number; hp: number; spd: 
 
 export const MAX_RANK = 4;
 export const MAX_LEVEL = 10;
+/** Evolving (the next rank) stays shut until one of the player's fighters reaches this level (gear_evolve). */
+export const EVOLVE_MIN_LEVEL = 40;
 export const maxRankOf = (b: { max_rank?: number }) => Math.min(MAX_RANK, b.max_rank ?? MAX_RANK);
 const RANK_MULT = [0, 1, 2.2, 4.2, 7];
 const RANK_VALUE = [0, 1, 4, 16, 60];
@@ -78,7 +80,7 @@ export const statLine = (i: Stats) =>
   ([["ATK", i.atk], ["DEF", i.def], ["MAG", i.magic], ["HP", i.hp], ["SPD", i.spd]] as const).filter(([, v]) => v).map(([k, v]) => `+${v} ${k}`).join("  ");
 
 export const GEAR_MESSAGES: Record<string, string> = {
-  not_enough_coins: "You can't afford that.", not_enough_items: "You don't have that piece.", item_worn: "Take it off first (worn gear can't be sold).", max_level: "Already at level 10. Evolve it instead.", max_rank: "Already at the top rank.", needs_level_10: "It must be level 10 to evolve.",
+  not_enough_coins: "You can't afford that.", not_enough_items: "You don't have that piece.", item_worn: "Take it off first (worn gear can't be sold).", max_level: "Already at level 10. Evolve it instead.", max_rank: "Already at the top rank.", needs_level_10: "It must be level 10 to evolve.", evolve_locked: `Evolving opens when one of your fighters reaches level ${EVOLVE_MIN_LEVEL}.`,
   not_for_sale: "The armourer doesn't deal in that.", unauthorized: "Please sign in again.",
   wrong_class: "That fighter's class can't use this.", level_too_low: "That fighter's level is too low.", not_your_fighter: "That isn't your fighter.",
 };
