@@ -12,11 +12,10 @@ import type { Role } from "@/lib/starter-pack";
 
 export interface Reward { step: number; coins: number; xp: number; items: { slug: string; qty: number }[]; armor: unknown[] }
 interface Mate { id: string; name: string; level: number; archetype: string; role: Role }
-const SPEAKER = { manager: "manager", trainer: "trainer", changer: "class_changer" } as const;
 
 /** What a person in the training field says. The database decides whether a step is really done (training_advance); this only words it. */
-export function TrainingTalk({ npc, step, kills, lowest, total, potionSet, onStep, onClassChanged, onClose }: {
-  npc: TrainingNpc; step: number; kills: number; lowest: number; total: number; potionSet: boolean;
+export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits, potionSet, onStep, onClassChanged, onClose }: {
+  npc: TrainingNpc; step: number; kills: number; lowest: number; total: number; ready: number; recruits: number; potionSet: boolean;
   onStep: (r: Reward) => void; onClassChanged: () => void; onClose: () => void;
 }) {
   const router = useRouter();
@@ -49,19 +48,18 @@ export function TrainingTalk({ npc, step, kills, lowest, total, potionSet, onSte
   const close = () => onClose();
   const done = <SpeechActions><PixelButton onClick={close}>Got it</PixelButton></SpeechActions>;
 
-  if (npc === "changer") return <Speech npc="class_changer" title={NPC_TAG.changer} onClose={close}><ChangerBody step={step} onClassChanged={onClassChanged} onClose={close} /></Speech>;
+  if (npc === "changer") return <Speech npc="class_changer" title={NPC_TAG.changer} onClose={close} still><ChangerBody step={step} onClassChanged={onClassChanged} onClose={close} /></Speech>;
 
   if (npc === "manager") {
     return (
-      <Speech npc="manager" title={NPC_TAG.manager} onClose={close}>
+      <Speech npc="manager" title={NPC_TAG.manager} onClose={close} still>
         {cur === 0 && (<>
-          <p>Welcome to the training field! This is where you learn to get started before you take on the real world.</p>
-          <p className="text-steel">Go and speak to the <span className="text-gold">Trainer</span>, the soldier with the spear. He will set you a few tasks.</p>
+          <p>Welcome to the training field! Speak to the <span className="text-gold">Trainer</span>, the soldier with the spear. He will set you a few quests.</p>
           <SpeechActions><PixelButton disabled={busy} onClick={() => advance()}>Understood</PixelButton></SpeechActions>
         </>)}
-        {cur >= 1 && cur <= 5 && (<><p>Speak to the Trainer and finish his tasks. Come back to me when he says you are done.</p>{done}</>)}
+        {cur >= 1 && cur <= 5 && (<><p>Finish the Trainer&apos;s quests, then come back to me.</p>{done}</>)}
         {cur === 6 && (<>
-          <p>Excellent work! You are ready for the real thing. Come, I will take you to the Main Lobby and show you around.</p>
+          <p>Excellent work! Come, I will show you around the Main Lobby.</p>
           <SpeechActions><PixelButton disabled={busy} onClick={() => advance()}>Take me to the lobby</PixelButton><PixelButton variant="ghost" onClick={close}>Not yet</PixelButton></SpeechActions>
         </>)}
         {note && <p role="alert" className="text-lg text-ember">{note}</p>}
@@ -69,33 +67,46 @@ export function TrainingTalk({ npc, step, kills, lowest, total, potionSet, onSte
     );
   }
 
+  const status = (n: number): "done" | "active" | "locked" => (cur > n ? "done" : cur === n ? "active" : "locked");
+  const QUESTS = [
+    { n: 2, title: "First Blood", blurb: "Tap a slime and your party attacks it. Slimes only fight back if you hit them.", goal: "Defeat a slime", have: Math.min(1, kills), need: 1, reward: "🪙 100 · 53 XP", ok: kills >= 1 },
+    { n: 3, title: "Grow Stronger", blurb: "Keep fighting slimes. Open the Fighters button on the left to see each level.", goal: "Every fighter at level 5", have: Math.min(total, ready), need: total, reward: "🪙 250 · 106 XP · 20 potions", ok: lowest >= 5 },
+    { n: 4, title: "Quick Hands", blurb: "Open the Bag on the left, pick a potion, then tap an empty slot at the bottom of the screen.", goal: "Put a potion in a shortcut slot", have: potionSet ? 1 : 0, need: 1, reward: "Drink it in one tap", ok: potionSet },
+    { n: 5, title: "Choose a Calling", blurb: "Tap the Class Changer. At level 5 each Novice can become a Recruit of their role, for free.", goal: "Every fighter a Recruit", have: Math.min(total, recruits), need: total, reward: "Recruit armour for everyone", ok: recruits >= total && total > 0 },
+  ];
+  const claim = (q: (typeof QUESTS)[number]) => advance(q.n === 4);
+
   return (
-    <Speech npc="trainer" title={NPC_TAG.trainer} onClose={close}>
+    <Speech npc="trainer" title={NPC_TAG.trainer} onClose={close} wide still>
       {rewardLine}
       {cur === 0 && (<><p>Hold on there. The Guild Manager wants a word with you first.</p>{done}</>)}
-      {cur === 1 && (<>
-        <p>So you are the new recruits. I am the Trainer. I will get you ready.</p>
-        <p><span className="text-gold">Quest 1: First Blood.</span> Defeat a slime. Tap one and your fighters will attack it. They won&apos;t hit back until you do.</p>
-        <SpeechActions><PixelButton disabled={busy} onClick={() => advance()}>Accept quest</PixelButton></SpeechActions>
+      {cur >= 1 && cur <= 5 && (<>
+        <p className="text-base text-steel">Quest board. Take a quest, finish it, then claim your reward.</p>
+        <div className="max-h-[46dvh] space-y-2 overflow-y-auto pr-1 short:max-h-[52dvh]">
+          {QUESTS.map((q) => {
+            const st = status(q.n);
+            const first = q.n === 2 && cur === 1; // the first quest has to be taken
+            return (
+              <div key={q.n} className={`pixel-box bg-panel p-3 text-lg text-paper ${st === "done" ? "opacity-60" : ""}`}>
+                <p className={`uppercase ${st === "locked" ? "text-steel" : "text-leaf"}`}>{q.title}</p>
+                <p className="text-base text-steel">{q.blurb}</p>
+                <ul className="my-1.5 text-base"><li className={st === "done" || q.ok ? "text-leaf" : undefined}>{st === "done" || q.ok ? "✓ " : "• "}{q.goal}{st === "locked" ? "" : ` ${st === "done" ? q.need : q.have}/${q.need}`}</li></ul>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-base text-gold">{q.reward}</p>
+                  {st === "done" ? <span className="text-base text-leaf">Done</span>
+                    : st === "locked" ? <span className="text-base text-steel">Locked</span>
+                    : first ? <PixelButton className="text-base" disabled={busy} onClick={() => advance()}>Take quest</PixelButton>
+                    : q.n === 5 && !q.ok ? <PixelButton className="text-base" disabled>In progress</PixelButton>
+                    : <PixelButton className="text-base" disabled={!q.ok || busy} onClick={() => claim(q)}>{q.ok ? "Claim" : "In progress"}</PixelButton>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {note && <p role="alert" className="text-lg text-ember">{note}</p>}
+        <SpeechActions><PixelButton variant="ghost" onClick={close}>Close</PixelButton></SpeechActions>
       </>)}
-      {cur === 2 && (kills < 1
-        ? (<><p><span className="text-gold">Quest 1: First Blood.</span> Defeat a slime. Tap one to send your party at it.</p>{done}</>)
-        : (<><p>You did it! Your first monster, your first quest.</p><SpeechActions><PixelButton disabled={busy} onClick={() => advance()}>Claim reward</PixelButton></SpeechActions></>))}
-      {cur === 3 && (lowest < 5 && !got
-        ? (<><p><span className="text-gold">Quest 2: Grow Stronger.</span> Fight slimes until every fighter reaches level 5.</p><p className="text-steel">Open the Fighters button on the left to see each level.</p>{done}</>)
-        : got
-          ? (<><p><span className="text-gold">Quest 2: Grow Stronger.</span> Fight slimes until every fighter reaches level 5.</p>{done}</>)
-          : (<><p>Level 5 already. Well done!</p><SpeechActions><PixelButton disabled={busy} onClick={() => advance()}>Claim reward</PixelButton></SpeechActions></>))}
-      {cur === 4 && (!potionSet && !got
-        ? (<><p><span className="text-gold">Quest 3: Quick Hands.</span> Put a potion in a shortcut slot, so you can drink it in one tap mid-fight.</p><p className="text-steel">Open the Bag on the left, pick a potion, then tap an empty slot at the bottom of the screen.</p>{done}</>)
-        : got
-          ? (<><p><span className="text-gold">Quest 3: Quick Hands.</span> Put a potion in a shortcut slot.</p>{done}</>)
-          : (<><p>Good. A potion at hand saves lives.</p><SpeechActions><PixelButton disabled={busy} onClick={() => advance(true)}>Done</PixelButton></SpeechActions></>))}
-      {cur === 5 && (!got
-        ? (<><p><span className="text-gold">Quest 4: Choose a Calling.</span> Visit the <span className="text-gold">Class Changer</span> and turn every Novice into a Recruit.</p><p className="text-steel">If you have already done it, I will check.</p><SpeechActions><PixelButton disabled={busy} onClick={() => advance()}>I have done it</PixelButton><PixelButton variant="ghost" onClick={close}>Not yet</PixelButton></SpeechActions></>)
-        : (<><p><span className="text-gold">Quest 4: Choose a Calling.</span> Become a Recruit at the Class Changer.</p>{done}</>))}
-      {cur === 6 && (<><p>That is everything I can teach you here. You are ready. Go back to the <span className="text-gold">Guild Manager</span>, he will take you on.</p>{done}</>)}
-      {note && <p role="alert" className="text-lg text-ember">{note}</p>}
+      {cur === 6 && (<><p>That is everything I can teach you. Go back to the <span className="text-gold">Guild Manager</span>, he will take you on.</p>{done}</>)}
     </Speech>
   );
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { InfoBox } from "@/components/guild/InfoBox";
-import { Npc } from "@/components/npc/Npc";
+import { NpcPortrait } from "@/components/npc/Npc";
 
 const STEPS: { title: string; body: string[] }[] = [
   { title: "The Main Lobby", body: ["This is the Main Lobby. Every guild comes through here, so you will see other players' fighters walking around.", "Tap the ground to walk, and tap a person or a sign to talk or travel. Let me show you who is who."] },
@@ -25,7 +25,7 @@ export function LobbyTour() {
   return (
     <div className="fixed inset-0 z-[9800] flex items-end justify-center bg-ink/50 p-3 sm:items-center" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
       <InfoBox
-        portrait={<Npc name="manager" className="w-14 short:w-10" />} title={s.title} step={i} total={STEPS.length}
+        portrait={<NpcPortrait name="manager" still />} title={s.title} step={i} total={STEPS.length}
         onBack={i > 0 ? () => setI(i - 1) : undefined}
         onNext={i === STEPS.length - 1 ? done : () => setI(i + 1)} nextLabel={i === STEPS.length - 1 ? "Let's go" : "Next"}
       >

@@ -173,7 +173,7 @@ interface Ag {
 interface WireMob { id: number; kind: string; rarity: string; sprite: string; level: number; boss: boolean; x: number; y: number; hp: number; max: number; home: [number, number, number]; dead?: boolean }
 interface WireFighter { id: string; sprite: string; name: string; role: "tank" | "healer" | "dps"; level: number; max: number; x?: number; y?: number; frac?: number; dead?: boolean }
 interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
-interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; gear?: { name: string; rank: number; level: number } | null }
+interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number; xp?: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; gear?: { name: string; rank: number; level: number } | null }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -611,7 +611,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
 
   // The server rolls the xp (a range, not a fixed amount) and says what each fighter got: show it over their heads.
   const showXp = (data: unknown) => {
-    const res = data as { throttled?: boolean; coins?: number; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
+    const res = data as { throttled?: boolean; coins?: number; awards?: { id: string; gained: number; levels_gained: number; xp?: number }[] } | null;
     if (!res?.awards || res.throttled) return;
     if (res.coins && allies.current[0]) { const lead = allies.current.find((u) => !u.dead) ?? allies.current[0]; setTimeout(() => coinPop(lead, res.coins as number), 350); }
     let ups = 0; // party members levelling on the same kill take turns, each banner a step higher than the last
@@ -619,9 +619,12 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       const a = allies.current.find((u) => u.id === w.id);
       if (!a || w.gained <= 0) continue;
       overHead(a, `+${w.gained} XP`, "text-leaf", 1200);
-      a.xp += w.gained;
-      for (let g = 0, lv = a.level - w.levels_gained; g < w.levels_gained; g++, lv++) a.xp -= xpRequired(lv);
-      a.xp = Math.max(0, a.xp);
+      if (typeof w.xp === "number") a.xp = w.xp; // the server's own total: the bar always matches the real experience
+      else {
+        a.xp += w.gained;
+        for (let g = 0, lv = a.level; g < w.levels_gained; g++, lv++) a.xp -= xpRequired(lv);
+        a.xp = Math.max(0, a.xp);
+      }
       if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); rerender(); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
     }
   };
@@ -630,6 +633,17 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     if (training && !(data as { throttled?: boolean } | null)?.throttled) setTKills((k) => k + 1);
     // The tutorial job is finished by the first bat; it gets the same banner as every other job.
     if (tutorialStep === 8 && floor.n === 1 && kind === "bat" && !boss && !firstDone.current) { firstDone.current = true; setFirstJobDone(true); try { localStorage.setItem("pocketrpg-first-job-done", "1"); } catch { /* ignore */ } showToast("Job complete: First job. Hand it in at the job board."); }
+  };
+  // A quest reward gives experience outside a kill: read the real numbers back so every bar matches.
+  const syncXp = async () => {
+    const { data } = await createClient().from("fighters").select("id, level, xp").in("id", allies.current.map((u) => u.id));
+    for (const r of data ?? []) {
+      const a = allies.current.find((u) => u.id === r.id);
+      if (!a) continue;
+      a.xp = r.xp as number;
+      if ((r.level as number) > a.level) { a.level = r.level as number; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); }
+    }
+    rerender();
   };
   const killReport = (m: Ag) => sendKill({ floor: floor.n, kind: m.kind, level: m.level, boss: m.boss }, (data) => paid(data, m.kind, m.boss));
 
@@ -1283,7 +1297,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         {!isTraining(floor.n) && <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>}
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-lg uppercase text-gold">{isTraining(floor.n) ? "Training Ground" : <>Floor {floor.n}{isBossFloor(floor.n) && " · Boss"}</>}</p>
-          <p className="truncate text-sm text-steel">{isTraining(floor.n) ? "Slimes, levels 1 to 3. They only fight back if you hit them." : floor.theme.name}</p>
+          <p className="truncate text-sm text-steel">{!isTraining(floor.n) && floor.theme.name}</p>
         </div>
         {room && (
           <p className="pixel-box shrink-0 bg-panel px-2 py-1 text-center text-base uppercase leading-tight text-paper" title="Share the code and a friend can join this room">
@@ -1340,7 +1354,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             const next = trainOn && nextTalk(tStep) === n.id;
             return (
               <div key={n.id} className="pointer-events-none absolute" style={{ left: (n.x - w / 2) * T, top: (n.y - h * 0.97) * T, width: w * T, zIndex: depth(n.y) }}>
-                <Npc name={sheet} className="w-full" />
+                <Npc name={sheet} still className="w-full" />
                 <span className="absolute left-1/2 top-[-4px] -translate-x-1/2 -translate-y-full whitespace-nowrap bg-ink/80 px-1 text-sm text-paper">{NPC_TAG[n.id]}</span>
                 {next && <span aria-hidden="true" className="absolute left-1/2 top-[-26px] -translate-x-1/2 -translate-y-full animate-bounce text-2xl leading-none text-gold" style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}>▼</span>}
               </div>
@@ -1382,8 +1396,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         {trainOn && state === "play" && <TrainingGuide step={tStep} paused={!!talkNpc || bagOpen || fightersOpen} />}
         {talkNpc && (
           <TrainingTalk
-            npc={talkNpc} step={tStep} kills={tKills} lowest={lowest} total={squad.length} potionSet={slots.some(Boolean)}
-            onStep={(r: Reward) => { setTStep(r.step); if (r.armor.length > 0) reloadOnClose.current = true; }}
+            npc={talkNpc} step={tStep} kills={tKills} lowest={lowest} total={squad.length} potionSet={slots.some(Boolean)} ready={allies.current.filter((a) => a.level >= 5).length} recruits={recruits}
+            onStep={(r: Reward) => { setTStep(r.step); if (r.armor.length > 0) reloadOnClose.current = true; if (r.xp > 0) void syncXp(); }}
             onClassChanged={() => { reloadOnClose.current = true; }}
             onClose={() => { setTalkNpc(null); if (reloadOnClose.current) window.location.reload(); }}
           />
