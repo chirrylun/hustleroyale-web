@@ -90,7 +90,8 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
   const dirty = useRef(true);
   const view = useRef<HTMLDivElement>(null);
   const world = useRef<HTMLDivElement>(null);
-  const cam = useRef({ x: 0, y: 0, vw: 800, vh: 600, z: 1, zu: ZOOM_MIN });
+  const cam = useRef({ x: 0, y: 0, vw: 800, vh: 600, z: 1, zu: ZOOM_MIN, free: false });
+  const [free, setFree] = useState(false); // the camera was dragged away from the party
   const WW = town.w * SCALE, WH = town.h * SCALE; // the picture on screen, in px
   const fitZoom = () => { const c = cam.current; c.z = Math.min(ZOOM_CAP, Math.max(1, c.vw / (T * VIEW_TILES))) * c.zu; };
   const marker = useRef<HTMLDivElement>(null);
@@ -195,8 +196,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
       // Camera: follow the leader; a picture smaller than the screen is centred.
       const c = cam.current, z = c.z, vw = c.vw / z, vh = c.vh / z;
       const tx = lead ? lead.x * T - vw / 2 : 0, ty = lead ? lead.y * T - vh / 2 : 0;
-      c.x += (tx - c.x) * Math.min(1, dt * 6);
-      c.y += (ty - c.y) * Math.min(1, dt * 6);
+      if (!c.free) { c.x += (tx - c.x) * Math.min(1, dt * 6); c.y += (ty - c.y) * Math.min(1, dt * 6); }
       c.x = WW <= vw ? (WW - vw) / 2 : Math.min(WW - vw, Math.max(0, c.x));
       c.y = WH <= vh ? (WH - vh) / 2 : Math.min(WH - vh, Math.max(0, c.y));
       if (world.current) world.current.style.transform = `scale(${z}) translate(${-c.x}px, ${-c.y}px)`;
@@ -229,6 +229,19 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
     const r = view.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
+  const last = useRef({ x: 0, y: 0 });
+  /** Hold and drag to look around; the camera stays where you leave it until you tap to walk or press Follow party. */
+  const onMove = (e: PointerEvent) => {
+    const d = down.current;
+    if (!d || e.buttons === 0) return;
+    const p = local(e), c = cam.current;
+    if (!c.free && Math.hypot(p.x - d.x, p.y - d.y) < 10) return;
+    if (!c.free) { c.free = true; setFree(true); }
+    c.x -= (p.x - last.current.x) / c.z; c.y -= (p.y - last.current.y) / c.z;
+    last.current = p;
+    d.t = 0; // a drag is never a tap
+  };
+  const recenter = () => { cam.current.free = false; setFree(false); };
   const onUp = (e: PointerEvent) => {
     const d = down.current, p = local(e), c = cam.current;
     down.current = null;
@@ -241,6 +254,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
       return Math.abs(px - n.x) < w * 0.4 && py < n.y + 12 && py > n.y - h * NPC_FEET;
     });
     if (person) { setTalk(person.action as Talk); return; }
+    recenter();
     // A tap on a sign travels there; anything else is "walk here".
     const sign = town.props.find((s) => {
       if (!s.href) return false;
@@ -281,11 +295,14 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
       <div
         ref={view}
         className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
-        onPointerDown={(e) => { down.current = { ...local(e), t: performance.now() }; }}
+        onPointerDown={(e) => { down.current = { ...local(e), t: performance.now() }; last.current = local(e); }}
+        onPointerMove={onMove}
         onPointerUp={onUp}
+        onPointerCancel={() => { down.current = null; }}
         onWheel={(e) => { const c = cam.current; c.zu = Math.min(1, Math.max(ZOOM_MIN, c.zu + (e.deltaY > 0 ? -0.07 : 0.07))); fitZoom(); }}
       >
-        <div ref={world} className="absolute left-0 top-0 origin-top-left" style={{ width: WW, height: WH }}>
+        {free && <button type="button" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={recenter} className="pixel-box absolute bottom-3 right-3 z-[9600] bg-night/90 px-3 py-1 text-lg uppercase text-paper">Follow party</button>}
+        <div ref={world} className="absolute left-0 top-0 origin-top-left" style={{ width: WW, height: WH, containerType: "inline-size" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={town.ground} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full" />
           {town.props.map((p, k) => {
@@ -306,7 +323,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
           {town.props.filter((p) => p.href).map((p, k) => (
             <span
               key={k}
-              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap bg-night/80 px-1.5 text-base uppercase text-gold"
+              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap bg-ink px-1.5 text-[clamp(10px,1.6cqw,18px)] uppercase text-paper"
               style={{ left: p.x * SCALE, top: p.y * SCALE + 6, zIndex: 9000 }}
             >
               {p.label}
@@ -317,7 +334,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
             return (
               <div key={k} className="pointer-events-none absolute" style={{ left: (n.x - w / 2) * SCALE, top: (n.y - h * NPC_FEET) * SCALE, width: w * SCALE, zIndex: zOf(n.y / UNIT) }}>
                 <Npc name={n.npc as NpcName} facing={n.facing} className="w-full" />
-                <span className="absolute left-1/2 top-[-4px] -translate-x-1/2 -translate-y-full whitespace-nowrap bg-ink/80 px-1 text-sm text-paper">{TAG[n.action as Talk] ?? ""}</span>
+                <span className="absolute left-1/2 top-[-4px] -translate-x-1/2 -translate-y-full whitespace-nowrap bg-ink px-1.5 text-[clamp(10px,1.6cqw,18px)] uppercase text-paper">{TAG[n.action as Talk] ?? ""}</span>
               </div>
             );
           })}
