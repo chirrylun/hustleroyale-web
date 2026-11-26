@@ -64,7 +64,8 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
     );
   }
 
-  const status = (n: number): "done" | "active" | "locked" => (cur > n ? "done" : cur === n ? "active" : "locked");
+  // Step 1 is "take the first quest" (database step 2 is its goal), so quest 1 is open while step is 1 or 2.
+  const status = (n: number): "done" | "active" | "locked" => (cur > n ? "done" : cur === n || (n === 2 && cur === 1) ? "active" : "locked");
   const QUESTS = [
     { n: 2, title: "First Blood", blurb: "Tap a slime and your party attacks it. Slimes only fight back if you hit them.", goal: "Defeat a slime", have: Math.min(1, kills), need: 1, reward: "🪙 100 · 53 XP", ok: kills >= 1 },
     { n: 3, title: "Grow Stronger", blurb: "Keep fighting slimes. Open the Fighters button on the left to see each level.", goal: "Every fighter at level 5", have: Math.min(total, ready), need: total, reward: "🪙 250 · 106 XP · 20 potions", ok: lowest >= 5 },
