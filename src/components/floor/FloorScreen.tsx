@@ -21,11 +21,17 @@ import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { BagMenu } from "@/components/floor/BagMenu";
 import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
-import { POTIONS, POTION_SLUGS, itemImage, itemName } from "@/lib/items";
+import { POTIONS, POTION_SLUGS, itemImage, itemName, UI_CELLS, UI_SHEET } from "@/lib/items";
 import { getFloorSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
 import { useLook } from "@/lib/lookStore";
-import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, rollMob, hitDamage, type Floor } from "@/lib/world/floor";
+import { MAX_FLOOR, TILE_SRC, baseMobCount, generateFloor, isBossFloor, isTraining, rollMob, hitDamage, type Floor } from "@/lib/world/floor";
+import { BODY_OF_FRAME, Npc, npcFrameH, npcRatio } from "@/components/npc/Npc";
+import { FirstTip } from "@/components/training/FirstTip";
+import { TrainingGuide } from "@/components/training/TrainingGuide";
+import { TrainingTalk, type Reward } from "@/components/training/TrainingTalk";
+import { NPC_SHEET, NPC_TAG, TRAINING_DONE, nextTalk, objective, type TrainingNpc } from "@/lib/training";
+import { isRecruit } from "@/lib/guild";
 
 const T = 34; // one tile, in px, before the camera zoom (tiles, props and sprites are all drawn at this scale)
 const FRAME = 2.7; // a sprite frame, in tiles
@@ -167,7 +173,7 @@ interface Ag {
 interface WireMob { id: number; kind: string; rarity: string; sprite: string; level: number; boss: boolean; x: number; y: number; hp: number; max: number; home: [number, number, number]; dead?: boolean }
 interface WireFighter { id: string; sprite: string; name: string; role: "tank" | "healer" | "dps"; level: number; max: number; x?: number; y?: number; frac?: number; dead?: boolean }
 interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
-interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; gear?: { name: string; rank: number; level: number } | null }
+interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number; xp?: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; gear?: { name: string; rank: number; level: number } | null }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -223,19 +229,24 @@ function Unit({ a, party }: { a: Ag; party: number }) {
  * Combat here runs in the browser and reports kills to the server, which checks the floor is unlocked and
  * pays XP. A fully server-run version comes with shared rooms.
  */
-export function FloorScreen({ floorNo, seed = 0, fighters, tutorialStep, players = 1, floorUnlocked = 1, arriveFromAbove = false, roomCode }: { floorNo: number; /** Which layout of this floor to build (a different seed is a different map). */ seed?: number; /** Came down from the floor above: the party appears beside the way up instead of by the way in. */ arriveFromAbove?: boolean; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number; /** A friend's room code to join instead of being matched. */ roomCode?: string }) {
+export function FloorScreen({ floorNo, seed = 0, fighters, tutorialStep, players = 1, floorUnlocked = 1, arriveFromAbove = false, roomCode, training }: { floorNo: number; /** Which layout of this floor to build (a different seed is a different map). */ seed?: number; /** Came down from the floor above: the party appears beside the way up instead of by the way in. */ arriveFromAbove?: boolean; fighters: GuildFighter[]; tutorialStep: number; /** Highest floor the player may enter (from the server). */ floorUnlocked?: number; /** People on this floor right now; more of them means more mobs and quicker arrivals. */ players?: number; /** A friend's room code to join instead of being matched. */ roomCode?: string; /** The tutorial's training field: where the player is in it. */ training?: { step: number; kills: number } }) {
   const floor = useMemo(() => generateFloor(floorNo, seed), [floorNo, seed]);
   const [run, setRun] = useState(0); // bump to retry
   const [revived, setRevived] = useState(false);
   // After a defeat the party starts again at a quarter of its health.
   const squadIn = useMemo(() => (revived ? fighters.map((f) => ({ ...f, hp_frac: 0.25, hp_at: undefined })) : fighters), [revived, fighters]);
-  return <FloorMap key={run} floor={floor} seed={seed} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} roomCode={roomCode} retry={() => { setRevived(true); setRun((r) => r + 1); }} />;
+  return <FloorMap key={run} floor={floor} seed={seed} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} roomCode={roomCode} training={training} retry={() => { setRevived(true); setRun((r) => r + 1); }} />;
 }
 
-function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked, fromAbove, roomCode, retry }: { roomCode?: string; seed: number; floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
+function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked, fromAbove, roomCode, training, retry }: { training?: { step: number; kills: number }; roomCode?: string; seed: number; floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
   const router = useRouter();
   const [askBack, setAskBack] = useState(false);
   const [askNext, setAskNext] = useState(false);
+  // The training field: how far along the tutorial is, who the player is talking to.
+  const [tStep, setTStep] = useState(training?.step ?? 0);
+  const [tKills, setTKills] = useState(training?.kills ?? 0);
+  const [talkNpc, setTalkNpc] = useState<TrainingNpc | null>(null);
+  const reloadOnClose = useRef(false);
   const nav = useMemo(() => buildNav(floor.nav), [floor]);
   const squad = useMemo(() => {
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
@@ -252,7 +263,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   /** The party's best level, which colours the level tags over monsters; rises when someone levels up. */
   const [partyLvl, setPartyLvl] = useState(() => Math.max(1, ...fighters.filter((f) => f.team_slot > 0).map((f) => f.level)));
   const [, rerender] = useReducer((n: number) => n + 1, 0);
-  const progress = useRef({ kills: 0, boss: false, gate: false as false | "back" | "next", unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false, left: false });
+  const progress = useRef({ kills: 0, boss: false, gate: false as false | "back" | "next", unlocked: false, next: 0, heading: 0, anchor: [0, 0] as Pt, strollAt: 0, strolling: false, left: false, npc: null as TrainingNpc | null });
   const [stance, setStanceState] = useState<Stance>("neutral");
   const stanceRef = useRef<Stance>("neutral");
   const [bagOpen, setBagOpen] = useState(false);
@@ -564,6 +575,23 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     setTimeout(() => d.remove(), ms + 20);
   };
 
+  /** "+N" with the coin picture, floating over a fighter. */
+  const coinPop = (a: Ag, n: number, ms = 1300) => {
+    const el = a.fx;
+    if (!el) return;
+    const [c, r] = UI_CELLS.coins, size = 22, cell = size * 1.16, off = (cell - size) / 2;
+    const d = document.createElement("div");
+    d.className = "over-head pointer-events-none absolute flex items-center gap-1 whitespace-nowrap text-xl font-bold text-gold";
+    d.style.cssText += `;animation:dmg ${ms}ms ease-out forwards;margin-bottom:2.4rem;text-shadow:0 2px 0 #000;`;
+    const ic = document.createElement("span");
+    ic.style.cssText = `display:inline-block;width:${size}px;height:${size}px;background-image:url(${UI_SHEET.src});background-size:${cell * UI_SHEET.cols}px ${cell * UI_SHEET.rows}px;background-position:${-c * cell - off}px ${-r * cell - off}px;`;
+    const t = document.createElement("span");
+    t.textContent = `+${n}`;
+    d.append(ic, t);
+    el.appendChild(d);
+    setTimeout(() => d.remove(), ms + 20);
+  };
+
   // A level-up: a golden aura behind the fighter, a ring spreading on the ground, a glow around their outline, and a
   // big banner overhead. All of it is attached to the fighter, so it follows them if they keep moving.
   const celebrate = (a: Ag, n = 0) => {
@@ -583,24 +611,39 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
 
   // The server rolls the xp (a range, not a fixed amount) and says what each fighter got: show it over their heads.
   const showXp = (data: unknown) => {
-    const res = data as { throttled?: boolean; coins?: number; awards?: { id: string; gained: number; levels_gained: number }[] } | null;
+    const res = data as { throttled?: boolean; coins?: number; awards?: { id: string; gained: number; levels_gained: number; xp?: number }[] } | null;
     if (!res?.awards || res.throttled) return;
-    if (res.coins && allies.current[0]) { const lead = allies.current.find((u) => !u.dead) ?? allies.current[0]; setTimeout(() => overHead(lead, `+${res.coins} coins`, "text-gold", 1200, undefined, "margin-bottom:2.4rem;"), 350); }
+    if (res.coins && allies.current[0]) { const lead = allies.current.find((u) => !u.dead) ?? allies.current[0]; setTimeout(() => coinPop(lead, res.coins as number), 350); }
     let ups = 0; // party members levelling on the same kill take turns, each banner a step higher than the last
     for (const w of res.awards) {
       const a = allies.current.find((u) => u.id === w.id);
       if (!a || w.gained <= 0) continue;
       overHead(a, `+${w.gained} XP`, "text-leaf", 1200);
-      a.xp += w.gained;
-      for (let g = 0, lv = a.level - w.levels_gained; g < w.levels_gained; g++, lv++) a.xp -= xpRequired(lv);
-      a.xp = Math.max(0, a.xp);
-      if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
+      if (typeof w.xp === "number") a.xp = w.xp; // the server's own total: the bar always matches the real experience
+      else {
+        a.xp += w.gained;
+        for (let g = 0, lv = a.level; g < w.levels_gained; g++, lv++) a.xp -= xpRequired(lv);
+        a.xp = Math.max(0, a.xp);
+      }
+      if (w.levels_gained > 0) { a.level += w.levels_gained; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); rerender(); const turn = ups++; setTimeout(() => celebrate(a, turn), 250 + turn * 450); }
     }
   };
   const paid = (data: unknown, kind: string, boss: boolean) => {
     showXp(data); noteKill(data as never);
+    if (training && !(data as { throttled?: boolean } | null)?.throttled) setTKills((k) => k + 1);
     // The tutorial job is finished by the first bat; it gets the same banner as every other job.
     if (tutorialStep === 8 && floor.n === 1 && kind === "bat" && !boss && !firstDone.current) { firstDone.current = true; setFirstJobDone(true); try { localStorage.setItem("pocketrpg-first-job-done", "1"); } catch { /* ignore */ } showToast("Job complete: First job. Hand it in at the job board."); }
+  };
+  // A quest reward gives experience outside a kill: read the real numbers back so every bar matches.
+  const syncXp = async () => {
+    const { data } = await createClient().from("fighters").select("id, level, xp").in("id", allies.current.map((u) => u.id));
+    for (const r of data ?? []) {
+      const a = allies.current.find((u) => u.id === r.id);
+      if (!a) continue;
+      a.xp = r.xp as number;
+      if ((r.level as number) > a.level) { a.level = r.level as number; if (a.lvEl) a.lvEl.textContent = `Lv ${a.level}`; setPartyLvl((p) => Math.max(p, a.level)); }
+    }
+    rerender();
   };
   const killReport = (m: Ag) => sendKill({ floor: floor.n, kind: m.kind, level: m.level, boss: m.boss }, (data) => paid(data, m.kind, m.boss));
 
@@ -903,6 +946,10 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             if (pr.gate === "back") setAskBack(true); else setAskNext(true);
             pr.gate = false;
           }
+          // Walked up to someone in the training field: they start talking.
+          const lead = A.find((x) => !x.dead);
+          const who = pr.npc ? floor.npcs.find((q) => q.id === pr.npc) : null;
+          if (who && lead && dist(lead, { x: who.x, y: who.y + 1.5 }) < 2.4) { pr.npc = null; setTalkNpc(who.id); }
         }
       }
 
@@ -1075,7 +1122,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       // Joined a room that runs a different layout: rebuild the floor from the room's seed so everyone sees the same map.
       if (typeof r.seed === "number" && r.seed !== seed) {
         sock.emit("leave");
-        router.replace(`/floor/${floor.n}?room=${r.code}&seed=${r.seed}`);
+        router.replace(`${isTraining(floor.n) ? "/training-ground" : `/floor/${floor.n}`}?room=${r.code}&seed=${r.seed}`);
         return;
       }
       me = r.you;
@@ -1169,13 +1216,25 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     const wx = (p.x / c.z + c.x) / T, wy = (p.y / c.z + c.y) / T;
     const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 - wy) < 0.9);
     const live = allies.current.filter((a) => !a.dead);
-    progress.current.gate = false;
+    progress.current.gate = false; progress.current.npc = null;
+    // Tapping a person in the training field walks the party over; arriving starts the conversation.
+    const who = isTraining(floor.n) ? floor.npcs.find((q) => Math.abs(wx - q.x) < 0.9 && wy < q.y + 0.4 && wy > q.y - 2.6) : undefined;
+    if (who && !foe) {
+      progress.current.npc = who.id;
+      const heading = Math.atan2(who.y + 1.5 - (live[0]?.y ?? who.y), who.x - (live[0]?.x ?? who.x));
+      live.forEach((a, i) => {
+        const to: Pt = nearestWalkable(nav, who.x + formationOffset(i, live.length, heading, 1)[0] * 0.6, who.y + 1.5 + Math.abs(formationOffset(i, live.length, heading, 1)[1]) * 0.4);
+        a.path = findPath(nav, [a.x, a.y], to);
+        a.held = a.path.length > 0; a.target = null; a.delay = i * 0.1;
+      });
+      return;
+    }
     // Tapping the white pillar walks the party into it; arriving there leads back out of the floor.
     const bx = floor.start[0], by = floor.start[1] + 0.9;
     // The gold pillar works the same way once its floor is open (Floors 2 and 3 need no unlock, so it is open from the start).
     const nx = floor.exit[0], ny = floor.exit[1] + 0.9;
-    const onBack = Math.abs(wx - bx) < 0.9 && wy > by - 3.6 && wy < by + 0.5;
-    const onNext = nextOpen && Math.abs(wx - nx) < 0.9 && wy > ny - 3.6 && wy < ny + 0.5;
+    const onBack = !isTraining(floor.n) && Math.abs(wx - bx) < 0.9 && wy > by - 3.6 && wy < by + 0.5;
+    const onNext = !isTraining(floor.n) && nextOpen && Math.abs(wx - nx) < 0.9 && wy > ny - 3.6 && wy < ny + 0.5;
     if (!foe && (onBack || onNext)) {
       const [gx, gy] = onNext ? [nx, ny] : [bx, by];
       progress.current.gate = onNext ? "next" : "back";
@@ -1223,6 +1282,10 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   };
 
   const A = floor.theme.atlas;
+  const trainOn = isTraining(floor.n) && tStep < TRAINING_DONE;
+  const lowest = allies.current.length ? Math.min(...allies.current.map((a) => a.level)) : 1;
+  const recruits = squad.filter((f) => isRecruit(f.template.archetype)).length;
+  const goal = trainOn ? objective(tStep, { kills: tKills, ready: allies.current.filter((a) => a.level >= 5).length, total: squad.length, potion: slots.some(Boolean), recruits }) : "";
   const quest = tutorialStep === 8 && floor.n === 1;
   // Floors 1 to 3 open one by one as you clear them; from Floor 3 on, the job-board quests open the next floor.
   const nextOpen = floor.n < MAX_FLOOR && (floor.n < 3 ? !isBossFloor(floor.n) : floor.n + 1 <= floorUnlocked);
@@ -1231,10 +1294,10 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     <div className="relative flex h-dvh w-full flex-col bg-ink">
       {state === "play" && <Music track={floorTrack(floor.n, isBossFloor(floor.n))} />}
       <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper">
-        <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>
+        {!isTraining(floor.n) && <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>}
         <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-lg uppercase text-gold">Floor {floor.n}{isBossFloor(floor.n) && " · Boss"}</p>
-          <p className="truncate text-sm text-steel">{floor.theme.name}</p>
+          <p className="truncate text-lg uppercase text-gold">{isTraining(floor.n) ? "Training Ground" : <>Floor {floor.n}{isBossFloor(floor.n) && " · Boss"}</>}</p>
+          <p className="truncate text-sm text-steel">{!isTraining(floor.n) && floor.theme.name}</p>
         </div>
         {room && (
           <p className="pixel-box shrink-0 bg-panel px-2 py-1 text-center text-base uppercase leading-tight text-paper" title="Share the code and a friend can join this room">
@@ -1242,6 +1305,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           </p>
         )}
       </div>
+      {trainOn && state === "play" && goal && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">{goal}</p>}
       {quest && !firstJobDone && state === "play" && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">First job: defeat a bat on this floor.</p>}
 
       <div
@@ -1284,6 +1348,18 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
               />
             );
           })}
+          {isTraining(floor.n) && floor.npcs.map((n) => {
+            const sheet = NPC_SHEET[n.id];
+            const h = npcFrameH(sheet, FRAME * BODY_OF_FRAME), w = h * npcRatio(sheet);
+            const next = trainOn && nextTalk(tStep) === n.id;
+            return (
+              <div key={n.id} className="pointer-events-none absolute" style={{ left: (n.x - w / 2) * T, top: (n.y - h * 0.97) * T, width: w * T, zIndex: depth(n.y) }}>
+                <Npc name={sheet} still className="w-full" />
+                <span className="absolute left-1/2 top-[-4px] -translate-x-1/2 -translate-y-full whitespace-nowrap bg-ink/80 px-1 text-sm text-paper">{NPC_TAG[n.id]}</span>
+                {next && <span aria-hidden="true" className="absolute left-1/2 top-[-26px] -translate-x-1/2 -translate-y-full animate-bounce text-2xl leading-none text-gold" style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}>▼</span>}
+              </div>
+            );
+          })}
           <div ref={marker} className="marker pointer-events-none absolute z-[5] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold opacity-0" />
           {ready && [...allies.current, ...mates.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} />)}
         </div>
@@ -1317,6 +1393,15 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           </div>
         )}
 
+        {trainOn && state === "play" && <TrainingGuide step={tStep} paused={!!talkNpc || bagOpen || fightersOpen} />}
+        {talkNpc && (
+          <TrainingTalk
+            npc={talkNpc} step={tStep} kills={tKills} lowest={lowest} total={squad.length} potionSet={slots.some(Boolean)} ready={allies.current.filter((a) => a.level >= 5).length} recruits={recruits}
+            onStep={(r: Reward) => { setTStep(r.step); if (r.armor.length > 0) reloadOnClose.current = true; if (r.xp > 0) void syncXp(); }}
+            onClassChanged={() => { reloadOnClose.current = true; }}
+            onClose={() => { setTalkNpc(null); if (reloadOnClose.current) window.location.reload(); }}
+          />
+        )}
         {fightersOpen && <FightersMenu onClose={() => setFightersOpen(false)} />}
         {bagOpen && <BagMenu onUse={drinkSlug} onClose={() => { setBagOpen(false); loadStock(); }} />}
 
@@ -1398,6 +1483,13 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           <div className="absolute inset-0 z-[9700] flex items-center justify-center bg-ink/70 p-4">
             <div className="pixel-box card-reveal w-full max-w-sm bg-night p-5 text-center">
                 <>
+                  <FirstTip tip="wipe" title="Your party was wiped out" when={state === "lost"}>
+                    <p>It happens to everyone. Next time you can:</p>
+                    <p>• Ask other players in the chat for help.</p>
+                    <p>• Use a Revive Potion to bring a fallen fighter back.</p>
+                    <p>• Or wake up back at your guild, with some experience lost.</p>
+                    <p className="text-steel">Revives and the guild wake-up are coming soon.</p>
+                  </FirstTip>
                   <h2 className="mb-2 text-3xl uppercase text-ember">Party down</h2>
                   <p className="mb-4 text-xl text-paper">Your fighters were beaten. Rest up and try again.</p>
                   <div className="flex flex-col gap-2">

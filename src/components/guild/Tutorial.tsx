@@ -87,7 +87,7 @@ export function Tutorial({ username, initialStep, fighters: existing }: { userna
         return (
           <ManagerBox step={3} total={TOTAL} title="Meet your Starters" onBack={() => go(2)} onNext={() => go(4)} nextLabel="Next" busy={fighters.length === 0}>
             <p>Each Starter has a role, stats and skills. Every one starts as a <span className="text-gold">Novice</span>.</p>
-            <p>At level 10, you can rank up a Novice into a Recruit, and many other <span className="text-gold">Classes</span> as you level up.</p>
+            <p>At level 5, you can rank up a Novice into a Recruit, and many other <span className="text-gold">Classes</span> as you level up.</p>
             <div className="mt-2 grid grid-cols-3 gap-2">
               {fighters.slice(0, 3).map((f) => (
                 <div key={f.id} className="flex min-w-0 flex-col items-center text-center text-base">

@@ -6,7 +6,7 @@ import type { Rarity, Role, StarterFighter } from "./starter-pack";
 export const ROSTER_CAP = 10;
 
 /** Level needed to take each class rank (mirrors rank_level_req in the database). */
-export const RANK_LEVEL: Record<Rarity, number> = { common: 10, uncommon: 20, rare: 35, legendary: 50 };
+export const RANK_LEVEL: Record<Rarity, number> = { common: 5, uncommon: 20, rare: 35, legendary: 50 };
 export const RANK_LABEL: Record<Rarity, string> = { common: "Rank 1", uncommon: "Rank 2", rare: "Rank 3", legendary: "Rank 4" };
 export const NEXT_RANK: Record<Rarity, Rarity | null> = { common: "uncommon", uncommon: "rare", rare: "legendary", legendary: null };
 
@@ -21,7 +21,7 @@ export const ARCHETYPE_LABEL: Record<string, string> = {
   ninja: "Ninja", samurai: "Samurai", soldier: "Soldier", sharpshooter: "Sharpshooter", ranger: "Ranger", whitemage: "White Mage", blackmage: "Black Mage",
 };
 
-/** Level 10: a Novice becomes a Recruit of its role. Level 20: a Recruit specialises (CLASSES). */
+/** Level 5: a Novice becomes a Recruit of its role. Level 20: a Recruit specialises (CLASSES). */
 export const RECRUITS: Record<Role, { id: string; blurb: string }> = {
   tank: { id: "recruit_fighter", blurb: "Learns Slash. Tough front-liner in training." },
   healer: { id: "recruit_acolyte", blurb: "Learns Basic Heal. Keeps allies standing." },
@@ -30,7 +30,7 @@ export const RECRUITS: Record<Role, { id: string; blurb: string }> = {
 export const RECRUIT_ADVANCE_LEVEL = 20;
 export const isRecruit = (archetype: string) => archetype.startsWith("recruit_");
 
-/** First-tier classes only: the second tier (Paladin, Debuff Tank, Warden, Bard, Marksman, Necromancer) is reached later through the class changer in town. */
+/** First-tier classes only: the second tier (Paladin, Debuff Tank, Warden, Bard, Marksman, Sharpshooter, Necromancer and more) is reached later through the class changer in town. */
 export const CLASSES: Record<Role, { id: string; blurb: string }[]> = {
   tank: [
     { id: "shield_tank", blurb: "Soaks hits and shields the team." },
@@ -43,6 +43,7 @@ export const CLASSES: Record<Role, { id: string; blurb: string }[]> = {
   dps: [
     { id: "rogue", blurb: "Fast striker with dodges and finishing blows." },
     { id: "magical_dps", blurb: "Ranged mage with stuns and area spells." },
+    { id: "ranger", blurb: "Hunter with a bow and quick, steady shots. Grows into a Marksman or Sharpshooter." },
   ],
 };
 

@@ -1,11 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Npc, type NpcName } from "@/components/npc/Npc";
+import { Npc, NpcPortrait, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
 
 /** An NPC speaking: their portrait, a heading and some words, plus whatever buttons or panels the page puts below. */
-export function Speech({ npc, title, onClose, children, wide = false, shop = false }: { npc: NpcName; title: string; onClose: () => void; children: ReactNode; wide?: boolean; shop?: boolean }) {
+export function Speech({ npc, title, onClose, children, wide = false, shop = false, still = false }: { npc: NpcName; title: string; onClose: () => void; children: ReactNode; wide?: boolean; shop?: boolean; still?: boolean }) {
   if (shop) return <ShopSpeech npc={npc} title={title} onClose={onClose}>{children}</ShopSpeech>;
   return (
     <div
@@ -14,7 +14,7 @@ export function Speech({ npc, title, onClose, children, wide = false, shop = fal
     >
       <div role="dialog" aria-modal="true" aria-label={title} className={`pixel-box card-reveal flex max-h-[94dvh] w-full flex-col overflow-y-auto bg-night p-4 short:max-w-2xl short:p-2.5 ${wide ? "max-w-xl" : "max-w-md"}`}>
         <div className="flex items-start gap-3">
-          <Npc name={npc} className="w-16 shrink-0 short:w-12" />
+          <NpcPortrait name={npc} still={still} />
           <div className="min-w-0 flex-1">
             <h2 className="mb-1 text-2xl uppercase text-gold short:text-xl">{title}</h2>
             <div className="flex flex-col gap-2 text-xl text-paper short:gap-1 short:text-base">{children}</div>

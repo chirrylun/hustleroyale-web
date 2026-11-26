@@ -7,13 +7,13 @@ export type Facing = "front" | "left" | "right";
  * An NPC's idle loop. The sheet is 6 frames across and one row per facing (front, left, right; the manager only has front).
  * It fills whatever width it is given, and the height follows from the sheet's proportions, so it scales with its parent.
  */
-export function Npc({ name, facing = "front", className = "", style }: { name: NpcName; facing?: Facing; className?: string; style?: React.CSSProperties }) {
+export function Npc({ name, facing = "front", className = "", style, still = false }: { name: NpcName; facing?: Facing; className?: string; style?: React.CSSProperties; /** Stand still on the first frame instead of the idle loop. */ still?: boolean }) {
   const d = npcs[name];
   const row = d.rows === 1 ? 0 : facing === "left" ? 1 : facing === "right" ? 2 : 0;
   return (
     <div
       aria-hidden="true"
-      className={`npc-pct ${className}`}
+      className={`${still ? "" : "npc-pct"} ${className}`}
       style={{
         aspectRatio: `${d.w} / ${d.h}`,
         backgroundImage: `url(/npc/${name}.png)`,
@@ -33,3 +33,12 @@ export const npcRatio = (name: NpcName) => npcs[name].w / npcs[name].h;
 export const npcFrameH = (name: NpcName, bodyH: number) => { const d = npcs[name] as { h: number; body?: number }; return bodyH * d.h / (d.body ?? d.h - 6); };
 /** A fighter's idle body as a share of its sprite frame (novice: 122 px of 208, drawn at 0.9). */
 export const BODY_OF_FRAME = 0.9 * 122 / 208;
+
+/** A speaker's picture in a speech box: every NPC the same height, whatever the proportions of their sheet, so nobody looks too big or too small. */
+export function NpcPortrait({ name, still = false }: { name: NpcName; still?: boolean }) {
+  return (
+    <div className="flex h-24 w-24 shrink-0 items-end justify-center short:h-16 short:w-16">
+      <Npc name={name} still={still} className="h-full w-auto" />
+    </div>
+  );
+}

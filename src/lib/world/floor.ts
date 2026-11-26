@@ -62,7 +62,10 @@ export const THEMES: Record<ThemeId, Theme> = {
 };
 
 const ORDER: ThemeId[] = ["grass", "cave", "swamp", "ice"];
-export const themeOf = (floor: number) => THEMES[ORDER[Math.min(3, Math.floor((floor - 1) / 10))]];
+/** The training field new players start in: one open meadow (grassland art), level 1-3 slimes that never go looking for a fight. Not a numbered floor. */
+export const TRAINING_FLOOR = -1;
+export const isTraining = (floor: number) => floor === TRAINING_FLOOR;
+export const themeOf = (floor: number) => THEMES[ORDER[floor < 1 ? 0 : Math.min(3, Math.floor((floor - 1) / 10))]];
 export const isBossFloor = (floor: number) => floor % 10 === 0;
 const RARITY = ["common", "uncommon", "rare", "legendary", "mini"] as const;
 
@@ -75,7 +78,7 @@ export const miniFor = (floor: number) => MINIBOSSES.find((m) => floor >= m.from
 export const MINI_LEVEL = 3; // over the floor
 export const MINI_APPEAR_MS: [number, number] = [3 * 60_000, 8 * 60_000];
 export const MINI_COOLDOWN_MS = 15 * 60_000;
-export const miniStats = (level: number) => { const b = mobStats(level, false); return { hp: Math.round(b.hp * 4.5), atk: Math.round(b.atk * 1.3), def: b.def }; };
+export const miniStats = (level: number) => { const b = mobStats(level, false); return { hp: Math.round(b.hp * TUNE.miniHp), atk: Math.round(b.atk * TUNE.miniAtk), def: b.def }; };
 
 export interface PropSpec {
   id: number;
@@ -99,6 +102,8 @@ export interface MobSpec {
   x: number; y: number;
   hp: number; atk: number; def: number;
 }
+/** A person standing in the training field. x, y are in tiles (feet). */
+export interface NpcSpec { id: "manager" | "trainer" | "changer"; x: number; y: number }
 export interface Floor {
   n: number;
   theme: Theme;
@@ -115,6 +120,8 @@ export interface Floor {
   start: [number, number];
   exit: [number, number];
   nav: NavLayout;
+  /** Training field only: who stands where. */
+  npcs: NpcSpec[];
 }
 
 function rng(seed: number) {
@@ -131,11 +138,13 @@ function rng(seed: number) {
 /** Mob numbers by level. Fighters grow +9% HP and +7% ATK/DEF per level (database); mobs run a little ahead so a same-level fight costs real health. */
 /** Every mob balance knob in one place (the server gets this file by sync). */
 export const TUNE = {
-  hpBase: 30, hpPerLevel: 16, atkBase: 5, atkPerLevel: 2.1, defBase: 2, defPerLevel: 0.9,
+  hpBase: 34, hpPerLevel: 18, atkBase: 5, atkPerLevel: 2.1, defBase: 2, defPerLevel: 0.9,
   /** Members of a pack are a little weaker one by one, because there are several of them. */
   packHp: 0.6, packAtk: 0.8,
   /** Gear can add at most this share of a stat to what a fighter has without it (0.667 means gear is at most 40% of the total). */
   gearCap: 2 / 3,
+  /** Bosses and special mobs: a long fight that wants a party, not a wall. Party size adds health on top (bossScale). */
+  bossHp: 9, bossAtk: 1.7, miniHp: 7, miniAtk: 1.5,
 };
 /** Each kind's own build: [hp, attack, defence] multipliers. Bosses and special mobs ignore these. */
 export const KIND_MUL: Record<string, [number, number, number]> = {
@@ -146,8 +155,8 @@ export const PACK_KINDS = ["slime", "goblin", "direwolf"];
 export const packSize = (floor: number, rand: () => number) => (floor <= 2 ? 2 : floor <= 6 ? 2 + (rand() < 0.4 ? 1 : 0) : 2 + Math.floor(rand() * 3));
 export const mobStats = (level: number, boss: boolean, kind?: string, pack = false) => {
   const m = !boss && kind ? KIND_MUL[kind] ?? [1, 1, 1] : [1, 1, 1];
-  const hp = (TUNE.hpBase + TUNE.hpPerLevel * level) * (boss ? 6 : 1) * m[0] * (pack ? TUNE.packHp : 1);
-  const atk = (TUNE.atkBase + TUNE.atkPerLevel * level) * (boss ? 1.4 : 1) * m[1] * (pack ? TUNE.packAtk : 1);
+  const hp = (TUNE.hpBase + TUNE.hpPerLevel * level) * (boss ? TUNE.bossHp : 1) * m[0] * (pack ? TUNE.packHp : 1);
+  const atk = (TUNE.atkBase + TUNE.atkPerLevel * level) * (boss ? TUNE.bossAtk : 1) * m[1] * (pack ? TUNE.packAtk : 1);
   return { hp: Math.round(hp), atk: Math.round(atk), def: Math.round((TUNE.defBase + TUNE.defPerLevel * level) * m[2]) };
 };
 /** Share of a hit that gets through `def` on something of `level` (same curve for fighters and mobs, so defence never stops mattering or becomes immunity). */
@@ -156,13 +165,14 @@ export const hitShare = (def: number, level: number) => { const k = 30 + 5 * Mat
 export const hitDamage = (power: number, def: number, defLevel: number, roll = 1) => Math.max(2, Math.round(power * hitShare(def, defLevel) * roll));
 
 /** How many ordinary mobs a floor holds for one player; also how many kills open the portal. Bosses are extra. */
-export const baseMobCount = (n: number) => Math.min(9, 4 + Math.floor((((n - 1) % 10) + 1) / 2));
+export const baseMobCount = (n: number) => (n === TRAINING_FLOOR ? 6 : Math.min(9, 4 + Math.floor((((n - 1) % 10) + 1) / 2)));
 
 /** A fresh ordinary mob for floor `n` (kind, level and stats), for the spawner. */
 /** How many levels above its floor an ordinary mob can be. */
 export const MOB_LEAD = 3;
 
 export function rollMob(n: number, rand: () => number): Omit<MobSpec, "id" | "x" | "y"> {
+  if (n === TRAINING_FLOOR) { const level = 1 + Math.floor(rand() * 3); return { kind: "slime", rarity: "common", sprite: "mob_slime_common", level, boss: false, ...mobStats(level, false) }; }
   const theme = themeOf(n);
   const f = ((n - 1) % 10) + 1;
   const rarity = RARITY[f <= 3 ? 0 : f <= 6 ? 1 : 2];
@@ -193,9 +203,11 @@ export function generateFloor(n: number, seed = 0): Floor {
   const variant = new Uint8Array(W * H);
   for (let i = 0; i < variant.length; i++) variant[i] = theme.ground[Math.floor(rand() * 4)];
 
+  const training = n === TRAINING_FLOOR;
   const boss = isBossFloor(n);
-  const start: [number, number] = [5, H / 2 + r(-10, 10)];
-  const exit: [number, number] = [W - 6, r(11, H - 11)];
+  const start: [number, number] = training ? [28, H / 2] : [5, H / 2 + r(-10, 10)];
+  const exit: [number, number] = training ? [28, H / 2] : [W - 6, r(11, H - 11)];
+  const npcs: NpcSpec[] = training ? [{ id: "manager", x: 35, y: 28.5 }, { id: "trainer", x: 37, y: 32.5 }, { id: "changer", x: 35, y: 36.5 }] : [];
 
   // Walkable ground is a network: a main road from entry to exit, side roads that end in dead-end glades, and
   // clearings where roads bend. Everything else is wall (dense trees or rocks), so the map is paths to follow, not open field.
@@ -237,6 +249,12 @@ export function generateFloor(n: number, seed = 0): Floor {
   };
 
   const zones: [number, number, number][] = []; // clearings: where mobs live
+  const glades: [number, number, number][] = [];
+  if (training) {
+    // One big open meadow (no corridors): an overlapping set of wide clearings with the NPCs at its west end and the slimes to the east.
+    for (const [cx, cy, rad] of [[34, 32, 9.5], [46, 32, 12], [58, 32, 12.5], [47, 21, 8.5], [47, 43, 8.5], [66, 32, 8]] as const) stamp(cx, cy, rad, false);
+    for (const z of [[46, 32, 5.5], [58, 27, 5.5], [58, 38, 5.5], [48, 21.5, 4.5], [48, 42.5, 4.5], [66, 32, 4.5]] as const) zones.push([z[0], z[1], z[2]]);
+  } else {
   const main = route(start, exit, 10, 12);
   lay(main, r(0, 6));
   for (let i = 1; i < main.length - 1; i++) {
@@ -245,7 +263,6 @@ export function generateFloor(n: number, seed = 0): Floor {
     stamp(main[i][0], main[i][1], rad, false);
   }
   // Side roads, each ending in a glade worth finding.
-  const glades: [number, number, number][] = [];
   const sides = 8 + Math.floor(rand() * 4);
   for (let k = 0, tries = 0; k < sides && tries < 260; tries++) {
     const from = main[1 + Math.floor(rand() * (main.length - 2))];
@@ -262,6 +279,7 @@ export function generateFloor(n: number, seed = 0): Floor {
   stamp(start[0], start[1], 3.2, false);
   stamp(exit[0], exit[1], boss ? 5 : 3.4, false);
 
+  }
   // A pond in some of the glades, off to the side so the way around stays open.
   glades.forEach((g, gi) => {
     if (gi > 1 && rand() < 0.5) return;
@@ -316,7 +334,7 @@ export function generateFloor(n: number, seed = 0): Floor {
     const clusters = 2 + Math.floor(rand() * 3);
     for (let k = 0; k < clusters; k++) {
       const a = r(0, Math.PI * 2), d = z[2] * r(0.55, 0.8), cx = z[0] + Math.cos(a) * d, cy = z[1] + Math.sin(a) * d * 0.8;
-      if (cx < 3 || cy < 4 || cx > W - 3 || cy > H - 2 || Math.hypot(cx - start[0], cy - start[1]) < 5 || Math.hypot(cx - exit[0], cy - exit[1]) < 6) continue;
+      if (cx < 3 || cy < 4 || cx > W - 3 || cy > H - 2 || Math.hypot(cx - start[0], cy - start[1]) < 5 || Math.hypot(cx - exit[0], cy - exit[1]) < 6 || npcs.some((q) => Math.hypot(cx - q.x, cy - q.y) < 4)) continue;
       if (cells[Math.floor(cy) * W + Math.floor(cx)] === 2) continue;
       const cat: Cat = rand() < 0.5 ? "big" : "mid";
       for (let m = 0, cnt = 1 + Math.floor(rand() * 3); m < cnt; m++) scatter(cat, cx + r(-0.8, 0.8), cy + r(-0.5, 0.5), 1, true);
@@ -331,9 +349,9 @@ export function generateFloor(n: number, seed = 0): Floor {
   }
 
   // Portals and the boss ring.
-  put(theme.entry, start[0], start[1] + 0.9, rw(theme.entry) * 0.7, "entry", undefined, [start[0] - 0.5, start[1] + 0.3, start[0] + 0.5, start[1] + 0.9]);
+  if (!training) put(theme.entry, start[0], start[1] + 0.9, rw(theme.entry) * 0.7, "entry", undefined, [start[0] - 0.5, start[1] + 0.3, start[0] + 0.5, start[1] + 0.9]);
   if (boss) put(theme.boss, exit[0] - 2.5, exit[1] + 1.2, rw(theme.boss) * 0.95, "boss");
-  put(theme.exit, exit[0] + (boss ? 2.6 : 0), exit[1] + 0.9, rw(theme.exit) * (theme.exitCrop ?? 1) * 0.7, "exit", theme.exitCrop, [exit[0] + (boss ? 2.1 : -0.5), exit[1] + 0.3, exit[0] + (boss ? 3.1 : 0.5), exit[1] + 0.9]);
+  if (!training) put(theme.exit, exit[0] + (boss ? 2.6 : 0), exit[1] + 0.9, rw(theme.exit) * (theme.exitCrop ?? 1) * 0.7, "exit", theme.exitCrop, [exit[0] + (boss ? 2.1 : -0.5), exit[1] + 0.3, exit[0] + (boss ? 3.1 : 0.5), exit[1] + 0.9]);
 
   // The map's navigation, built here so mobs are only ever put on ground a fighter can really stand on.
   const navLayout: NavLayout = { cols: W, rows: H, floor: { x0: 1.2, x1: W - 1.2, y0: 2.4, y1: H - 1 }, props: [...feet, ...liquidFeet(cells, W, H)], solid };
@@ -349,7 +367,7 @@ export function generateFloor(n: number, seed = 0): Floor {
     mobs.push({ id: mobs.length, kind, rarity, sprite: `mob_${kind}_${rarity}`, level, boss: isBoss, ...(grp !== undefined ? { grp } : {}), x, y, ...s });
   };
   const homes = zones.filter((z) => Math.hypot(z[0] - start[0], z[1] - start[1]) > 12);
-  const count = Math.max(baseMobCount(n), Math.round(homes.length * 1.2));
+  const count = training ? baseMobCount(n) : Math.max(baseMobCount(n), Math.round(homes.length * 1.2));
   for (let i = 0; mobs.length < count; i++) {
     const c = homes[i % homes.length];
     let x = c[0], y = c[1];
@@ -361,6 +379,7 @@ export function generateFloor(n: number, seed = 0): Floor {
     }
     if (!ok) [x, y] = nearestRoomy(nav, c[0], c[1]);
     // Floor 1 always has a bat, so the first job can be done there.
+    if (training) { spawn("slime", "common", 1 + (i % 3), false, x, y); continue; }
     const kind = n === 1 && i === 0 ? "bat" : pick(theme.mobs);
     const lvl = Math.max(1, n + (i % 3 === 2 ? 1 : 0));
     if (PACK_KINDS.includes(kind) && !(n === 1 && i === 0)) {
@@ -376,7 +395,7 @@ export function generateFloor(n: number, seed = 0): Floor {
 
   return {
     n, theme, w: W, h: H, cells, variant, props, mobs, zones, start, exit,
-    nav: navLayout,
+    nav: navLayout, npcs,
   };
 }
 
