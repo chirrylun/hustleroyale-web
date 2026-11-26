@@ -37,13 +37,10 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
     if (r.step === TRAINING_DONE) router.push("/lobby?tour=1");
   };
 
-  const rewardLine = got && (got.coins || got.xp || got.items.length > 0 || got.armor.length > 0) ? (
-    <p className="pixel-box bg-panel p-2 text-lg text-leaf">
-      Reward:{got.coins ? ` ${got.coins} coins` : ""}{got.xp ? `, experience for every fighter` : ""}
-      {got.items.length > 0 && `, ${got.items.map((i) => `${i.qty} × ${itemName(i.slug)}`).join(", ")}`}
-      {got.armor.length > 0 && `, Recruit armour for every fighter (already worn)`}.
-    </p>
-  ) : null;
+  // Like the job board: what a claim paid, shown under the list.
+  const claimed = got && (got.coins || got.xp || got.items.length > 0 || got.armor.length > 0)
+    ? `${[got.coins ? `+${got.coins} coins` : "", got.xp ? `+${got.xp} XP` : ""].filter(Boolean).join(", ")}${got.items.length > 0 ? ` · ${got.items.map((i) => `${i.qty} × ${itemName(i.slug)}`).join(", ")}` : ""}${got.armor.length > 0 ? " · Recruit armour for every fighter (already worn)" : ""}`
+    : null;
 
   const close = () => onClose();
   const done = <SpeechActions><PixelButton onClick={close}>Got it</PixelButton></SpeechActions>;
@@ -78,7 +75,6 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
 
   return (
     <Speech npc="trainer" title={NPC_TAG.trainer} onClose={close} wide still>
-      {rewardLine}
       {cur === 0 && (<><p>Hold on there. The Guild Manager wants a word with you first.</p>{done}</>)}
       {cur >= 1 && cur <= 5 && (<>
         <p className="text-base text-steel">Quest board. Take a quest, finish it, then claim your reward.</p>
@@ -103,10 +99,11 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
             );
           })}
         </div>
+        {claimed && <p role="status" className="text-xl text-gold">{claimed}</p>}
         {note && <p role="alert" className="text-lg text-ember">{note}</p>}
         <SpeechActions><PixelButton variant="ghost" onClick={close}>Close</PixelButton></SpeechActions>
       </>)}
-      {cur === 6 && (<><p>That is everything I can teach you. Go back to the <span className="text-gold">Guild Manager</span>, he will take you on.</p>{done}</>)}
+      {cur === 6 && (<>{claimed && <p role="status" className="text-xl text-gold">{claimed}</p>}<p>That is everything I can teach you. Go back to the <span className="text-gold">Guild Manager</span>, he will take you on.</p>{done}</>)}
     </Speech>
   );
 }

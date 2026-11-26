@@ -23,7 +23,7 @@ export function LobbyTour() {
   const s = STEPS[i];
   const done = () => { setOpen(false); router.replace("/lobby"); };
   return (
-    <div className="fixed inset-0 z-[9800] flex items-end justify-center bg-ink/50 p-3 sm:items-center" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9800] flex items-end justify-center bg-ink/50 p-3 sm:items-center" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}>
       <InfoBox
         portrait={<NpcPortrait name="manager" still />} title={s.title} step={i} total={STEPS.length}
         onBack={i > 0 ? () => setI(i - 1) : undefined}

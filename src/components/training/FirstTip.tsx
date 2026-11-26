@@ -21,7 +21,7 @@ export function FirstTip({ tip, title, who = "manager", when = true, children }:
   if (state !== "new" || !when) return null;
   const close = () => { setState("seen"); void createClient().rpc("tip_seen", { p_key: tip }); };
   return (
-    <div className="fixed inset-0 z-[9800] flex items-end justify-center bg-ink/60 p-3 sm:items-center" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9800] flex items-end justify-center bg-ink/60 p-3 sm:items-center" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}>
       <InfoBox portrait={<NpcPortrait name={who} still />} title={title} step={0} total={1} onNext={close} nextLabel="Got it">{children}</InfoBox>
     </div>
   );

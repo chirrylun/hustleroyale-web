@@ -21,7 +21,7 @@ export function TrainingGuide({ step, paused }: { step: number; paused: boolean 
   if (!tip || paused) return null;
   const close = () => { try { localStorage.setItem(key(open!), "1"); } catch { /* ignore */ } setOpen(null); };
   return (
-    <div className="absolute inset-x-0 bottom-20 z-[9650] flex justify-center px-3 short:bottom-12" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+    <div className="absolute inset-x-0 bottom-20 z-[9650] flex justify-center px-3 short:bottom-12" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}>
       <InfoBox portrait={<NpcPortrait name={tip.who === "manager" ? "manager" : "trainer"} still />} title={tip.title} step={0} total={1} onNext={close} nextLabel="Got it">
         {tip.body.map((t, i) => <p key={i}>{t}</p>)}
       </InfoBox>
