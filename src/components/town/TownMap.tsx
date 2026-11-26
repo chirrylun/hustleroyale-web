@@ -3,6 +3,7 @@
 import { LiveSprite } from "@/components/sprites/LiveSprite";
 import { Music } from "@/components/Music";
 import { ArmouryPanel } from "@/components/gear/ArmouryPanel";
+import { ForgePanel } from "@/components/gear/ForgePanel";
 import { BagButton } from "@/components/floor/BagButton";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -44,8 +45,8 @@ interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
 /** How the loop reaches a figure's element and its look state, by id. */
 type Rig = Map<string, { el: HTMLDivElement | null; set: (l: Look) => void }>;
 
-type Talk = "arena" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "guard";
-const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", guard: "guard" };
+type Talk = "arena" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "blacksmith" | "guard";
+const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", blacksmith: "blacksmith", guard: "guard" };
 
 function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite: string; role: Role; level: number; tag: string | null; own: boolean; rig: Rig }) {
   const [look, setLook] = useState<Look>({ walking: false, flip: false });
@@ -329,7 +330,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
 
       {tour && <LobbyTour />}
       {talk && (
-        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer" || talk === "alchemist"} onClose={close}>
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer" || talk === "blacksmith" || talk === "alchemist"} onClose={close}>
           {talk === "arena" && (
             <>
               <p>Think your fighters are tough? Test them against other guilds.</p>
@@ -373,6 +374,13 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
               <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
             </>
           )}
+          {talk === "blacksmith" && (
+            <>
+              <p className="text-steel">Bring me your gear. I can make a piece stronger with coins, and once it is level 10, forge it into the next rank.</p>
+              <ForgePanel />
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
+            </>
+          )}
           {talk === "guard" && (
             <>
               <p>The guild hall is just through here. Need to head back?</p>
@@ -389,5 +397,5 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
 }
 
 const TITLE: Record<Talk, string> = {
-  arena: "The Arena", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", guard: "Guild Guard",
+  arena: "The Arena", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
 };

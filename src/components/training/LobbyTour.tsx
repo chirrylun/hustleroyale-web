@@ -10,7 +10,7 @@ const STEPS: { title: string; body: string[] }[] = [
   { title: "The Arena", body: ["The Gladiator, to the west, runs the Arena. That is where your fighters test themselves against other guilds."] },
   { title: "The Class Changer", body: ["To the east stands the Class Changer. Recruits can take up a new class from level 20, and the Class Changer also moves fighters between classes."] },
   { title: "The Storage Keeper", body: ["Next to him, the Storage Keeper looks after your spare items. His boxes hold much more than your bag."] },
-  { title: "The Marketplace", body: ["Follow the road south to the Marketplace. The Merchant sells potions, the Alchemist brews more from monster parts, and the Armourer sells weapons, shields and armour."] },
+  { title: "The Marketplace", body: ["Follow the road south to the Marketplace. The Merchant sells potions, the Alchemist brews more from monster parts, the Armourer sells weapons, shields and armour, and the Blacksmith makes your gear stronger."] },
   { title: "Your guild", body: ["Your guild hall is north of here. Walk up the avenue to the Guild hall sign and tap it.", "That is where you take jobs, pick your party and head out to the floors. Good luck out there!"] },
 ];
 

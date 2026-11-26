@@ -243,6 +243,13 @@
      "action": "armourer"
     },
     {
+     "npc": "blacksmith",
+     "facing": "front",
+     "x": 1590,
+     "y": 790,
+     "action": "blacksmith"
+    },
+    {
      "npc": "storage_keeper",
      "facing": "front",
      "x": 1700,
