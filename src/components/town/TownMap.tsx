@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { StoragePanel } from "@/components/lobby/StoragePanel";
 import { MarketPanel } from "@/components/lobby/MarketPanel";
 import { AlchemistPanel } from "@/components/town/AlchemistPanel";
+import { LobbyTour } from "@/components/training/LobbyTour";
 import { ClassChangerPanel } from "@/components/town/ClassChangerPanel";
 import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
@@ -68,7 +69,7 @@ function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite
  * them there; tap a sign to travel; tap a person to talk). The lobby is shared: everyone in it sees each other's
  * fighters live.
  */
-export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[] }) {
+export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: GuildFighter[]; /** Show the Guild Manager's walk-through (right after training). */ tour?: boolean }) {
   const town = TOWNS[id];
   const router = useRouter();
   const nav = useMemo(() => buildNav(navLayoutOf(town)), [town]);
@@ -326,6 +327,7 @@ export function TownMap({ id, fighters }: { id: TownId; fighters: GuildFighter[]
         </div>
       </div>
 
+      {tour && <LobbyTour />}
       {talk && (
         <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer" || talk === "alchemist"} onClose={close}>
           {talk === "arena" && (

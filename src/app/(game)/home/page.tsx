@@ -34,7 +34,7 @@ async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: s
   // RLS lets a player read only their own row, so this cannot leak anyone else's data.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username, level, coins, starter_pack_opened, tutorial_step, floor_cleared, floor_unlocked")
+    .select("username, level, coins, starter_pack_opened, tutorial_step, training_step, floor_cleared, floor_unlocked")
     .eq("id", user.id)
     .single();
 
@@ -46,6 +46,8 @@ async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: s
   if (step < 6) {
     return <Tutorial username={username} initialStep={step} fighters={fighters} />;
   }
+  // After the arena fights, new players go to the training field before the guild hall.
+  if ((profile?.training_step ?? 100) < 100 && fighters.some((f) => f.team_slot > 0)) redirect("/training-ground");
   return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} enterFloor={enter} enterLobby={sp.lobby === "1"} />;
 }
 

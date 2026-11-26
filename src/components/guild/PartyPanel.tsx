@@ -3,6 +3,7 @@
 import { LiveSprite } from "@/components/sprites/LiveSprite";
 import { useEffect, useMemo, useState } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
+import { FirstTip } from "@/components/training/FirstTip";
 import type { GuildFighter } from "@/lib/guild";
 import { restedFrac } from "@/lib/rest";
 import { createClient } from "@/lib/supabase/client";
@@ -116,6 +117,11 @@ export function PartyPanel({ floorNo, fighters, onBack, onGo, title, kicker, goL
       </section>
       </div>
 
+      <FirstTip tip="party" title="Choose your party">
+        <p>Tap a fighter to add them to the party, or tap them again to take them out. You can bring up to three.</p>
+        <p>The first one is your leader. The bar under each fighter is their health: resting in the guild heals them.</p>
+        <p className="text-steel">When you are ready, press the button at the bottom to head out.</p>
+      </FirstTip>
       <div className="sticky bottom-0 flex gap-2 bg-night/90 py-1">
         <PixelButton variant="ghost" className="flex-none" onClick={onBack}>Back</PixelButton>
         <PixelButton className="flex-1 text-xl" disabled={!chosen.length || busy} onClick={go}>{busy ? "…" : goLabel ?? `Head out to Floor ${floorNo}`}</PixelButton>

@@ -19,6 +19,7 @@ CFG = {
     "alchemist": ("251900e9-image.jpg", 0, 2, "right", 0),
     "manager": ("736eb98a-image.jpg", 0, None, None, 0),
     "blacksmith": ("c0c64256-image.jpg", 0, 2, "right", 0),
+    "trainer": ("/mnt/user-data/attachments/82dfff77-ab7d-53a6-966d-45ff52140262/90542c5c-image.jpg", 0, 2, "left", 0),
 }
 BODY = 122  # a player's idle body height on a 208 px cell
 
@@ -53,7 +54,7 @@ def frames(mask, y0, y1):
 
 def build(name):
     f, fr, sr, face, skip = CFG[name]
-    im, mask = load(ATT / f)
+    im, mask = load(ATT / f)  # an absolute path replaces the folder
     rows = rows_of(mask)
     fb = frames(mask, *rows[fr])[:6]
     crop = lambda b: (lambda c: c.crop(c.getchannel("A").point(lambda v: 255 if v > 40 else 0).getbbox()))(im.crop(b))

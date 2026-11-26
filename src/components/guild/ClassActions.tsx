@@ -13,7 +13,7 @@ const ERRORS: Record<string, string> = {
   already_has_class: "This fighter already has a class.", recruit_first: "Novices become Recruits first.", class_not_available: "That class isn't available.", class_locked: "Train the first class before this one.",
 };
 
-/** Under a fighter card: pick a class at level 10, then climb the job ranks. */
+/** Under a fighter card: pick a class at level 5, then climb the job ranks. */
 export function ClassActions({ id, level, role, archetype, rarity }: { id: string; level: number; role: Role; archetype: string; rarity: Rarity }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);

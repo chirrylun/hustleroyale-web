@@ -224,7 +224,7 @@ export function SkillManager({ fighter, equipped, learned, nodes, ownedNodes, st
         <section className="flex flex-col gap-3">
           <p className="text-lg text-steel">Skills cost skill points. You earn one for every level. Learn them top to bottom: a skill unlocks after the one above it.</p>
           {nodes.length === 0 ? (
-            <p className="pixel-box bg-night p-3 text-lg text-steel">{fighter.archetype === "novice" ? "Choose a class at level 10 to unlock a skill tree." : "No skill tree for this class yet."}</p>
+            <p className="pixel-box bg-night p-3 text-lg text-steel">{fighter.archetype === "novice" ? "Become a Recruit at level 5, then reach level 10, to unlock a skill tree." : "No skill tree for this class yet."}</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-3">
               {branches.map((b) => (

@@ -5,16 +5,17 @@ import { TownMap } from "@/components/town/TownMap";
 import { loadFighters } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/server";
 
-export default function LobbyPage() {
+export default function LobbyPage({ searchParams }: { searchParams: Promise<{ tour?: string }> }) {
   return (
     <Suspense fallback={<div className="h-dvh animate-pulse bg-night" aria-busy="true" />}>
-      <Content />
+      <Content searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Content() {
+async function Content({ searchParams }: { searchParams: Promise<{ tour?: string }> }) {
   await connection();
+  const sp = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -22,5 +23,5 @@ async function Content() {
   if (!user) redirect("/login");
   const fighters = await loadFighters(supabase, user.id);
   if (!fighters.length) redirect("/home");
-  return <TownMap id="lobby" fighters={fighters} />;
+  return <TownMap id="lobby" fighters={fighters} tour={sp.tour === "1"} />;
 }
