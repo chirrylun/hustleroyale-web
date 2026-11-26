@@ -13,7 +13,7 @@ import { InfoBox } from "./InfoBox";
 
 /** The tutorial's speech box with the guild manager standing inside it. */
 function ManagerBox(props: React.ComponentProps<typeof InfoBox>) {
-  return <InfoBox portrait={<GuildManager height={120} />} {...props} />;
+  return <InfoBox portrait={<GuildManager height={150} />} {...props} />;
 }
 import { TutorialFight } from "./TutorialFight";
 

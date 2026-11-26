@@ -40,7 +40,7 @@ async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: s
 
   const fighters = await loadFighters(supabase, user.id);
   const step = profile?.tutorial_step ?? 0;
-  const username = profile?.username ?? "hustler";
+  const username = profile?.username ?? "adventurer";
 
   // New players (and existing ones, once) walk through the tutorial; after that, the guild hall.
   if (step < 6) {
