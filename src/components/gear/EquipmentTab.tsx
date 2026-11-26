@@ -13,7 +13,7 @@ import { setLook } from "@/lib/lookStore";
 const SLOTS: GearSlot[] = ["weapon", "offhand", "armor"];
 
 /** Equipment for each fighter: three slots (weapon, shield, armour set). Gear is class- and level-gated by the database; this screen explains each "no". */
-export function EquipmentTab() {
+export function EquipmentTab({ guide = false, onWorn, onDone }: { guide?: boolean; onWorn?: (worn: boolean) => void; onDone?: () => void }) {
   const [fighters, setFighters] = useState<GuildFighter[] | null>(null);
   const [bases, setBases] = useState<GearBase[]>([]);
   const [items, setItems] = useState<GearItem[]>([]);
@@ -39,9 +39,10 @@ export function EquipmentTab() {
     setBases((t.data ?? []) as GearBase[]);
     setItems((inv.data ?? []) as GearItem[]);
     setWorn((w.data ?? []) as { fighter_id: string; slot: GearSlot; item_id: string }[]);
+    onWorn?.((w.data ?? []).some((r) => r.slot === "armor"));
     setSel((cur) => cur ?? fs[0]?.id ?? null);
     return fs;
-  }, []);
+  }, [onWorn]);
   useEffect(() => { void load(); }, [load]);
 
   const baseOf = useMemo(() => new Map(bases.map((b) => [b.slug, b])), [bases]);
@@ -70,11 +71,21 @@ export function EquipmentTab() {
   // Gear another fighter is wearing is not on offer here: take it off them first.
   const choices = inSlot.filter((i) => { const w = wearerOf(i.id); return !w || w === sel; }).sort((a, b) => b.rank - a.rank || b.level - a.level);
 
+  // Walk-through for the first fighter: their tab, then Armour, then Equip, then close.
+  const firstId = fighters[0]?.id;
+  const firstWearing = worn.some((w) => w.fighter_id === firstId && w.slot === "armor");
+  const firstChoice = choices.find((i) => { const b = baseOf.get(i.base_slug); return b && fighter && !whyNot(b, i.rank, fighter) && !mine.some((m) => m.item_id === i.id); });
+  const step: "fighter" | "slot" | "equip" | "done" | null = !guide ? null : firstWearing ? "done" : sel !== firstId ? "fighter" : slot !== "armor" ? "slot" : "equip";
+  const HINT = { fighter: "Tap the blinking name to pick your first fighter.", slot: "Now tap the blinking Armour box.", equip: "Tap the blinking Equip button to wear it.", done: "Well done! Your fighter is wearing it. Close this, then tell the Trainer. You can dress the others the same way." } as const;
+  const blink = (on: boolean) => (on ? " tut-blink" : "");
+
   return (
     <div className="flex flex-col gap-2">
+      {step && <p className="bg-gold/90 px-3 py-1 text-center text-base text-ink">{HINT[step]}</p>}
+      {step === "done" && onDone && <button type="button" onClick={onDone} className="tut-blink bg-leaf px-3 py-1 text-xl uppercase text-ink">Close</button>}
       <div className="flex flex-wrap gap-1">
         {fighters.map((f) => (
-          <button key={f.id} type="button" onClick={() => setSel(f.id)} className={`px-2 py-0.5 text-lg ${sel === f.id ? "bg-gold text-ink" : "bg-panel text-paper"}`}>{f.template.name}</button>
+          <button key={f.id} type="button" onClick={() => setSel(f.id)} className={`px-2 py-0.5 text-lg ${sel === f.id ? "bg-gold text-ink" : "bg-panel text-paper"}${blink(step === "fighter" && f.id === firstId)}`}>{f.template.name}</button>
         ))}
       </div>
       {fighter && (
@@ -90,7 +101,7 @@ export function EquipmentTab() {
           const it = w ? itemOf.get(w.item_id) : null;
           const b = it ? baseOf.get(it.base_slug) : null;
           return (
-            <button key={s} type="button" onClick={() => setSlot(s)} className={`pixel-box flex flex-col items-center gap-1 p-1.5 text-center ${slot === s ? "bg-night ring-2 ring-gold" : "bg-panel"}`}>
+            <button key={s} type="button" onClick={() => setSlot(s)} className={`pixel-box flex flex-col items-center gap-1 p-1.5 text-center ${slot === s ? "bg-night ring-2 ring-gold" : "bg-panel"}${blink(step === "slot" && s === "armor")}`}>
               <span className="text-sm uppercase text-steel">{SLOT_LABEL[s]}</span>
               {it && b ? <GearIcon base={b.slug} kind={b.kind} rank={it.rank} /> : <span className="flex h-10 w-10 items-center justify-center border-2 border-dashed border-steel/50 text-steel">–</span>}
               <span className={`w-full truncate text-sm ${it ? RANK_TEXT[it.rank] : "text-steel"}`}>{it && b ? `${b.name} · R${it.rank} L${it.level}` : "Empty"}</span>
@@ -117,7 +128,7 @@ export function EquipmentTab() {
                 <div className="flex shrink-0 flex-col gap-1">
                   {here
                     ? <button type="button" disabled={busy} onClick={() => call(null, slot)} className="bg-gold px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Unequip</button>
-                    : <button type="button" disabled={busy || !!why} onClick={() => call(i.id, null)} className="bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Equip</button>}
+                    : <button type="button" disabled={busy || !!why} onClick={() => call(i.id, null)} className={`bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40${blink(step === "equip" && i.id === firstChoice?.id)}`}>Equip</button>}
                   <button type="button" onClick={() => setView({ base: b, rank: i.rank, level: i.level })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">View</button>
                 </div>
               </div>

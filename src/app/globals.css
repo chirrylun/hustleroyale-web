@@ -554,3 +554,8 @@ canvas,
 @keyframes npc-pct { from { background-position-x: 0%; } to { background-position-x: 100%; } }
 .npc-pct { animation: npc-pct 2.6s steps(6, jump-none) infinite; background-repeat: no-repeat; }
 @media (prefers-reduced-motion: reduce) { .npc-pct { animation: none; } }
+
+/* Tutorial: the button to press next. */
+@keyframes tut-blink { 0%, 100% { outline-color: #ffc83c; box-shadow: 0 0 0 0 rgba(255,200,60,0.9); } 50% { outline-color: transparent; box-shadow: 0 0 14px 4px rgba(255,200,60,0.9); } }
+.tut-blink { outline: 3px solid #ffc83c; outline-offset: 2px; animation: tut-blink 0.9s steps(2, jump-none) infinite; position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .tut-blink { animation: none; } }

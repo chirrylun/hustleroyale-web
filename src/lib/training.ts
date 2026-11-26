@@ -7,16 +7,18 @@ export const NPC_TAG: Record<TrainingNpc, string> = { manager: "Guild Manager", 
 export const NPC_SHEET = { manager: "manager", trainer: "trainer", changer: "class_changer" } as const;
 
 /** Who the player should speak to next, by step. */
-export const nextTalk = (step: number, p?: { recruits: number; total: number }): TrainingNpc | null => {
-  if (step === 0 || step === 6) return "manager";
+export const nextTalk = (step: number, p?: { recruits: number; total: number; armored: boolean }): TrainingNpc | null => {
+  if (step === 0 || step === 7) return "manager";
+  // The armour quest is done in the Fighters menu; once it is worn, report back to the Trainer.
+  if (step === 6 && p && !p.armored) return null;
   // The class quest is done at the Class Changer; once every fighter is a Recruit, report back to the Trainer.
   if (step === 5 && p && !(p.total > 0 && p.recruits >= p.total)) return "changer";
-  if (step >= 1 && step <= 5) return "trainer";
+  if (step >= 1 && step <= 6) return "trainer";
   return null;
 };
 
 /** The one-line goal shown along the top of the screen. */
-export function objective(step: number, p: { kills: number; ready: number; total: number; potion: boolean; recruits: number }): string {
+export function objective(step: number, p: { kills: number; ready: number; total: number; potion: boolean; recruits: number; armored: boolean }): string {
   switch (step) {
     case 0: return "Speak to the Guild Manager.";
     case 1: return "Speak to the Trainer.";
@@ -24,7 +26,8 @@ export function objective(step: number, p: { kills: number; ready: number; total
     case 3: return p.ready >= p.total ? "Quest done: report back to the Trainer." : `Quest 2: get every fighter to level 5 (${p.ready}/${p.total}).`;
     case 4: return p.potion ? "Quest done: report back to the Trainer." : "Quest 3: put a potion in a shortcut slot.";
     case 5: return p.recruits >= p.total ? "Quest done: report back to the Trainer." : `Quest 4: become Recruits at the Class Changer (${p.recruits}/${p.total}).`;
-    case 6: return "Training complete! Speak to the Guild Manager.";
+    case 6: return p.armored ? "Quest done: report back to the Trainer." : "Quest 5: wear your armour. Open Fighters, then Equipment.";
+    case 7: return "Training complete! Speak to the Guild Manager.";
     default: return "";
   }
 }

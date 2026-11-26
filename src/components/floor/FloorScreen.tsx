@@ -270,6 +270,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const stanceRef = useRef<Stance>("neutral");
   const [bagOpen, setBagOpen] = useState(false);
   const [fightersOpen, setFightersOpen] = useState(false);
+  const [armored, setArmored] = useState(false); // training: some fighter is wearing armour
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
   const [stock, setStock] = useState<Record<string, number>>({});
   const [picking, setPicking] = useState<number | null>(null);
@@ -1290,9 +1291,16 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
 
   const A = floor.theme.atlas;
   const trainOn = isTraining(floor.n) && tStep < TRAINING_DONE;
+  // Training: is anyone wearing armour yet? (Also reported live by the Fighters menu.)
+  useEffect(() => {
+    if (!isTraining(floor.n) || tStep !== 6) return;
+    let live = true;
+    void createClient().from("fighter_gear").select("fighter_id", { count: "exact", head: true }).eq("slot", "armor").then(({ count }) => { if (live && (count ?? 0) > 0) setArmored(true); });
+    return () => { live = false; };
+  }, [floor.n, tStep]);
   const lowest = allies.current.length ? Math.min(...allies.current.map((a) => a.level)) : 1;
   const recruits = squad.filter((f) => isRecruit(f.template.archetype)).length;
-  const goal = trainOn ? objective(tStep, { kills: tKills, ready: allies.current.filter((a) => a.level >= 5).length, total: squad.length, potion: slots.some(Boolean), recruits }) : "";
+  const goal = trainOn ? objective(tStep, { kills: tKills, ready: allies.current.filter((a) => a.level >= 5).length, total: squad.length, potion: slots.some(Boolean), recruits, armored }) : "";
   const quest = tutorialStep === 8 && floor.n === 1;
   // Floors 1 to 3 open one by one as you clear them; from Floor 3 on, the job-board quests open the next floor.
   const nextOpen = floor.n < MAX_FLOOR && (floor.n < 3 ? !isBossFloor(floor.n) : floor.n + 1 <= floorUnlocked);
@@ -1358,7 +1366,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           {isTraining(floor.n) && floor.npcs.map((n) => {
             const sheet = NPC_SHEET[n.id];
             const h = npcFrameH(sheet, FRAME * BODY_OF_FRAME), w = h * npcRatio(sheet);
-            const next = trainOn && nextTalk(tStep, { recruits, total: squad.length }) === n.id;
+            const next = trainOn && nextTalk(tStep, { recruits, total: squad.length, armored }) === n.id;
             return (
               <div key={n.id} className="pointer-events-none absolute" style={{ left: (n.x - w / 2) * T, top: (n.y - h * 0.97) * T, width: w * T, zIndex: depth(n.y) }}>
                 <Npc name={sheet} still className="w-full" />
@@ -1395,7 +1403,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/ui/bag.png" alt="" className="h-8 w-8" draggable={false} />
               </button>
-              <FightersButton onClick={() => setFightersOpen(true)} />
+              <FightersButton onClick={() => setFightersOpen(true)} blink={trainOn && tStep === 6 && !armored && !fightersOpen} />
             </div>
           </div>
         )}
@@ -1403,13 +1411,13 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         {trainOn && state === "play" && <TrainingGuide step={tStep} paused={!!talkNpc || bagOpen || fightersOpen} />}
         {talkNpc && (
           <TrainingTalk
-            npc={talkNpc} step={tStep} kills={tKills} lowest={lowest} total={squad.length} potionSet={slots.some(Boolean)} ready={allies.current.filter((a) => a.level >= 5).length} recruits={recruits}
-            onStep={(r: Reward) => { setTStep(r.step); if (r.armor.length > 0) reloadOnClose.current = true; if (r.xp > 0) void syncXp(); }}
+            npc={talkNpc} step={tStep} kills={tKills} lowest={lowest} total={squad.length} potionSet={slots.some(Boolean)} ready={allies.current.filter((a) => a.level >= 5).length} recruits={recruits} armored={armored}
+            onStep={(r: Reward) => { setTStep(r.step); if (r.xp > 0) void syncXp(); }}
             onClassChanged={() => { reloadOnClose.current = true; }}
             onClose={() => { setTalkNpc(null); if (reloadOnClose.current) window.location.reload(); }}
           />
         )}
-        {fightersOpen && <FightersMenu onClose={() => setFightersOpen(false)} />}
+        {fightersOpen && <FightersMenu onClose={() => setFightersOpen(false)} guide={trainOn && tStep === 6} onWorn={setArmored} />}
         {bagOpen && <BagMenu onUse={drinkSlug} onClose={() => { setBagOpen(false); loadStock(); }} />}
 
         {state === "play" && (

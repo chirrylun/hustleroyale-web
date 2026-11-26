@@ -15,8 +15,8 @@ import { NPC_TAG, TRAINING_DONE, type TrainingNpc } from "@/lib/training";
 export interface Reward { step: number; coins: number; xp: number; items: { slug: string; qty: number }[]; armor: unknown[] }
 
 /** What a person in the training field says. The database decides whether a step is really done (training_advance); this only words it. */
-export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits, potionSet, onStep, onClassChanged, onClose }: {
-  npc: TrainingNpc; step: number; kills: number; lowest: number; total: number; ready: number; recruits: number; potionSet: boolean;
+export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits, potionSet, armored, onStep, onClassChanged, onClose }: {
+  npc: TrainingNpc; step: number; kills: number; lowest: number; total: number; ready: number; recruits: number; potionSet: boolean; armored: boolean;
   onStep: (r: Reward) => void; onClassChanged: () => void; onClose: () => void;
 }) {
   const router = useRouter();
@@ -55,8 +55,8 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
           <p>Welcome to the training field! Speak to the <span className="text-gold">Trainer</span>, the soldier with the spear. He will set you a few quests.</p>
           <SpeechActions><PixelButton disabled={busy} onClick={() => advance()}>Understood</PixelButton></SpeechActions>
         </>)}
-        {cur >= 1 && cur <= 5 && (<><p>Finish the Trainer&apos;s quests, then come back to me.</p>{done}</>)}
-        {cur === 6 && (<>
+        {cur >= 1 && cur <= 6 && (<><p>Finish the Trainer&apos;s quests, then come back to me.</p>{done}</>)}
+        {cur === 7 && (<>
           <p>Excellent work! Come, I will show you around the Main Lobby.</p>
           <SpeechActions><PixelButton disabled={busy} onClick={() => advance()}>Take me to the lobby</PixelButton><PixelButton variant="ghost" onClick={close}>Not yet</PixelButton></SpeechActions>
         </>)}
@@ -72,13 +72,14 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
     { n: 3, title: "Grow Stronger", blurb: "Keep fighting slimes. Open the Fighters button on the left to see each level.", goal: "Every fighter at level 5", have: Math.min(total, ready), need: total, reward: "🪙 250 · 106 XP · 20 potions", ok: lowest >= 5 },
     { n: 4, title: "Quick Hands", blurb: "Open the Bag on the left, pick a potion, then tap an empty slot at the bottom of the screen.", goal: "Put a potion in a shortcut slot", have: potionSet ? 1 : 0, need: 1, reward: "Drink it in one tap", ok: potionSet },
     { n: 5, title: "Choose a Calling", blurb: "Tap the Rookie Class Changer. At level 5 each Novice can become a Recruit of their role, for free.", goal: "Every fighter a Recruit", have: Math.min(total, recruits), need: total, reward: "Recruit armour for everyone", ok: recruits >= total && total > 0 },
+    { n: 6, title: "Suit Up", blurb: "Open Fighters on the left, then Equipment. Put the armour on your first fighter; the blinking buttons will guide you. You can dress the others after.", goal: "Wear your armour", have: armored ? 1 : 0, need: 1, reward: "Armour on your back", ok: armored },
   ];
   const claim = (q: (typeof QUESTS)[number]) => advance(q.n === 4);
 
   return (
     <Speech npc="trainer" title={NPC_TAG.trainer} onClose={close} wide still>
       {cur === 0 && (<><p>Hold on there. The Guild Manager wants a word with you first.</p>{done}</>)}
-      {cur >= 1 && cur <= 5 && (<>
+      {cur >= 1 && cur <= 6 && (<>
         <p className="text-base text-steel">Quest board. Take a quest, finish it, then claim your reward.</p>
         <div className="max-h-[46dvh] space-y-2 overflow-y-auto pr-1 short:max-h-[52dvh]">
           {QUESTS.map((q) => {
@@ -105,7 +106,7 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
         {note && <p role="alert" className="text-lg text-ember">{note}</p>}
         <SpeechActions><PixelButton variant="ghost" onClick={close}>Close</PixelButton></SpeechActions>
       </>)}
-      {cur === 6 && (<>{claimed && <p role="status" className="text-xl text-gold">{claimed}</p>}<p>That is everything I can teach you. Go back to the <span className="text-gold">Guild Manager</span>, he will take you on.</p>{done}</>)}
+      {cur === 7 && (<>{claimed && <p role="status" className="text-xl text-gold">{claimed}</p>}<p>That is everything I can teach you. Go back to the <span className="text-gold">Guild Manager</span>, he will take you on.</p>{done}</>)}
     </Speech>
   );
 }

@@ -12,7 +12,7 @@ import { EquipmentTab } from "@/components/gear/EquipmentTab";
 type Tab = "fighters" | "equipment";
 
 /** Your fighters from anywhere: the same cards as My Fighters in the guild, and a tab to equip them. */
-export function FightersMenu({ onClose }: { onClose: () => void }) {
+export function FightersMenu({ onClose, guide = false, onWorn }: { onClose: () => void; guide?: boolean; onWorn?: (worn: boolean) => void }) {
   const [list, setList] = useState<GuildFighter[] | null>(null);
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<Tab>("fighters");
@@ -42,11 +42,12 @@ export function FightersMenu({ onClose }: { onClose: () => void }) {
           <button type="button" role="tab" aria-selected={tab === "fighters"} onClick={() => setTab("fighters")} className={`flex flex-1 items-center justify-center gap-2 px-2 py-1 text-xl uppercase ${tab === "fighters" ? "bg-gold text-ink" : "bg-panel text-paper"}`}>
             My Fighters{list && <span className="min-w-6 bg-ink/20 px-1 text-base">{list.length}/{ROSTER_CAP}</span>}
           </button>
-          <button type="button" role="tab" aria-selected={tab === "equipment"} onClick={() => setTab("equipment")} className={`flex flex-1 items-center justify-center px-2 py-1 text-xl uppercase ${tab === "equipment" ? "bg-gold text-ink" : "bg-panel text-paper"}`}>Equipment</button>
+          <button type="button" role="tab" aria-selected={tab === "equipment"} onClick={() => setTab("equipment")} className={`flex flex-1 items-center justify-center px-2 py-1 text-xl uppercase ${tab === "equipment" ? "bg-gold text-ink" : "bg-panel text-paper"} ${guide && tab !== "equipment" ? "tut-blink" : ""}`}>Equipment</button>
           <button type="button" aria-label="Close" onClick={onClose} className="w-10 bg-panel text-2xl text-paper">✕</button>
         </div>
+        {guide && tab !== "equipment" && <p className="bg-gold/90 px-3 py-1 text-center text-base text-ink">Tap the blinking Equipment tab.</p>}
         <div className="min-h-48 overflow-y-auto p-3 short:min-h-24 short:p-2">
-          {tab === "equipment" ? <EquipmentTab />
+          {tab === "equipment" ? <EquipmentTab guide={guide} onWorn={onWorn} onDone={onClose} />
             : error ? <p role="alert" className="text-xl text-ember">Couldn&apos;t load your fighters. Try again.</p>
             : list === null ? <div className="h-40 animate-pulse bg-panel" aria-busy="true" />
             : list.length === 0 ? <p className="text-xl text-paper">No fighters yet.</p>
@@ -68,12 +69,12 @@ export function FightersMenu({ onClose }: { onClose: () => void }) {
 }
 
 /** The roster icon button; sits with the bag button. */
-export function FightersButton({ onClick }: { onClick: () => void }) {
+export function FightersButton({ onClick, blink = false }: { onClick: () => void; blink?: boolean }) {
   return (
     <button
       type="button" aria-label="My Fighters" onClick={onClick}
       onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
-      className="pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90 text-2xl leading-none"
+      className={`pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90 text-2xl leading-none ${blink ? "tut-blink" : ""}`}
     >
       <UiIcon name="crown" size={30} />
     </button>

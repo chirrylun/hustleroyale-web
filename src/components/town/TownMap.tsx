@@ -315,11 +315,10 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
           {town.npcs.map((n, k) => {
             const h = npcH(n.npc), w = h * npcRatio(n.npc as NpcName);
             return (
-              <Npc
-                key={k} name={n.npc as NpcName} facing={n.facing}
-                className="pointer-events-none absolute"
-                style={{ left: (n.x - w / 2) * SCALE, top: (n.y - h * NPC_FEET) * SCALE, width: w * SCALE, zIndex: zOf(n.y / UNIT) }}
-              />
+              <div key={k} className="pointer-events-none absolute" style={{ left: (n.x - w / 2) * SCALE, top: (n.y - h * NPC_FEET) * SCALE, width: w * SCALE, zIndex: zOf(n.y / UNIT) }}>
+                <Npc name={n.npc as NpcName} facing={n.facing} className="w-full" />
+                <span className="absolute left-1/2 top-[-4px] -translate-x-1/2 -translate-y-full whitespace-nowrap bg-ink/80 px-1 text-sm text-paper">{TAG[n.action as Talk] ?? ""}</span>
+              </div>
             );
           })}
           <div ref={marker} className="marker pointer-events-none absolute z-[5] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold opacity-0" />
@@ -392,6 +391,10 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
   );
 }
 
+/** The name floating over each person, so everyone is clear who they are. */
+const TAG: Record<Talk, string> = {
+  arena: "Arena Master", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage Keeper", merchant: "Item Seller", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
+};
 const TITLE: Record<Talk, string> = {
   arena: "The Arena", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
 };
