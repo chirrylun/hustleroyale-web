@@ -4,14 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { Speech, SpeechActions } from "@/components/room/Speech";
-import { ARCHETYPE_LABEL, RECRUITS, RANK_LEVEL, isRecruit } from "@/lib/guild";
+import { LiveSprite } from "@/components/sprites/LiveSprite";
+import { Tag } from "@/components/ui/Tag";
+import { ARCHETYPE_LABEL, RECRUITS, RANK_LEVEL, isRecruit, loadFighters, type GuildFighter } from "@/lib/guild";
+import { setLook } from "@/lib/lookStore";
 import { itemName } from "@/lib/items";
 import { createClient } from "@/lib/supabase/client";
 import { NPC_TAG, TRAINING_DONE, type TrainingNpc } from "@/lib/training";
-import type { Role } from "@/lib/starter-pack";
 
 export interface Reward { step: number; coins: number; xp: number; items: { slug: string; qty: number }[]; armor: unknown[] }
-interface Mate { id: string; name: string; level: number; archetype: string; role: Role }
 
 /** What a person in the training field says. The database decides whether a step is really done (training_advance); this only words it. */
 export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits, potionSet, onStep, onClassChanged, onClose }: {
@@ -45,7 +46,7 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
   const close = () => onClose();
   const done = <SpeechActions><PixelButton onClick={close}>Got it</PixelButton></SpeechActions>;
 
-  if (npc === "changer") return <Speech npc="class_changer" title={NPC_TAG.changer} onClose={close} still><ChangerBody step={step} onClassChanged={onClassChanged} onClose={close} /></Speech>;
+  if (npc === "changer") return <Speech npc="class_changer" title={NPC_TAG.changer} onClose={close} shop><ChangerBody step={step} onClassChanged={onClassChanged} onClose={close} /></Speech>;
 
   if (npc === "manager") {
     return (
@@ -70,7 +71,7 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
     { n: 2, title: "First Blood", blurb: "Tap a slime and your party attacks it. Slimes only fight back if you hit them.", goal: "Defeat a slime", have: Math.min(1, kills), need: 1, reward: "🪙 100 · 53 XP", ok: kills >= 1 },
     { n: 3, title: "Grow Stronger", blurb: "Keep fighting slimes. Open the Fighters button on the left to see each level.", goal: "Every fighter at level 5", have: Math.min(total, ready), need: total, reward: "🪙 250 · 106 XP · 20 potions", ok: lowest >= 5 },
     { n: 4, title: "Quick Hands", blurb: "Open the Bag on the left, pick a potion, then tap an empty slot at the bottom of the screen.", goal: "Put a potion in a shortcut slot", have: potionSet ? 1 : 0, need: 1, reward: "Drink it in one tap", ok: potionSet },
-    { n: 5, title: "Choose a Calling", blurb: "Tap the Class Changer. At level 5 each Novice can become a Recruit of their role, for free.", goal: "Every fighter a Recruit", have: Math.min(total, recruits), need: total, reward: "Recruit armour for everyone", ok: recruits >= total && total > 0 },
+    { n: 5, title: "Choose a Calling", blurb: "Tap the Rookie Class Changer. At level 5 each Novice can become a Recruit of their role, for free.", goal: "Every fighter a Recruit", have: Math.min(total, recruits), need: total, reward: "Recruit armour for everyone", ok: recruits >= total && total > 0 },
   ];
   const claim = (q: (typeof QUESTS)[number]) => advance(q.n === 4);
 
@@ -109,48 +110,63 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
   );
 }
 
-/** A Novice becomes the Recruit of its role at level 5 (free). Further classes come at level 20 from the Class Changer in the lobby. */
-function ChangerBody({ step, onClassChanged, onClose }: { step: number; onClassChanged: () => void; onClose: () => void }) {
-  const [mates, setMates] = useState<Mate[] | null>(null);
-  const [busy, setBusy] = useState(false);
+/**
+ * The Rookie Class Changer: a Novice becomes the Recruit of its role at level 5, free. Recruit is the only class on offer here; the rest
+ * come at level 20 from the Class Changer in the lobby. Each fighter is a card with its level and class as tags and one class to take.
+ */
+function ChangerBody({ onClassChanged }: { step: number; onClassChanged: () => void; onClose: () => void }) {
+  const [mates, setMates] = useState<GuildFighter[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
   const load = useCallback(async () => {
-    const { data, error } = await createClient().from("fighters").select("id, level, nickname, team_slot, template:fighter_templates(name, role, archetype)").gt("team_slot", 0).order("team_slot");
-    if (error) { setNote({ text: "Couldn't open the register. Try again.", bad: true }); return; }
-    type Row = { id: string; level: number; nickname: string | null; template: { name: string; role: Role; archetype: string } | { name: string; role: Role; archetype: string }[] | null };
-    setMates(((data ?? []) as unknown as Row[]).flatMap((r) => { const t = Array.isArray(r.template) ? r.template[0] : r.template; return t ? [{ id: r.id, name: r.nickname ?? t.name, level: r.level, archetype: t.archetype, role: t.role }] : []; }));
+    const sb = createClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) { setNote({ text: "Please sign in again.", bad: true }); return; }
+    const all = (await loadFighters(sb, user.id)).filter((f) => f.team_slot > 0);
+    for (const f of all) setLook(f.id, f.template.sprite_key);
+    setMates(all);
   }, []);
   useEffect(() => { const t = setTimeout(() => void load(), 0); return () => clearTimeout(t); }, [load]);
 
-  const become = async (m: Mate) => {
+  const become = async (m: GuildFighter) => {
     if (busy) return;
-    setBusy(true); setNote(null);
-    const { error } = await createClient().rpc("choose_class", { p_fighter: m.id, p_archetype: RECRUITS[m.role].id });
-    if (error) setNote({ text: error.message.includes("level_too_low") ? `Reach level ${RANK_LEVEL.common} first.` : "That didn't work. Try again.", bad: true });
-    else { setNote({ text: `${m.name} is now a ${ARCHETYPE_LABEL[RECRUITS[m.role].id]}.`, bad: false }); onClassChanged(); }
+    setBusy(m.id); setNote(null);
+    const { error } = await createClient().rpc("choose_class", { p_fighter: m.id, p_archetype: RECRUITS[m.template.role].id });
+    if (error) setNote({ text: error.message.includes("level_too_low") ? `Level ${RANK_LEVEL.common} first.` : "That didn't work. Try again.", bad: true });
+    else { setNote({ text: `${m.template.name} is now a ${ARCHETYPE_LABEL[RECRUITS[m.template.role].id]}.`, bad: false }); onClassChanged(); }
     await load();
-    setBusy(false);
+    setBusy(null);
   };
 
   return (
     <>
-      <p>Every fighter starts as a Novice. At <span className="text-gold">level {RANK_LEVEL.common}</span> a Novice can become a Recruit of their role. Later classes build on that one.</p>
-      {step < 5 && <p className="text-steel">The Trainer will tell you when it is time, but you are welcome to look around.</p>}
       {note && <p role="alert" className={`text-lg ${note.bad ? "text-ember" : "text-leaf"}`}>{note.text}</p>}
-      <div className="space-y-1.5">
-        {mates === null ? <div className="h-16 animate-pulse bg-panel" aria-busy="true" /> : mates.map((m) => (
-          <div key={m.id} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
-            <div className="min-w-0 flex-1 leading-tight">
-              <p className="truncate text-xl text-paper">{m.name}</p>
-              <p className="truncate text-base text-steel">Lv {m.level} · {ARCHETYPE_LABEL[m.archetype] ?? m.archetype}</p>
-            </div>
-            {m.archetype === "novice"
-              ? <PixelButton disabled={busy || m.level < RANK_LEVEL.common} onClick={() => become(m)} className="shrink-0 text-lg">{m.level < RANK_LEVEL.common ? `Level ${RANK_LEVEL.common}` : `Become ${ARCHETYPE_LABEL[RECRUITS[m.role].id].replace("Recruit ", "")}`}</PixelButton>
-              : <span className="shrink-0 text-lg text-leaf">{isRecruit(m.archetype) ? "Recruit ✓" : "✓"}</span>}
-          </div>
-        ))}
-      </div>
-      <SpeechActions><PixelButton variant="ghost" onClick={onClose}>Done</PixelButton></SpeechActions>
+      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+        {mates === null ? <li className="h-24 animate-pulse bg-panel" aria-busy="true" /> : mates.length === 0 ? <li className="text-lg text-steel">Put a fighter in your team first.</li> : mates.map((m) => {
+          const novice = m.template.archetype === "novice";
+          const recruitId = RECRUITS[m.template.role].id;
+          const met = m.level >= RANK_LEVEL.common;
+          return (
+            <li key={m.id} className="pixel-box bg-panel p-2">
+              <div className="flex items-center gap-2">
+                <div className="pointer-events-none -mb-1 -mt-1 h-14 w-14 shrink-0"><LiveSprite id={m.id} spriteKey={m.template.sprite_key} role={m.template.role} still /></div>
+                <div className="min-w-0 flex-1 leading-tight">
+                  <p className="truncate text-xl text-paper">{m.template.name}</p>
+                  <div className="mt-0.5 flex flex-wrap gap-1"><Tag tone="dim">Lv {m.level}</Tag><Tag tone="dim">{ARCHETYPE_LABEL[m.template.archetype] ?? m.template.archetype}</Tag></div>
+                </div>
+              </div>
+              {/* The one class on offer here */}
+              {novice
+                ? <button type="button" disabled={!met || busy !== null} onClick={() => become(m)} className="pixel-btn mt-2 flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1 bg-gold px-2 py-2 text-left text-ink disabled:opacity-60">
+                    <span className="text-xl uppercase">{ARCHETYPE_LABEL[recruitId]}</span>
+                    <span className="flex gap-1"><Tag tone={met ? "ok" : "bad"}>Lv {RANK_LEVEL.common}</Tag><Tag tone="dim">Free</Tag></span>
+                  </button>
+                : <div className="mt-2 flex items-center justify-between gap-2 bg-night px-2 py-2"><span className="text-xl uppercase text-paper">{ARCHETYPE_LABEL[isRecruit(m.template.archetype) ? m.template.archetype : recruitId]}</span><Tag tone="gold">{isRecruit(m.template.archetype) ? "Current" : "Done"}</Tag></div>}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex shrink-0 items-center gap-2"><Tag tone="dim">More classes</Tag><Tag tone="bad">Lv {RANK_LEVEL.uncommon}</Tag><Tag tone="dim">Lobby</Tag></div>
     </>
   );
 }

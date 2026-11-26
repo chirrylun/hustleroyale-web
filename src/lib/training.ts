@@ -2,7 +2,7 @@
 export const TRAINING_DONE = 100;
 export type TrainingNpc = "manager" | "trainer" | "changer";
 
-export const NPC_TAG: Record<TrainingNpc, string> = { manager: "Guild Manager", trainer: "Trainer", changer: "Class Changer" };
+export const NPC_TAG: Record<TrainingNpc, string> = { manager: "Guild Manager", trainer: "Trainer", changer: "Rookie Class Changer" };
 /** The sprite sheet each person uses (public/npc). */
 export const NPC_SHEET = { manager: "manager", trainer: "trainer", changer: "class_changer" } as const;
 

@@ -330,7 +330,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
 
       {tour && <LobbyTour />}
       {talk && (
-        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer" || talk === "blacksmith" || talk === "alchemist"} onClose={close}>
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer" || talk === "blacksmith" || talk === "alchemist" || talk === "classes"} onClose={close}>
           {talk === "arena" && (
             <>
               <p>Think your fighters are tough? Test them against other guilds.</p>
@@ -341,11 +341,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
             </>
           )}
           {talk === "classes" && (
-            <>
-              <p className="text-steel">I help fighters take up a new calling. Second-tier classes need their first class.</p>
-              <ClassChangerPanel />
-              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
-            </>
+            <ClassChangerPanel />
           )}
           {talk === "alchemist" && (
             <>
