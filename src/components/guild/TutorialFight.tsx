@@ -31,7 +31,7 @@ const COPY = {
     read: [
       "Your team fights on its own. Pick how they act below: Attack makes them more bold and charge in, Defend makes them hold back and heal early.",
     ],
-    win: ["Well fought!", "Your team is ready. Let's head to your guild."],
+    win: ["Well fought!", "Your team is ready. Let's go to the training field."],
   },
 } as const;
 
