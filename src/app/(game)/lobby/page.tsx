@@ -20,7 +20,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ tour?: string
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
   const fighters = await loadFighters(supabase, user.id);
   if (!fighters.length) redirect("/home");
   return <TownMap id="lobby" fighters={fighters} tour={sp.tour === "1"} />;

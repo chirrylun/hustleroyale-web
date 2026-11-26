@@ -57,7 +57,7 @@ export function TutorialFight({ stage, step, total, onWin, onBack }: { stage: 1 
         />
         {phase === "ready" && (
           <div className="mx-auto w-full max-w-xl">
-            <InfoBox portrait={<GuildManager height={110} />} step={step} total={total} title={c.ready} onBack={reset} onNext={beginTutorial} nextLabel="Start fight!">
+            <InfoBox portrait={<GuildManager height={130} />} step={step} total={total} title={c.ready} onBack={reset} onNext={beginTutorial} nextLabel="Start fight!">
               {c.read.map((t) => <p key={t}>{t}</p>)}
               {error && <p role="alert" className="text-base text-ember">{error}</p>}
             </InfoBox>
@@ -74,7 +74,7 @@ export function TutorialFight({ stage, step, total, onWin, onBack }: { stage: 1 
         )}
         {phase === "ended" && (
           <InfoBox
-            portrait={<GuildManager height={110} />}
+            portrait={<GuildManager height={130} />}
             step={step}
             total={total}
             title={won ? c.win[0] : "Not this time"}
@@ -89,7 +89,7 @@ export function TutorialFight({ stage, step, total, onWin, onBack }: { stage: 1 
   }
 
   return (
-    <InfoBox portrait={<GuildManager height={110} />} step={step} total={total} title={c.title} onBack={onBack} onNext={() => startTutorial(stage)} nextLabel={phase === "starting" ? "Loading..." : "To the arena"} busy={phase === "starting"}>
+    <InfoBox portrait={<GuildManager height={130} />} step={step} total={total} title={c.title} onBack={onBack} onNext={() => startTutorial(stage)} nextLabel={phase === "starting" ? "Loading..." : "To the arena"} busy={phase === "starting"}>
       {c.intro.map((t) => <p key={t}>{t}</p>)}
       {error && <p role="alert" className="text-base text-ember">{error}</p>}
     </InfoBox>

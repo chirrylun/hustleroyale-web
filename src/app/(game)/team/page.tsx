@@ -25,7 +25,7 @@ async function Fighters() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
 
   const fighters = await loadFighters(supabase, user.id);
 

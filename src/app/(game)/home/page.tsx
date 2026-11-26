@@ -29,7 +29,7 @@ async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: s
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
 
   // RLS lets a player read only their own row, so this cannot leak anyone else's data.
   const { data: profile } = await supabase
@@ -40,7 +40,7 @@ async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: s
 
   const fighters = await loadFighters(supabase, user.id);
   const step = profile?.tutorial_step ?? 0;
-  const username = profile?.username ?? "hustler";
+  const username = profile?.username ?? "adventurer";
 
   // New players (and existing ones, once) walk through the tutorial; after that, the guild hall.
   if (step < 6) {

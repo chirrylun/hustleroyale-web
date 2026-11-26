@@ -30,7 +30,7 @@ export async function updateSession(request: NextRequest) {
   const needsAuth = PROTECTED.some((p) => path === p || path.startsWith(`${p}/`));
   if (!user && needsAuth) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
   return response;

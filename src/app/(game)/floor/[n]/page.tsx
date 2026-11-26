@@ -23,7 +23,7 @@ async function Content({ params, searchParams }: { params: Promise<{ n: string }
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
   const { data: profile } = await supabase.from("profiles").select("floor_unlocked, tutorial_step").eq("id", user.id).single();
   // Floors unlock one at a time.
   if (n > (profile?.floor_unlocked ?? 1)) redirect("/home");
