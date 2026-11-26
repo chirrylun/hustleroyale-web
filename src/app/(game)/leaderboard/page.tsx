@@ -38,7 +38,7 @@ async function Board() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
 
   // Ranking is computed in the database (security-definer function), so players can see each other's
   // score without being able to read anyone else's full profile row.

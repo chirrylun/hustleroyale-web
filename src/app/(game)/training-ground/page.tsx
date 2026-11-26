@@ -21,7 +21,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ room?: string
   const sp = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
   const { data: profile } = await supabase.from("profiles").select("tutorial_step, training_step, training_kills, floor_unlocked").eq("id", user.id).single();
   if ((profile?.tutorial_step ?? 0) < 6 || (profile?.training_step ?? TRAINING_DONE) >= TRAINING_DONE) redirect("/home");
   const fighters = await loadFighters(supabase, user.id);

@@ -21,7 +21,7 @@ async function Content({ id }: { id: TownId }) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
   const fighters = await loadFighters(supabase, user.id);
   if (!fighters.length) redirect("/home");
   return <TownMap id={id} fighters={fighters} />;

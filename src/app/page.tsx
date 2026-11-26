@@ -1,6 +1,7 @@
 import { LiveBackdrop } from "@/components/home/LiveBackdrop";
 import { Music } from "@/components/Music";
 import Link from "next/link";
+import { StartButton } from "@/components/home/StartButton";
 import { PixelPanel } from "@/components/pixel/PixelPanel";
 
 export default function Landing() {
@@ -14,13 +15,9 @@ export default function Landing() {
         Embark on a 2D adventure, build a crew of adventurers and build your legacy as the best team on the server.
       </p>
       <PixelPanel className="w-full max-w-sm">
-        <Link
-          href="/login"
-          className="pixel-btn block bg-leaf px-4 py-3 text-xl uppercase text-ink"
-        >
-          Press start
-        </Link>
+        <StartButton />
       </PixelPanel>
+      <Link href="/login" className="text-lg text-steel underline">Already have an account? Sign in</Link>
     </main>
     </>
   );

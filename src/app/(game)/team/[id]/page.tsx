@@ -25,7 +25,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
 
   const { data: f } = await supabase
     .from("fighters")

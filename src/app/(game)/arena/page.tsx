@@ -42,7 +42,7 @@ async function ArenaContent() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
 
   const [{ data: profile }, { data: rows }, { data: ledger }] = await Promise.all([
     supabase.from("profiles").select("coins, starter_pack_opened").eq("id", user.id).single(),
