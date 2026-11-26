@@ -66,7 +66,9 @@ export function EquipmentTab() {
 
   const bonus = mine.reduce((a, w) => { const i = itemOf.get(w.item_id); if (i) { a.atk += i.atk; a.def += i.def; a.magic += i.magic; a.hp += i.hp; a.spd += i.spd; } return a; }, { atk: 0, def: 0, magic: 0, hp: 0, spd: 0 });
   const bonusText = statLine(bonus);
-  const choices = items.filter((i) => baseOf.get(i.base_slug)?.slot === slot).sort((a, b) => b.rank - a.rank || b.level - a.level);
+  const inSlot = items.filter((i) => baseOf.get(i.base_slug)?.slot === slot);
+  // Gear another fighter is wearing is not on offer here: take it off them first.
+  const choices = inSlot.filter((i) => { const w = wearerOf(i.id); return !w || w === sel; }).sort((a, b) => b.rank - a.rank || b.level - a.level);
 
   return (
     <div className="flex flex-col gap-2">
@@ -96,18 +98,13 @@ export function EquipmentTab() {
           );
         })}
       </div>
-      {mine.find((m) => m.slot === slot) && (
-        <button type="button" disabled={busy} onClick={() => call(null, slot)} className="self-start bg-night px-2 py-0.5 text-base uppercase text-gold disabled:opacity-40">Take off {SLOT_LABEL[slot].toLowerCase()}</button>
-      )}
       <div className="max-h-[34dvh] space-y-1.5 overflow-y-auto pr-1 short:max-h-[26dvh]">
-        {choices.length === 0 ? <p className="text-lg text-paper">You don&apos;t own any {SLOT_LABEL[slot].toLowerCase()} gear. The armourer in the market sells it.</p>
+        {choices.length === 0 ? <p className="text-lg text-paper">{inSlot.length > 0 ? `All your ${SLOT_LABEL[slot].toLowerCase()} gear is on other fighters. Take it off them to use it here.` : `You don't own any ${SLOT_LABEL[slot].toLowerCase()} gear. The armourer in the market sells it.`}</p>
           : choices.map((i) => {
             const b = baseOf.get(i.base_slug);
             if (!b) return null;
             const here = mine.some((m) => m.item_id === i.id);
             const why = fighter ? whyNot(b, i.rank, fighter) : null;
-            const other = wearerOf(i.id);
-            const holder = other && other !== sel ? fighters.find((f) => f.id === other)?.template.name : null;
             return (
               <div key={i.id} className="pixel-box flex items-center gap-2 bg-panel p-1.5">
                 <GearIcon base={b.slug} kind={b.kind} rank={i.rank} />
@@ -115,10 +112,12 @@ export function EquipmentTab() {
                   <p className="truncate text-xl text-paper">{b.name}</p>
                   <p className="truncate text-base text-steel"><span className={RANK_TEXT[i.rank]}>{rankName(i.rank)}</span> · Lv {i.level}/{MAX_LEVEL} · wear at Lv {minLevel(i.rank)}+ · {classLabel(b)}</p>
                   <p className="truncate text-base text-leaf">{statLine(i)}</p>
-                  {why ? <p className="truncate text-sm text-ember">{why}</p> : holder ? <p className="truncate text-sm text-steel">Worn by {holder} (equipping moves it)</p> : null}
+                  {here ? <p className="truncate text-sm text-leaf">Worn by {fighter?.template.name}</p> : why ? <p className="truncate text-sm text-ember">{why}</p> : null}
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
-                  <button type="button" disabled={busy || !!why || here} onClick={() => call(i.id, null)} className="bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">{here ? "Worn" : "Equip"}</button>
+                  {here
+                    ? <button type="button" disabled={busy} onClick={() => call(null, slot)} className="bg-gold px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Unequip</button>
+                    : <button type="button" disabled={busy || !!why} onClick={() => call(i.id, null)} className="bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Equip</button>}
                   <button type="button" onClick={() => setView({ base: b, rank: i.rank, level: i.level })} className="bg-night px-3 py-0.5 text-base uppercase text-paper">View</button>
                 </div>
               </div>
