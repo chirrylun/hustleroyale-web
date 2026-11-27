@@ -3,7 +3,8 @@
 import { Music } from "@/components/Music";
 import clsx from "clsx";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BOSSES, fmtTime } from "@/lib/arena";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { PixelPanel } from "@/components/pixel/PixelPanel";
@@ -17,21 +18,27 @@ export type TeamFighter = StarterFighter;
 interface Props {
   team: TeamFighter[];
   /** What the arena map asked for: a mode, a level range and, for Boss Rush, a boss. The fight starts on arrival. */
-  request: StartRequest;
+  request: ArenaRequest;
 }
 
+/** An arena fight: against the AI (challenge, boss, raid) or against another player (pvp). */
+export type ArenaRequest = StartRequest | { mode: "pvp"; range: StartRequest["range"] };
+
 export function ArenaScreen({ team, request }: Props) {
-  const { phase, view, error, startMode, nextFloor, focus, move, auto, setStance, reset } = useSoloBattle();
+  const { phase, view, error, startMode, queuePvp, cancelPvp, nextFloor, focus, move, auto, setStance, reset } = useSoloBattle();
   const [muted, setMutedState] = useState(() => isMuted());
+  const router = useRouter();
   const held = useRef(new Set<string>());
+
+  const go = useCallback((r: ArenaRequest) => (r.mode === "pvp" ? queuePvp(r.range) : startMode(r)), [queuePvp, startMode]);
 
   // The fight starts as soon as the player arrives from the arena map.
   const begun = useRef(false);
   useEffect(() => {
     if (begun.current) return;
     begun.current = true;
-    startMode(request);
-  }, [request, startMode]);
+    go(request);
+  }, [request, go]);
 
   const controlledUnit = view?.controlledUnitId ?? null;
   // Keyboard: WASD or the arrow keys walk, Space hands the fighter back to its AI.
@@ -117,17 +124,30 @@ export function ArenaScreen({ team, request }: Props) {
               Sound: {muted ? "off" : "on"}
             </button>
           </div>
-          {phase === "fighting" && (controlledUnit ? <SkillBar view={view} onAuto={auto} /> : <StanceBar current={view.stances[1]} onPick={setStance} />)}
-          {phase === "ended" && view.end && <ResultPanel end={view.end} onAgain={() => { reset(); startMode(request); }} onNext={nextFloor} />}
+          {phase === "fighting" && (controlledUnit ? <SkillBar view={view} onAuto={auto} /> : <StanceBar current={view.stances[view.yourSide]} onPick={setStance} />)}
+          {phase === "ended" && view.end && <ResultPanel end={view.end} onAgain={() => { reset(); go(request); }} onNext={nextFloor} />}
         </>
       ) : phase === "starting" && view?.info?.mode === "raid" ? (
         <PixelPanel title="Next floor"><p className="text-xl text-paper" aria-live="polite">Getting the next floor ready...</p></PixelPanel>
+      ) : phase === "queued" ? (
+        <PixelPanel title="Finding a player">
+          <p className="text-xl text-paper" aria-live="polite">Looking for a player at your level...</p>
+          <div className="mt-3"><PixelButton onClick={() => { cancelPvp(); router.push("/arena"); }}>Cancel</PixelButton></div>
+        </PixelPanel>
+      ) : phase === "nobody" ? (
+        <PixelPanel title="No one available">
+          <p role="alert" className="text-xl text-paper">No player at your level is available in this range right now.</p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <PixelButton onClick={() => go(request)}>Search again</PixelButton>
+            <Link href="/arena" className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Back to the arena</Link>
+          </div>
+        </PixelPanel>
       ) : (
         <PixelPanel title="The Arena">
           {error ? (
             <>
               <p role="alert" className="text-xl text-ember">{error}</p>
-              <div className="mt-3 flex flex-wrap gap-3"><PixelButton onClick={() => startMode(request)}>Try again</PixelButton><Link href="/arena" className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Back to the arena</Link></div>
+              <div className="mt-3 flex flex-wrap gap-3"><PixelButton onClick={() => go(request)}>Try again</PixelButton><Link href="/arena" className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Back to the arena</Link></div>
             </>
           ) : <p className="text-xl text-paper" aria-live="polite">Getting the arena ready...</p>}
         </PixelPanel>

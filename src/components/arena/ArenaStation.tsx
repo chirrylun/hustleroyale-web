@@ -58,7 +58,8 @@ export function ArenaStation({ station }: { station: Station }) {
         </>
       )}
 
-      <Link href={href} className="pixel-btn mt-1 block bg-leaf py-3 text-center text-2xl uppercase text-ink">{station === "boss" ? `Fight ${BOSSES[bossId].name}` : "Start"}</Link>
+      <Link href={href} className="pixel-btn mt-1 block bg-leaf py-3 text-center text-2xl uppercase text-ink">{station === "boss" ? `Fight ${BOSSES[bossId].name}` : station === "challenge" ? "Fight the AI" : "Start"}</Link>
+      {station === "challenge" && <Link href={`/arena/fight?mode=pvp&range=${range}`} className="pixel-btn mt-2 block bg-gold py-3 text-center text-2xl uppercase text-ink">Fight a player</Link>}
     </>
   );
 }

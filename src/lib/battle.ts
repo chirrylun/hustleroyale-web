@@ -178,6 +178,7 @@ export type StartRequest =
   | { mode: "raid"; range: RangeId; controlledFighterId: string | null };
 
 type StartError = "invalid_request" | "match_in_progress" | "no_team" | "invalid_team" | "server_error";
+type QueueAck = { ok: true; matched: boolean } | { ok: false; error: StartError };
 type StartAck = { ok: true; matchId: string } | { ok: false; error: StartError };
 
 /* ---------------------------------------------------------------- live view state */
@@ -251,6 +252,8 @@ export interface BattleView {
   info: ArenaInfo | null;
   metas: UnitMeta[];
   controlledUnitId: string | null;
+  /** 1 on the left; 2 for the second player in a player match. */
+  yourSide: Side;
   arena: { w: number; h: number };
   obstacles: Obstacle[];
   layout: string;
@@ -546,6 +549,7 @@ export function battleReducer(view: BattleView | null, action: BattleAction): Ba
         info: p.arena ?? null,
         metas: p.units,
         controlledUnitId: p.controlledUnitId,
+        yourSide: p.yourSide ?? 1,
         arena: p.snapshot.arena,
         obstacles: p.snapshot.obstacles ?? [],
         layout: p.snapshot.layout ?? "",
@@ -600,7 +604,8 @@ export function battleReducer(view: BattleView | null, action: BattleAction): Ba
 /* ---------------------------------------------------------------- the hook */
 
 /** `ready`: the fight is set up and frozen, waiting for the player to press Start (tutorial only). */
-export type Phase = "lobby" | "starting" | "ready" | "fighting" | "ended";
+/** `queued`: waiting for another player. `nobody`: nobody in the same range and level came. */
+export type Phase = "lobby" | "starting" | "queued" | "nobody" | "ready" | "fighting" | "ended";
 
 const START_ERRORS: Record<StartError, string> = {
   invalid_request: "That match setup didn't work. Pick again and try once more.",
@@ -636,6 +641,7 @@ export function useSoloBattle() {
       setError(null);
       setPhase(payload.awaitingStart ? "ready" : "fighting");
     };
+    const onNobody = () => setPhase((cur) => (cur === "queued" ? "nobody" : cur));
     const onBegin = (p: { matchId: string }) => {
       dispatch({ type: "begin", matchId: p.matchId });
       setPhase((cur) => (cur === "ready" ? "fighting" : cur));
@@ -669,7 +675,7 @@ export function useSoloBattle() {
     const rejoin = () => socket.emit("battle:rejoin");
     const onConnectError = (err: Error) => {
       setError(err.message === "unauthorized" ? "You are signed out. Log in again." : "Can't reach the game server. Check your connection.");
-      setPhase((p) => (p === "starting" ? "lobby" : p));
+      setPhase((p) => (p === "starting" || p === "queued" ? "lobby" : p));
     };
 
     socket.on("battle:start", onStart);
@@ -677,6 +683,7 @@ export function useSoloBattle() {
     socket.on("battle:sync", onSync);
     socket.on("battle:end", onEnd);
     socket.on("battle:begin", onBegin);
+    socket.on("pvp:none", onNobody);
     socket.on("connect", rejoin);
     socket.on("connect_error", onConnectError);
     if (socket.connected) rejoin();
@@ -689,6 +696,7 @@ export function useSoloBattle() {
       socket.off("battle:sync", onSync);
       socket.off("battle:end", onEnd);
       socket.off("battle:begin", onBegin);
+      socket.off("pvp:none", onNobody);
       socket.off("connect", rejoin);
       socket.off("connect_error", onConnectError);
     };
@@ -751,6 +759,36 @@ export function useSoloBattle() {
       socket.once("connect", go);
       socket.connect();
     }
+  }, []);
+
+  /** Challenge against another player: wait in the queue for the chosen level range. */
+  const queuePvp = useCallback((range: StartRequest["range"]) => {
+    const socket = getGameSocket();
+    unlockAudio();
+    setError(null);
+    setPhase("starting");
+    const go = () =>
+      socket.timeout(8000).emit("pvp:queue", { range }, (err: Error | null, ack?: QueueAck) => {
+        if (err || !ack) {
+          setError("The game server didn't answer. Try again.");
+          setPhase("lobby");
+        } else if (!ack.ok) {
+          setError(START_ERRORS[ack.error]);
+          setPhase("lobby");
+          if (ack.error === "match_in_progress") socket.emit("battle:rejoin");
+        } else if (!ack.matched) setPhase("queued");
+        // When matched, the server's `battle:start` moves us into the fight.
+      });
+    if (socket.connected) go();
+    else {
+      socket.once("connect", go);
+      socket.connect();
+    }
+  }, []);
+
+  const cancelPvp = useCallback(() => {
+    getGameSocket().emit("pvp:cancel");
+    setPhase("lobby");
   }, []);
 
   /** Floor Raid: the floor is cleared and the player wants the next one. */
@@ -819,7 +857,7 @@ export function useSoloBattle() {
     setPhase("lobby");
   }, []);
 
-  return { phase, view, error, lastReward, start, startMode, nextFloor, startTutorial, beginTutorial, cast, focus, move, auto, setStance, reset };
+  return { phase, view, error, lastReward, start, startMode, queuePvp, cancelPvp, nextFloor, startTutorial, beginTutorial, cast, focus, move, auto, setStance, reset };
 }
 
 function soundFor(e: BattleEvent): Sfx | null {

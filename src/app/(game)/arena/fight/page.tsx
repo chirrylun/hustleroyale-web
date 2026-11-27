@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { lookKey, type WornRows } from "@/lib/look";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { ArenaScreen, type TeamFighter } from "@/components/battle/ArenaScreen";
+import { ArenaScreen, type ArenaRequest, type TeamFighter } from "@/components/battle/ArenaScreen";
 import { PageShell } from "@/components/layout/PageShell";
 import { RANGES } from "@/lib/arena";
-import type { BossId, StartRequest } from "@/lib/battle";
+import type { BossId } from "@/lib/battle";
 import { createClient } from "@/lib/supabase/server";
 
 /** Same pattern as /home: request data (the session) is read inside <Suspense> so the shell prerenders. */
@@ -20,10 +20,11 @@ export default function FightPage({ searchParams }: { searchParams: Promise<{ mo
 }
 
 /** What the arena map sent us here to fight: a mode, a level range and (for Boss Rush) a boss. Anything else goes back to the map. */
-function requestOf(q: { mode?: string; range?: string; boss?: string }): StartRequest | null {
+function requestOf(q: { mode?: string; range?: string; boss?: string }): ArenaRequest | null {
   const range = RANGES.find((r) => r.id === q.range);
   if (!range) return null;
   if (q.mode === "challenge") return { mode: "challenge", range: range.id };
+  if (q.mode === "pvp") return { mode: "pvp", range: range.id };
   if (q.mode === "raid") return { mode: "raid", range: range.id, controlledFighterId: null };
   if (q.mode === "boss" && range.bosses.some((b) => b === q.boss)) return { mode: "boss", range: range.id, boss: q.boss as BossId, controlledFighterId: null };
   return null;
