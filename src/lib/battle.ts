@@ -121,9 +121,37 @@ export interface RewardSummary {
   balance: number;
 }
 
+export type RangeId = "10-20" | "20-30" | "30-40";
+export type BossId = "goblin" | "golem" | "mushroom" | "direwolf";
+
+/** Which arena mode a fight belongs to, and where in it (a raid floor). */
+export interface ArenaInfo {
+  mode: "challenge" | "boss" | "raid";
+  range: RangeId;
+  title: string;
+  subtitle?: string;
+  boss?: BossId;
+  stage?: number;
+  stages?: number;
+}
+
+/** What the end of an arena fight adds to the result. */
+export interface ArenaEnd {
+  mode: "challenge" | "boss" | "raid";
+  range: RangeId;
+  boss?: BossId;
+  stage?: number;
+  stages?: number;
+  cleared?: number;
+  /** A won raid floor that is not the last: the run goes on. */
+  more?: boolean;
+  bossRush?: { timeMs: number; bestMs: number; newBest: boolean; rank: number };
+}
+
 export interface BattleStartPayload {
   matchId: string;
   difficulty: Difficulty;
+  arena?: ArenaInfo;
   yourSide: Side;
   controlledUnitId: string | null;
   tickMs: number;
@@ -140,7 +168,14 @@ export interface BattleEndPayload {
   durationMs: number;
   damageDealt: number;
   reward: RewardSummary | null;
+  arena?: ArenaEnd;
 }
+
+/** What the arena screen asks for. Challenge has no steering and no difficulty; Boss Rush and Floor Raid may name a fighter to steer. */
+export type StartRequest =
+  | { mode: "challenge"; range: RangeId }
+  | { mode: "boss"; range: RangeId; boss: BossId; controlledFighterId: string | null }
+  | { mode: "raid"; range: RangeId; controlledFighterId: string | null };
 
 type StartError = "invalid_request" | "match_in_progress" | "no_team" | "invalid_team" | "server_error";
 type StartAck = { ok: true; matchId: string } | { ok: false; error: StartError };
@@ -212,6 +247,8 @@ export type MatchPhase = "normal" | "warning" | "sudden";
 export interface BattleView {
   matchId: string;
   difficulty: Difficulty;
+  /** Which arena mode this is (Challenge, Boss Rush, Floor Raid), when it is one. */
+  info: ArenaInfo | null;
   metas: UnitMeta[];
   controlledUnitId: string | null;
   arena: { w: number; h: number };
@@ -506,6 +543,7 @@ export function battleReducer(view: BattleView | null, action: BattleAction): Ba
       return {
         matchId: p.matchId,
         difficulty: p.difficulty,
+        info: p.arena ?? null,
         metas: p.units,
         controlledUnitId: p.controlledUnitId,
         arena: p.snapshot.arena,
@@ -691,6 +729,42 @@ export function useSoloBattle() {
     }
   }, []);
 
+  /** Starts an arena fight in one of the three modes. */
+  const startMode = useCallback((req: StartRequest) => {
+    const socket = getGameSocket();
+    unlockAudio();
+    setError(null);
+    setPhase("starting");
+    const go = () =>
+      socket.timeout(8000).emit("solo:start", req, (err: Error | null, ack?: StartAck) => {
+        if (err || !ack) {
+          setError("The game server didn't answer. Try again.");
+          setPhase("lobby");
+        } else if (!ack.ok) {
+          setError(START_ERRORS[ack.error]);
+          setPhase("lobby");
+          if (ack.error === "match_in_progress") socket.emit("battle:rejoin");
+        }
+      });
+    if (socket.connected) go();
+    else {
+      socket.once("connect", go);
+      socket.connect();
+    }
+  }, []);
+
+  /** Floor Raid: the floor is cleared and the player wants the next one. */
+  const nextFloor = useCallback(() => {
+    const socket = getGameSocket();
+    unlockAudio();
+    setError(null);
+    setPhase("starting");
+    socket.timeout(8000).emit("raid:next", (err: Error | null, res?: { ok: boolean; error?: string }) => {
+      if (err || !res) { setError("The game server didn't answer. Try again."); setPhase("ended"); }
+      else if (!res.ok) { setError(res.error === "no_raid" ? "That raid has ended. Start a new one." : "The next floor isn't ready. Try again in a moment."); setPhase("ended"); }
+    });
+  }, []);
+
   /** Scripted first fights (stage 1: one fighter vs a slime; stage 2: the crew vs three). No rewards. */
   const startTutorial = useCallback((stage: 1 | 2) => {
     const socket = getGameSocket();
@@ -745,7 +819,7 @@ export function useSoloBattle() {
     setPhase("lobby");
   }, []);
 
-  return { phase, view, error, lastReward, start, startTutorial, beginTutorial, cast, focus, move, auto, setStance, reset };
+  return { phase, view, error, lastReward, start, startMode, nextFloor, startTutorial, beginTutorial, cast, focus, move, auto, setStance, reset };
 }
 
 function soundFor(e: BattleEvent): Sfx | null {

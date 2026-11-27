@@ -4,11 +4,12 @@ import { Music } from "@/components/Music";
 import clsx from "clsx";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { FighterCard } from "@/components/pack/FighterCard";
+import { ArenaLobby } from "@/components/arena/ArenaLobby";
+import { BOSSES, fmtTime } from "@/lib/arena";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { PixelPanel } from "@/components/pixel/PixelPanel";
-import { useSoloBattle, type BattleEndPayload, type BattleView, type Difficulty, type Stance } from "@/lib/battle";
-import { DAILY_CAP, DIFFICULTY_INFO } from "@/lib/economy";
+import { useSoloBattle, type BattleEndPayload, type BattleView, type Stance } from "@/lib/battle";
+import { DAILY_CAP } from "@/lib/economy";
 import { isMuted, setMuted } from "@/lib/sfx";
 import type { StarterFighter } from "@/lib/starter-pack";
 import { Arena } from "./Arena";
@@ -22,12 +23,8 @@ interface Props {
   earnedToday: number;
 }
 
-const DIFFICULTIES: Difficulty[] = ["rookie", "hustler", "boss"];
-
 export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }: Props) {
-  const { phase, view, error, lastReward, start, focus, move, auto, setStance, reset } = useSoloBattle();
-  const [difficulty, setDifficulty] = useState<Difficulty>("hustler");
-  const [controlledId, setControlledId] = useState<string | null>(null);
+  const { phase, view, error, lastReward, startMode, nextFloor, focus, move, auto, setStance, reset } = useSoloBattle();
   const [muted, setMutedState] = useState(() => isMuted());
   const held = useRef(new Set<string>());
 
@@ -109,6 +106,7 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
 
       {showArena ? (
         <>
+          {view.info && <FightHeader info={view.info} />}
           <Arena view={view} phase={phase} canFocus={!!controlledUnit && phase === "fighting"} canMove={!!controlledUnit && phase === "fighting" && !view.end} onFocus={focus} onMove={move} />
           <div className="flex justify-end">
             <button
@@ -124,116 +122,31 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
             </button>
           </div>
           {phase === "fighting" && (controlledUnit ? <SkillBar view={view} onAuto={auto} /> : <StanceBar current={view.stances[1]} onPick={setStance} />)}
-          {phase === "ended" && view.end && <ResultPanel end={view.end} coins={coins} earnedToday={earnedToday} onAgain={reset} />}
+          {phase === "ended" && view.end && <ResultPanel end={view.end} coins={coins} earnedToday={earnedToday} onAgain={reset} onNext={nextFloor} />}
         </>
+      ) : phase === "starting" && view?.info?.mode === "raid" ? (
+        <PixelPanel title="Next floor"><p className="text-xl text-paper" aria-live="polite">Getting the next floor ready...</p></PixelPanel>
       ) : (
-        <Lobby
-          team={team}
-          difficulty={difficulty}
-          onDifficulty={setDifficulty}
-          controlledId={controlledId}
-          onControlled={setControlledId}
-          starting={phase === "starting"}
-          error={error}
-          capReached={earnedToday >= DAILY_CAP}
-          onStart={() => start(difficulty, controlledId)}
-        />
+        <ArenaLobby team={team} starting={phase === "starting"} error={error} capReached={earnedToday >= DAILY_CAP} onStart={startMode} />
       )}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ lobby */
-
-function Lobby({
-  team,
-  difficulty,
-  onDifficulty,
-  controlledId,
-  onControlled,
-  starting,
-  error,
-  capReached,
-  onStart,
-}: {
-  team: TeamFighter[];
-  difficulty: Difficulty;
-  onDifficulty: (d: Difficulty) => void;
-  controlledId: string | null;
-  onControlled: (id: string | null) => void;
-  starting: boolean;
-  error: string | null;
-  capReached: boolean;
-  onStart: () => void;
-}) {
+/** The mode, boss or floor being fought, above the arena. */
+function FightHeader({ info }: { info: NonNullable<BattleView["info"]> }) {
   return (
-    <>
-      <PixelPanel title="Your team">
-        <div className="grid gap-4 sm:grid-cols-3">
-          {team.map((f, i) => (
-            <FighterCard key={f.id} fighter={f} delayMs={i * 120} />
-          ))}
-        </div>
-      </PixelPanel>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <PixelPanel title="Who do you control?">
-          <div className="flex flex-col gap-2">
-            <Choice selected={controlledId === null} onClick={() => onControlled(null)} title="Nobody, I'm the coach" hint="Your team fights on its own. You pick how bold it is." />
-            {team.map((f) => (
-              <Choice
-                key={f.id}
-                selected={controlledId === f.id}
-                onClick={() => onControlled(f.id)}
-                title={f.template.name}
-                hint="You walk it and dodge danger circles. Its skills fire on their own."
-              />
-            ))}
-          </div>
-        </PixelPanel>
-
-        <PixelPanel title="How hard?">
-          <div className="flex flex-col gap-2">
-            {DIFFICULTIES.map((d) => (
-              <Choice
-                key={d}
-                selected={difficulty === d}
-                onClick={() => onDifficulty(d)}
-                title={DIFFICULTY_INFO[d].label}
-                hint={`${DIFFICULTY_INFO[d].hint}. Win: ${DIFFICULTY_INFO[d].win} points.`}
-              />
-            ))}
-          </div>
-        </PixelPanel>
+    <div className="pixel-box flex flex-wrap items-center justify-between gap-2 bg-night px-3 py-2">
+      <div className="leading-tight">
+        <p className="text-2xl uppercase text-gold">{info.title}</p>
+        {info.subtitle && <p className="text-base text-steel">{info.subtitle}</p>}
       </div>
-
-      <PixelPanel title="How the fight works">
-        <ul className="flex flex-col gap-1 text-lg text-steel">
-          <li>Magic beats tanks. Tanks shrug off physical hits. Physical hits hurt healers. Healers resist magic.</li>
-          <li>Big attacks show a red circle first. Walk out of it to dodge. Stuns cancel a charging attack.</li>
-          <li>Fights last 2.5 minutes at most. After that a ring closes in and anyone outside it takes damage.</li>
-        </ul>
-      </PixelPanel>
-
-      <PixelPanel title="About practice points">
-        <ul className="flex flex-col gap-1 text-lg text-steel">
-          <li>Practice wins pay a few points. The first 5 matches each day pay the most.</li>
-          <li>You can earn up to {DAILY_CAP} practice points a day. It resets at midnight UTC.</li>
-          <li>Practice never changes your score or your wins and losses. Online matches are for that, and they are coming soon.</li>
-        </ul>
-      </PixelPanel>
-
-      {error && (
-        <p role="alert" className="pixel-box bg-blood px-4 py-3 text-lg text-paper">
-          {error}
-        </p>
+      {info.mode === "raid" && info.stage && info.stages && (
+        <ol className="flex gap-1" aria-label={`Floor ${info.stage} of ${info.stages}`}>
+          {Array.from({ length: info.stages }, (_, i) => i + 1).map((s) => <li key={s} className={clsx("h-3 w-3", s < info.stage! ? "bg-leaf" : s === info.stage ? "bg-gold" : "bg-panel")} />)}
+        </ol>
       )}
-      {capReached && <p className="text-lg text-gold">You hit today&apos;s practice limit. You can still play, but matches won&apos;t pay more points today.</p>}
-
-      <PixelButton onClick={onStart} disabled={starting} className="py-4 text-2xl sm:text-3xl">
-        {starting ? "Getting the arena ready..." : "Start practice match"}
-      </PixelButton>
-    </>
+    </div>
   );
 }
 
@@ -266,7 +179,7 @@ function SkillBar({ view, onAuto }: { view: BattleView; onAuto: () => void }) {
 
   return (
     <PixelPanel title={`Steering ${meta.name}`}>
-      <p className="text-lg text-paper">Skills fire on their own when they're ready. You decide where your fighter stands.</p>
+      <p className="text-lg text-paper">Skills fire on their own when they&apos;re ready. You decide where your fighter stands.</p>
       <div className="mt-3 flex items-center gap-2">
         <span className="text-base uppercase text-steel">Energy</span>
         <div className="pixel-bar h-3 flex-1 bg-ink">
@@ -306,10 +219,46 @@ export function StanceBar({ current, onPick }: { current: Stance; onPick: (s: St
 
 /* ------------------------------------------------------------------ result */
 
-function ResultPanel({ end, coins, earnedToday, onAgain }: { end: BattleEndPayload; coins: number; earnedToday: number; onAgain: () => void }) {
-  const { reward } = end;
-  const title = end.result === "win" ? "You won!" : end.result === "loss" ? "You lost this one" : "It was a draw";
+function ResultPanel({ end, coins, earnedToday, onAgain, onNext }: { end: BattleEndPayload; coins: number; earnedToday: number; onAgain: () => void; onNext: () => void }) {
+  const { reward, arena } = end;
+  const won = end.result === "win";
+  const back = <Link href="/home" className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Back to home</Link>;
 
+  if (arena?.mode === "boss") {
+    const br = arena.bossRush;
+    return (
+      <PixelPanel title={won ? `${BOSSES[arena.boss!].name} defeated!` : "The boss won this time"} aria-live="polite">
+        {won && br ? (
+          <>
+            <p className="text-3xl text-gold">{fmtTime(br.timeMs)}</p>
+            <p className="mt-1 text-lg text-paper">{br.newBest ? `New best! You are number ${br.rank} on the board.` : `Your best is ${fmtTime(br.bestMs)} (number ${br.rank}).`}</p>
+          </>
+        ) : (
+          <p className="text-lg text-steel">{end.result === "draw" ? "Time ran out." : "Your team fell."} Try a different stance, or steer a fighter out of the red circles.</p>
+        )}
+        <div className="mt-4 flex flex-wrap gap-3"><PixelButton onClick={onAgain}>Back to the arena</PixelButton>{back}</div>
+      </PixelPanel>
+    );
+  }
+
+  if (arena?.mode === "raid") {
+    const { stage = 1, stages = 10, cleared = 0, more } = arena;
+    const title = !won ? `Your team fell on floor ${stage}` : more ? `Floor ${stage} cleared!` : "Raid cleared!";
+    return (
+      <PixelPanel title={title} aria-live="polite">
+        <p className="text-3xl text-gold">{cleared} / {stages} floors</p>
+        <p className="mt-1 text-lg text-steel">
+          {more ? "Your team heals a little before the next floor. Fallen fighters return weak." : won ? "You climbed every floor. Well done." : "The raid ends here. Nothing is lost, and no rewards were on offer."}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          {more ? <PixelButton onClick={onNext}>Next floor</PixelButton> : <PixelButton onClick={onAgain}>Back to the arena</PixelButton>}
+          {more ? <button type="button" onClick={onAgain} className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Leave the raid</button> : back}
+        </div>
+      </PixelPanel>
+    );
+  }
+
+  const title = won ? "You won!" : end.result === "loss" ? "You lost this one" : "It was a draw";
   let note = "";
   if (reward) {
     if (reward.coinsEarned === 0 && reward.base === 0) note = "No points this time. Practice pays for wins and for real fights.";
@@ -330,9 +279,7 @@ function ResultPanel({ end, coins, earnedToday, onAgain }: { end: BattleEndPaylo
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
         <PixelButton onClick={onAgain}>Fight again</PixelButton>
-        <Link href="/home" className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">
-          Back to home
-        </Link>
+        {back}
       </div>
     </PixelPanel>
   );
