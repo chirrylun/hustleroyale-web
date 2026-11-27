@@ -274,6 +274,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const [armored, setArmored] = useState(false); // training: some fighter is wearing armour
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
   const [stock, setStock] = useState<Record<string, number>>({});
+  const [stockReady, setStockReady] = useState(false); // false until the bag has been read at least once
   const [picking, setPicking] = useState<number | null>(null);
   const usingPotion = useRef(false);
   const [free, setFree] = useState(false); // camera detached from the party
@@ -479,6 +480,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const loadStock = () => {
     createClient().from("player_items").select("item_slug, qty").in("item_slug", POTION_LIST).then(({ data }) => {
       setStock(Object.fromEntries((data ?? []).map((r) => [r.item_slug as string, r.qty as number])));
+      setStockReady(true);
     });
   };
   useEffect(() => {
@@ -1426,7 +1428,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             onClose={() => { setTalkNpc(null); if (reloadOnClose.current) window.location.reload(); }}
           />
         )}
-        {fightersOpen && <FightersMenu onClose={() => setFightersOpen(false)} guide={trainOn && tStep === 6} onWorn={setArmored} />}
+        {fightersOpen && <FightersMenu onClose={() => setFightersOpen(false)} guide={trainOn && tStep === 6 && !armored} onWorn={setArmored} />}
         {bagOpen && <BagMenu onUse={drinkSlug} onClose={() => { setBagOpen(false); loadStock(); }} />}
 
         {state === "play" && (
@@ -1440,7 +1442,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                 <div key={i} className="relative">
                   {picking === i && (
                     <div className="pixel-box absolute bottom-full left-1/2 mb-2 flex max-w-[17rem] -translate-x-1/2 flex-wrap justify-center gap-2 bg-night/95 p-2">
-                      {POTION_LIST.every((p) => (stock[p] ?? 0) <= 0) && <span className="px-2 text-base text-paper">No potions yet. Buy some at the market.</span>}
+                      {!stockReady ? <span className="px-2 text-base text-paper">Loading...</span> : POTION_LIST.every((p) => (stock[p] ?? 0) <= 0) && <span className="px-2 text-base text-paper">No potions yet. Buy some at the market.</span>}
                       {POTION_LIST.filter((p) => (stock[p] ?? 0) > 0).map((p) => (
                         <button key={p} type="button" aria-label={itemName(p)} disabled={(stock[p] ?? 0) <= 0} onClick={() => setSlot(i, p)} className={`pixel-box relative h-12 w-12 bg-night disabled:opacity-40${slotGuide?.kind === "pick" && p === POTION_LIST.find((q) => (stock[q] ?? 0) > 0) ? " tut-blink" : ""}`}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1452,7 +1454,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                   )}
                   <button
                     type="button" aria-label={slug ? `Use ${itemName(slug)}` : "Empty item slot"}
-                    onClick={() => (slug && n > 0 ? drinkPotion(i) : setPicking(picking === i ? null : i))}
+                    onClick={() => { if (slug && n > 0) drinkPotion(i); else { if (picking !== i) { setStockReady(false); loadStock(); } setPicking(picking === i ? null : i); } }}
                     className={`pixel-box relative flex h-14 w-14 short:h-11 short:w-11 items-center justify-center bg-night/90 ${slug && n <= 0 ? "opacity-50" : ""}${slotGuide && slotGuide.kind !== "pick" && slotGuide.at === i ? " tut-blink" : ""}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}

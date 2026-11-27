@@ -76,7 +76,7 @@ export function EquipmentTab({ guide = false, onWorn, onDone }: { guide?: boolea
   const firstWearing = worn.some((w) => w.fighter_id === firstId && w.slot === "armor");
   const firstChoice = choices.find((i) => { const b = baseOf.get(i.base_slug); return b && fighter && !whyNot(b, i.rank, fighter) && !mine.some((m) => m.item_id === i.id); });
   const step: "fighter" | "slot" | "equip" | "done" | null = !guide ? null : firstWearing ? "done" : sel !== firstId ? "fighter" : slot !== "armor" ? "slot" : "equip";
-  const HINT = { fighter: "Tap the blinking name to pick your first fighter.", slot: "Now tap the blinking Armour box.", equip: "Tap the blinking Equip button to wear it.", done: "Well done! Your fighter is wearing it. Close this, then tell the Trainer. You can dress the others the same way." } as const;
+  const HINT = { fighter: "Pick your first fighter.", slot: "Tap Armour.", equip: "Tap Equip.", done: "Done! Close this and tell the Trainer." } as const;
   const blink = (on: boolean) => (on ? " tut-blink" : "");
 
   return (

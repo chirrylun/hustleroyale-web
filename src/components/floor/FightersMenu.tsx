@@ -12,7 +12,9 @@ import { EquipmentTab } from "@/components/gear/EquipmentTab";
 type Tab = "fighters" | "equipment";
 
 /** Your fighters from anywhere: the same cards as My Fighters in the guild, and a tab to equip them. */
-export function FightersMenu({ onClose, guide = false, onWorn }: { onClose: () => void; guide?: boolean; onWorn?: (worn: boolean) => void }) {
+export function FightersMenu({ onClose, guide: guideNow = false, onWorn }: { onClose: () => void; guide?: boolean; onWorn?: (worn: boolean) => void }) {
+  // The walk-through is decided when the menu opens, so it can finish ("Close") and never comes back once armour is worn.
+  const [guide] = useState(guideNow);
   const [list, setList] = useState<GuildFighter[] | null>(null);
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<Tab>("fighters");
@@ -45,7 +47,7 @@ export function FightersMenu({ onClose, guide = false, onWorn }: { onClose: () =
           <button type="button" role="tab" aria-selected={tab === "equipment"} onClick={() => setTab("equipment")} className={`flex flex-1 items-center justify-center px-2 py-1 text-xl uppercase ${tab === "equipment" ? "bg-gold text-ink" : "bg-panel text-paper"} ${guide && tab !== "equipment" ? "tut-blink" : ""}`}>Equipment</button>
           <button type="button" aria-label="Close" onClick={onClose} className="w-10 bg-panel text-2xl text-paper">✕</button>
         </div>
-        {guide && tab !== "equipment" && <p className="bg-gold/90 px-3 py-1 text-center text-base text-ink">Tap the blinking Equipment tab.</p>}
+        {guide && tab !== "equipment" && <p className="bg-gold/90 px-3 py-1 text-center text-base text-ink">Tap Equipment.</p>}
         <div className="min-h-48 overflow-y-auto p-3 short:min-h-24 short:p-2">
           {tab === "equipment" ? <EquipmentTab guide={guide} onWorn={onWorn} onDone={onClose} />
             : error ? <p role="alert" className="text-xl text-ember">Couldn&apos;t load your fighters. Try again.</p>
