@@ -81,7 +81,7 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
       {cur === 0 && (<><p>Hold on there. The Guild Manager wants a word with you first.</p>{done}</>)}
       {cur >= 1 && cur <= 6 && (<>
         <p className="text-base text-steel">Quest board. Take a quest, finish it, then claim your reward.</p>
-        <div className="max-h-[46dvh] space-y-2 overflow-y-auto pr-1 short:max-h-[52dvh]">
+        <div className="space-y-2 sm:max-h-[46dvh] sm:overflow-y-auto sm:pr-1 short:max-h-[52dvh]">
           {QUESTS.map((q) => {
             const st = status(q.n);
             const first = q.n === 2 && cur === 1; // the first quest has to be taken
@@ -90,8 +90,8 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
                 <p className={`uppercase ${st === "locked" ? "text-steel" : "text-leaf"}`}>Training Quest {q.n - 1}</p>
                 <p className="text-base text-steel">{q.blurb}</p>
                 <ul className="my-1.5 text-base"><li className={st === "done" || q.ok ? "text-leaf" : undefined}>{st === "done" || q.ok ? "✓ " : "• "}{q.goal}{st === "locked" ? "" : ` ${st === "done" ? q.need : q.have}/${q.need}`}</li></ul>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-base text-gold">{q.reward}</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="min-w-0 text-base text-gold">{q.reward}</p>
                   {st === "done" ? <span className="text-base text-leaf">Done</span>
                     : st === "locked" ? <span className="text-base text-steel">Locked</span>
                     : first ? <PixelButton className="text-base" disabled={busy} onClick={() => advance()}>Take quest</PixelButton>

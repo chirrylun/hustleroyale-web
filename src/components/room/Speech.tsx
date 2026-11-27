@@ -13,13 +13,11 @@ export function Speech({ npc, title, onClose, children, wide = false, shop = fal
       onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}
     >
       <div role="dialog" aria-modal="true" aria-label={title} className={`pixel-box card-reveal flex max-h-[94dvh] w-full flex-col overflow-y-auto bg-night p-4 short:max-w-2xl short:p-2.5 ${wide ? "max-w-xl" : "max-w-md"}`}>
-        <div className="flex items-start gap-3">
-          <NpcPortrait name={npc} still={still} />
-          <div className="min-w-0 flex-1">
-            <h2 className="mb-1 text-2xl uppercase text-gold short:text-xl">{title}</h2>
-            <div className="flex flex-col gap-2 text-xl text-paper short:gap-1 short:text-base">{children}</div>
-          </div>
-          <button type="button" aria-label="Close" onClick={onClose} className="h-9 w-9 shrink-0 bg-panel text-2xl text-paper">✕</button>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 sm:items-start short:items-start short:gap-y-1">
+          <div className="max-sm:[zoom:.6] short:[zoom:1] sm:row-span-2 short:row-span-2"><NpcPortrait name={npc} still={still} /></div>
+          <h2 className="min-w-0 text-2xl uppercase text-gold short:text-xl">{title}</h2>
+          <button type="button" aria-label="Close" onClick={onClose} className="h-9 w-9 shrink-0 bg-panel text-2xl text-paper sm:row-span-2 short:row-span-2">✕</button>
+          <div className="col-span-3 flex min-w-0 flex-col gap-2 text-xl text-paper sm:col-span-1 sm:col-start-2 short:col-span-1 short:col-start-2 short:gap-1 short:text-base">{children}</div>
         </div>
       </div>
     </div>
