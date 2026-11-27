@@ -12,6 +12,7 @@ import { StoragePanel } from "@/components/lobby/StoragePanel";
 import { MarketPanel } from "@/components/lobby/MarketPanel";
 import { AlchemistPanel } from "@/components/town/AlchemistPanel";
 import { LobbyTour } from "@/components/training/LobbyTour";
+import { ArenaStation } from "@/components/arena/ArenaStation";
 import { ClassChangerPanel } from "@/components/town/ClassChangerPanel";
 import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
@@ -45,8 +46,8 @@ interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
 /** How the loop reaches a figure's element and its look state, by id. */
 type Rig = Map<string, { el: HTMLDivElement | null; set: (l: Look) => void }>;
 
-type Talk = "arena" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "blacksmith" | "guard";
-const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", blacksmith: "blacksmith", guard: "guard" };
+type Talk = "arena" | "challenge" | "boss" | "raid" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "blacksmith" | "guard";
+const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", challenge: "trainer", boss: "gladiator", raid: "guard", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", blacksmith: "blacksmith", guard: "guard" };
 
 function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite: string; role: Role; level: number; tag: string | null; own: boolean; rig: Rig }) {
   const [look, setLook] = useState<Look>({ walking: false, flip: false });
@@ -346,7 +347,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
 
       {tour && <LobbyTour />}
       {talk && (
-        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage"} shop={talk === "merchant" || talk === "armourer" || talk === "blacksmith" || talk === "alchemist" || talk === "classes"} onClose={close}>
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage" || talk === "boss"} shop={talk === "merchant" || talk === "armourer" || talk === "blacksmith" || talk === "alchemist" || talk === "classes"} onClose={close}>
           {talk === "arena" && (
             <>
               <p>Think your fighters are tough? Test them against other guilds.</p>
@@ -356,6 +357,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
               </SpeechActions>
             </>
           )}
+          {(talk === "challenge" || talk === "boss" || talk === "raid") && <ArenaStation station={talk} />}
           {talk === "classes" && (
             <ClassChangerPanel />
           )}
@@ -410,8 +412,8 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
 
 /** The name floating over each person, so everyone is clear who they are. */
 const TAG: Record<Talk, string> = {
-  arena: "Arena Master", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage Keeper", merchant: "Item Seller", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
+  arena: "Arena Master", challenge: "Challenge Master", boss: "Boss Rush Master", raid: "Floor Raid Master", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage Keeper", merchant: "Item Seller", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
 };
 const TITLE: Record<Talk, string> = {
-  arena: "The Arena", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
+  arena: "The Arena", challenge: "Challenge", boss: "Boss Rush", raid: "Floor Raid", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
 };

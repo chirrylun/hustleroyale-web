@@ -67,18 +67,18 @@ def lane(canvas, box, lift=1.1):
     canvas.paste(part, (x0, y0), m.filter(ImageFilter.GaussianBlur(14)))
 
 
-def lobby(W, H):
+def lobby(W, H, cy=1010):
     s = Image.open(SRC / "lobby.png").convert("RGB")
     c = Image.new("RGB", (W, H))
     quilt(c, (0, 0, W, H), [(875, 300, 1135, 860), (120, 460, 400, 1000)], s)
     # Avenues: north-south through the gate, east-west across the yard.
     lane(c, (W // 2 - 110, 300, W // 2 + 110, H - 190))
-    lane(c, (130, 930, W - 130, 1090))
+    lane(c, (130, cy - 80, W - 130, cy + 80))
     emb = s.crop((410, 410, 845, 775))
     mask = Image.new("L", emb.size, 0)
     from PIL import ImageDraw
     ImageDraw.Draw(mask).ellipse((6, 6, emb.width - 6, emb.height - 6), fill=255)
-    c.paste(emb, (W // 2 - emb.width // 2, 1010 - emb.height // 2), mask)
+    c.paste(emb, (W // 2 - emb.width // 2, cy - emb.height // 2), mask)
     tile_h(c, crop(s, 105, 0, 1150, 258), 105, W - 105, 0)
     c.paste(crop(s, 0, 0, 105, 258), (0, 0)); c.paste(crop(s, 1150, 0, 1254, 258), (W - 104, 0))
     tile_v(c, crop(s, 0, 258, 105, 1000), 0, 258, H - 254)
@@ -86,6 +86,14 @@ def lobby(W, H):
     tile_h(c, crop(s, 220, 1000, 1030, 1254), 220, W - 224, H - 254)
     c.paste(crop(s, 0, 1000, 220, 1254), (0, H - 254)); c.paste(crop(s, 1030, 1000, 1254, 1254), (W - 224, H - 254))
     return c
+
+
+def arena(W, H):
+    """The arena yard: the lobby's plaza in warm sand and stone, the emblem in the middle."""
+    c = lobby(W, H, cy=880)
+    a = np.asarray(c).astype(np.float32)
+    sand = np.array([1.10, 0.97, 0.78], np.float32)
+    return Image.fromarray(np.clip(a * sand + np.array([6, 2, -6], np.float32), 0, 255).astype(np.uint8))
 
 
 def market(W, H):
@@ -147,6 +155,28 @@ LOBBY = {
     ],
 }
 
+AW, AH = 2400, 1700
+ARENA = {
+    "title": "The Arena", "ground": "/town/arena.webp", "w": AW, "h": AH, "online": False,
+    "floor": [130, 300, AW - 130, AH - 190],
+    "blocks": [[0, 0, AW, 300], [0, AH - 200, AW, AH]],
+    "spawn": [AW // 2, 1300],
+    "props": [
+        # Three stations along the north: a banner pair and a lamp each, hay and ropes round the sparring ring.
+        P(9, 330, 470), P(10, 760, 470), P(9, AW // 2 - 220, 440), P(10, AW // 2 + 220, 440), P(9, AW - 760, 470), P(10, AW - 330, 470),
+        P(31, AW // 2, 470), P(11, 560, 520), P(11, AW - 560, 520), P(11, AW // 2 - 420, 520), P(11, AW // 2 + 420, 520),
+        P(17, 360, 1180), P(17, 510, 1180), P(17, 660, 1180), P(17, AW - 360, 1180), P(17, AW - 510, 1180), P(17, AW - 660, 1180),
+        P(18, 330, 1060), P(18, AW - 330, 1060), P(24, 420, 1400), P(24, AW - 420, 1400),
+        P(12, AW // 2 - 330, 1290), P(12, AW // 2 + 330, 1290), P(14, 250, 760), P(15, AW - 250, 760),
+        P(16, AW // 2, 1560, "Lobby", "/lobby"), P(11, AW // 2 - 300, 1520), P(11, AW // 2 + 300, 1520),
+    ],
+    "npcs": [
+        N("trainer", "front", 545, 700, "challenge"),
+        N("gladiator", "front", AW // 2, 600, "boss"),
+        N("guard", "front", AW - 545, 700, "raid"),
+    ],
+}
+
 MW, MH = 2640, 1860
 MARKET = {
     "title": "Marketplace", "ground": "/town/market.webp", "w": MW, "h": MH, "online": False,
@@ -176,12 +206,14 @@ MARKET["npcs"].append(N("guard", "left", MW - 330, 1030, "guard"))
 
 def main():
     out = ROOT / "public" / "town"
-    for name, fn, spec in (("lobby", lobby, LOBBY), ("market", market, MARKET)):
+    only = sys.argv[2:]  # e.g. `arena`: redraw just that picture
+    for name, fn, spec in (("lobby", lobby, LOBBY), ("market", market, MARKET), ("arena", arena, ARENA)):
+        if only and name not in only: continue
         fn(spec["w"], spec["h"]).save(out / f"{name}.webp", quality=92, method=6)
         print(name, spec["w"], spec["h"])
     path = ROOT / "src" / "lib" / "town" / "maps.json"
     d = json.loads(path.read_text())
-    d["maps"] = {"market": MARKET, "lobby": LOBBY}
+    d["maps"] = {"market": MARKET, "lobby": LOBBY, "arena": ARENA}
     path.write_text(json.dumps(d, indent=1))
 
 

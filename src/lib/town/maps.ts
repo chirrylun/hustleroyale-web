@@ -6,7 +6,7 @@ import atlas from "../../../public/town/props.json";
  * floor but smaller. Everything in maps.json is in picture pixels; the helpers here turn that into the tiles
  * the walking code (guild-nav) works in.
  */
-export type TownId = "market" | "lobby";
+export type TownId = "market" | "lobby" | "arena";
 
 export interface TownProp { i: number; x: number; y: number; href?: string; label?: string }
 export interface TownNpc { npc: string; facing: "front" | "left" | "right"; x: number; y: number; action: string }

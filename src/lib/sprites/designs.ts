@@ -36,6 +36,11 @@ export const mobScale = (spriteKey: string): number => {
   return m ? (MOB_SCALE[m[1]] ?? 1) : 1;
 };
 
+/** A floor boss in the arena (its legendary sheet) is drawn this many times bigger than the same kind of ordinary mob, so it feels like one. */
+export const BOSS_SIZE = 2.4;
+export const isBossSprite = (spriteKey: string): boolean => /^mob_[a-z]+_legendary$/.test(spriteKey);
+export const bossScale = (spriteKey: string): number => mobScale(spriteKey) * (isBossSprite(spriteKey) ? BOSS_SIZE : 1);
+
 /** Keys look like `<archetype>_<rarity>`. Archetypes without art yet wear their class sheet at the same rarity. */
 export const sheetUrl = (key: string, role: Role) => {
   if (key.startsWith("armor_")) return `/sprites/${key}.png`; // a full armour set: the item slug is the sprite key

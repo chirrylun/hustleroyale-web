@@ -4,12 +4,10 @@ import { Music } from "@/components/Music";
 import clsx from "clsx";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArenaLobby } from "@/components/arena/ArenaLobby";
 import { BOSSES, fmtTime } from "@/lib/arena";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { PixelPanel } from "@/components/pixel/PixelPanel";
-import { useSoloBattle, type BattleEndPayload, type BattleView, type Stance } from "@/lib/battle";
-import { DAILY_CAP } from "@/lib/economy";
+import { useSoloBattle, type BattleEndPayload, type BattleView, type StartRequest, type Stance } from "@/lib/battle";
 import { isMuted, setMuted } from "@/lib/sfx";
 import type { StarterFighter } from "@/lib/starter-pack";
 import { Arena } from "./Arena";
@@ -18,19 +16,22 @@ export type TeamFighter = StarterFighter;
 
 interface Props {
   team: TeamFighter[];
-  coins: number;
-  /** Practice points already earned today (UTC day). */
-  earnedToday: number;
+  /** What the arena map asked for: a mode, a level range and, for Boss Rush, a boss. The fight starts on arrival. */
+  request: StartRequest;
 }
 
-export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }: Props) {
-  const { phase, view, error, lastReward, startMode, nextFloor, focus, move, auto, setStance, reset } = useSoloBattle();
+export function ArenaScreen({ team, request }: Props) {
+  const { phase, view, error, startMode, nextFloor, focus, move, auto, setStance, reset } = useSoloBattle();
   const [muted, setMutedState] = useState(() => isMuted());
   const held = useRef(new Set<string>());
 
-  // After a match pays out, the balance and today's total come straight from the server's answer.
-  const coins = lastReward?.balance ?? startCoins;
-  const earnedToday = lastReward?.earnedToday ?? startToday;
+  // The fight starts as soon as the player arrives from the arena map.
+  const begun = useRef(false);
+  useEffect(() => {
+    if (begun.current) return;
+    begun.current = true;
+    startMode(request);
+  }, [request, startMode]);
 
   const controlledUnit = view?.controlledUnitId ?? null;
   // Keyboard: WASD or the arrow keys walk, Space hands the fighter back to its AI.
@@ -99,11 +100,6 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
   return (
     <div className="flex flex-col gap-4">
       <Music track="arena" />
-      <div className="flex flex-wrap gap-2 text-lg">
-        <Chip label="Points" value={coins} />
-        <Chip label="Practice points today" value={`${earnedToday} / ${DAILY_CAP}`} />
-      </div>
-
       {showArena ? (
         <>
           {view.info && <FightHeader info={view.info} />}
@@ -122,12 +118,19 @@ export function ArenaScreen({ team, coins: startCoins, earnedToday: startToday }
             </button>
           </div>
           {phase === "fighting" && (controlledUnit ? <SkillBar view={view} onAuto={auto} /> : <StanceBar current={view.stances[1]} onPick={setStance} />)}
-          {phase === "ended" && view.end && <ResultPanel end={view.end} coins={coins} earnedToday={earnedToday} onAgain={reset} onNext={nextFloor} />}
+          {phase === "ended" && view.end && <ResultPanel end={view.end} onAgain={() => { reset(); startMode(request); }} onNext={nextFloor} />}
         </>
       ) : phase === "starting" && view?.info?.mode === "raid" ? (
         <PixelPanel title="Next floor"><p className="text-xl text-paper" aria-live="polite">Getting the next floor ready...</p></PixelPanel>
       ) : (
-        <ArenaLobby team={team} starting={phase === "starting"} error={error} capReached={earnedToday >= DAILY_CAP} onStart={startMode} />
+        <PixelPanel title="The Arena">
+          {error ? (
+            <>
+              <p role="alert" className="text-xl text-ember">{error}</p>
+              <div className="mt-3 flex flex-wrap gap-3"><PixelButton onClick={() => startMode(request)}>Try again</PixelButton><Link href="/arena" className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Back to the arena</Link></div>
+            </>
+          ) : <p className="text-xl text-paper" aria-live="polite">Getting the arena ready...</p>}
+        </PixelPanel>
       )}
     </div>
   );
@@ -219,77 +222,42 @@ export function StanceBar({ current, onPick }: { current: Stance; onPick: (s: St
 
 /* ------------------------------------------------------------------ result */
 
-function ResultPanel({ end, coins, earnedToday, onAgain, onNext }: { end: BattleEndPayload; coins: number; earnedToday: number; onAgain: () => void; onNext: () => void }) {
-  const { reward, arena } = end;
+function ResultPanel({ end, onAgain, onNext }: { end: BattleEndPayload; onAgain: () => void; onNext: () => void }) {
+  const { arena } = end;
   const won = end.result === "win";
-  const back = <Link href="/home" className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Back to home</Link>;
+  const leave = <Link href="/arena" className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Back to the arena</Link>;
 
   if (arena?.mode === "boss") {
     const br = arena.bossRush;
     return (
-      <PixelPanel title={won ? `${BOSSES[arena.boss!].name} defeated!` : "The boss won this time"} aria-live="polite">
-        {won && br ? (
+      <PixelPanel title={won ? `${BOSSES[arena.boss!].name} defeated!` : "The boss won"} aria-live="polite">
+        {won && br && (
           <>
             <p className="text-3xl text-gold">{fmtTime(br.timeMs)}</p>
-            <p className="mt-1 text-lg text-paper">{br.newBest ? `New best! You are number ${br.rank} on the board.` : `Your best is ${fmtTime(br.bestMs)} (number ${br.rank}).`}</p>
+            <p className="mt-1 text-lg text-paper">{br.newBest ? `New best! Number ${br.rank} on the board.` : `Your best is ${fmtTime(br.bestMs)} (number ${br.rank}).`}</p>
           </>
-        ) : (
-          <p className="text-lg text-steel">{end.result === "draw" ? "Time ran out." : "Your team fell."} Try a different stance, or steer a fighter out of the red circles.</p>
         )}
-        <div className="mt-4 flex flex-wrap gap-3"><PixelButton onClick={onAgain}>Back to the arena</PixelButton>{back}</div>
+        <div className="mt-4 flex flex-wrap gap-3"><PixelButton onClick={onAgain}>Fight again</PixelButton>{leave}</div>
       </PixelPanel>
     );
   }
 
   if (arena?.mode === "raid") {
-    const { stage = 1, stages = 10, cleared = 0, more } = arena;
-    const title = !won ? `Your team fell on floor ${stage}` : more ? `Floor ${stage} cleared!` : "Raid cleared!";
+    const { stage = 1, stages = 10, more } = arena;
     return (
-      <PixelPanel title={title} aria-live="polite">
-        <p className="text-3xl text-gold">{cleared} / {stages} floors</p>
-        <p className="mt-1 text-lg text-steel">
-          {more ? "Your team heals a little before the next floor. Fallen fighters return weak." : won ? "You climbed every floor. Well done." : "The raid ends here. Nothing is lost, and no rewards were on offer."}
-        </p>
+      <PixelPanel title={!won ? "Your team fell" : more ? `Floor ${stage} cleared!` : "Raid cleared!"} aria-live="polite">
+        <p className="text-3xl text-gold">Floor {won ? stage : stage - 1} of {stages}</p>
         <div className="mt-4 flex flex-wrap gap-3">
-          {more ? <PixelButton onClick={onNext}>Next floor</PixelButton> : <PixelButton onClick={onAgain}>Back to the arena</PixelButton>}
-          {more ? <button type="button" onClick={onAgain} className="pixel-btn bg-panel px-4 py-2 text-lg uppercase text-paper">Leave the raid</button> : back}
+          {more ? <PixelButton onClick={onNext}>Next floor</PixelButton> : <PixelButton onClick={onAgain}>Raid again</PixelButton>}
+          {leave}
         </div>
       </PixelPanel>
     );
   }
 
-  const title = won ? "You won!" : end.result === "loss" ? "You lost this one" : "It was a draw";
-  let note = "";
-  if (reward) {
-    if (reward.coinsEarned === 0 && reward.base === 0) note = "No points this time. Practice pays for wins and for real fights.";
-    else if (reward.coinsEarned === 0 || reward.capped) note = `You hit today's practice limit of ${reward.dailyCap} points. Come back tomorrow for more.`;
-    else if (reward.multiplier < 1) note = "Matches pay a bit less after your first few each day.";
-  }
-
   return (
-    <PixelPanel title={title} aria-live="polite">
-      {reward ? (
-        <p className="text-3xl text-gold">+{reward.coinsEarned} points</p>
-      ) : (
-        <p className="text-xl text-ember">We couldn&apos;t save the points for this match.</p>
-      )}
-      {note && <p className="mt-1 text-lg text-steel">{note}</p>}
-      <p className="mt-2 text-lg text-paper">
-        You now have {coins} points. Practice points today: {earnedToday} / {DAILY_CAP}.
-      </p>
-      <div className="mt-4 flex flex-wrap gap-3">
-        <PixelButton onClick={onAgain}>Fight again</PixelButton>
-        {back}
-      </div>
+    <PixelPanel title={won ? "You won!" : end.result === "loss" ? "You lost this one" : "It was a draw"} aria-live="polite">
+      <div className="flex flex-wrap gap-3"><PixelButton onClick={onAgain}>Fight again</PixelButton>{leave}</div>
     </PixelPanel>
-  );
-}
-
-function Chip({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="pixel-box bg-night px-3 py-1">
-      <dt className="text-sm text-steel">{label}</dt>
-      <dd className="text-xl text-paper">{value}</dd>
-    </div>
   );
 }
