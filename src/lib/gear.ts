@@ -58,7 +58,7 @@ export function gearClass(archetype: string): string {
 }
 
 export const CLASS_LABEL: Record<string, string> = {
-  novice: "Novice", fighter: "Fighter", soldier: "Soldier", warrior: "Warrior", warden: "Warden", paladin: "Paladin", shield_tank: "Shield Tank", bard: "Bard",
+  novice: "Novice", fighter: "Fighter", soldier: "Soldier", warrior: "Warrior", warden: "Paladin", paladin: "Paladin", shield_tank: "Knight", bard: "Bard",
   rogue: "Rogue", thief: "Thief", ninja: "Ninja", samurai: "Samurai",
   healer: "Healer", battle_medic: "Battle Medic", pure_healer: "Pure Healer",
   mage: "Mage", necromancer: "Necromancer", blackmage: "Blackmage", whitemage: "Whitemage",

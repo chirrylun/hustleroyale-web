@@ -249,7 +249,7 @@ export function GuildScreen({ username, coins, level, fighters: dbFighters, tuto
 
         {panel && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-ink/70 p-3 short:p-2">
-            <div className="pixel-box card-reveal max-h-[94dvh] w-full max-w-lg overflow-y-auto bg-night p-5 short:max-w-3xl short:p-3">
+            <div className={`pixel-box card-reveal max-h-[94dvh] w-full overflow-y-auto bg-night p-5 short:max-w-3xl short:p-3 ${panel === "party" ? "max-w-lg sm:max-w-3xl" : "max-w-lg"}`}>
               {panel === "party" ? (
                 <PartyPanel floorNo={floorSel} fighters={fighters} onBack={() => setPanel("adventure")} onGo={() => router.push(`/floor/${floorSel}`)} />
               ) : panel === "adventure" ? (
@@ -260,9 +260,9 @@ export function GuildScreen({ username, coins, level, fighters: dbFighters, tuto
                     {[0, 1, 2, 3].filter((t) => t * 10 + 1 <= unlocked).map((t) => (
                       <div key={t}>
                         <p className="mb-1 text-base uppercase text-steel">{themeOf(t * 10 + 1).name}</p>
-                        <div className="grid grid-cols-5 gap-1.5">
+                        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
                           {Array.from({ length: 10 }, (_, i) => t * 10 + i + 1).filter((n) => n <= unlocked).map((n) => (
-                            <button key={n} type="button" onClick={() => { setFloorSel(n); setPanel("party"); }} className={`pixel-box py-1.5 text-center text-xl ${n <= floorCleared ? "bg-panel text-leaf" : "bg-gold text-ink"}`}>{n}</button>
+                            <button key={n} type="button" onClick={() => { setFloorSel(n); setPanel("party"); }} className={`pixel-box py-1.5 text-center text-lg uppercase ${n <= floorCleared ? "bg-panel text-leaf" : "bg-gold text-ink"}`}>Floor {n}</button>
                           ))}
                         </div>
                       </div>

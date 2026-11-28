@@ -15,8 +15,8 @@ export const xpRequired = (level: number) => 30 + 22 * level + 4 * level * level
 
 export const ARCHETYPE_LABEL: Record<string, string> = {
   novice: "Novice", recruit_acolyte: "Recruit Acolyte", recruit_fighter: "Recruit Fighter", recruit_thief: "Recruit Thief",
-  shield_tank: "Shield Tank", fighter_tank: "Fighter Tank", debuff_tank: "Debuff Tank", paladin: "Paladin",
-  pure_healer: "Pure Healer", healer_fighter: "Battle Medic", healer_tank: "Warden", bard: "Bard",
+  shield_tank: "Knight", fighter_tank: "Fighter", debuff_tank: "Warden", paladin: "Paladin",
+  pure_healer: "Pure Healer", healer_fighter: "Battle Medic", healer_tank: "Paladin", bard: "Bard",
   rogue: "Rogue", magical_dps: "Mage", marksman: "Marksman", necromancer: "Necromancer",
   ninja: "Ninja", samurai: "Samurai", soldier: "Soldier", sharpshooter: "Sharpshooter", ranger: "Ranger", whitemage: "White Mage", blackmage: "Black Mage",
 };
@@ -30,15 +30,16 @@ export const RECRUITS: Record<Role, { id: string; blurb: string }> = {
 export const RECRUIT_ADVANCE_LEVEL = 20;
 export const isRecruit = (archetype: string) => archetype.startsWith("recruit_");
 
-/** First-tier classes only: the second tier (Paladin, Debuff Tank, Warden, Bard, Marksman, Sharpshooter, Necromancer and more) is reached later through the class changer in town. */
+/** First-tier classes only: the second tier (Warden, Paladin, Marksman, Sharpshooter, Necromancer and more) is reached later through the class changer in town. */
 export const CLASSES: Record<Role, { id: string; blurb: string }[]> = {
   tank: [
-    { id: "shield_tank", blurb: "Soaks hits and shields the team." },
-    { id: "fighter_tank", blurb: "Tough brawler that taunts enemies." },
+    { id: "shield_tank", blurb: "Knight: soaks hits and shields the team." },
+    { id: "fighter_tank", blurb: "Fighter: tough brawler that taunts enemies. Grows into a Warden or Soldier." },
   ],
   healer: [
     { id: "pure_healer", blurb: "The strongest healing in the guild." },
-    { id: "healer_fighter", blurb: "Fights in the front line and heals." },
+    { id: "healer_fighter", blurb: "Fights in the front line and heals. Grows into a Paladin." },
+    { id: "bard", blurb: "Heals and inspires the team with song." },
   ],
   dps: [
     { id: "rogue", blurb: "Fast striker with dodges and finishing blows." },
