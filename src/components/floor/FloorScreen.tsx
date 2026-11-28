@@ -14,6 +14,7 @@ import type { EquippedSkill } from "@/lib/starter-pack";
 import { findPath, buildNav, clearLine, nearestRoomy, nearestWalkable, roomy, walkable, standable, type Pt } from "@/lib/guild-nav";
 import type { Stance } from "@/lib/battle";
 import { clearExpedition, partySig, readExpedition, writeExpedition } from "@/lib/world/expedition";
+import { MELEE_REACH, RECOVER_ABOVE, RECOVER_BELOW, engagement, kitOf } from "@/lib/world/roles";
 import { RULES, START_MOVING, STANCES, STOP_MOVING, STROLL_SPEED, arriveEase, strollGoal } from "@/lib/world/stance";
 import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan } from "@/lib/world/party";
 import { restedFrac } from "@/lib/rest";
@@ -110,6 +111,8 @@ const depth = (y: number) => 10 + Math.round(y * 10);
 /** One fighter or mob. Its position and state are updated by the loop, so moving costs no React renders. */
 interface Ag {
   id: string;
+  /** Role behaviour: carries a weapon / fights from range, and has fallen back to mid range to recover. */
+  armed?: boolean; ranged?: boolean; recovering?: boolean;
   /** Training field: when the next second's healing lands. */
   healAt?: number;
   side: "ally" | "foe";
@@ -173,6 +176,15 @@ interface Ag {
 
 /** What the room server sends about a mob and about another player's fighters. */
 interface WireMob { id: number; kind: string; rarity: string; sprite: string; level: number; boss: boolean; x: number; y: number; hp: number; max: number; home: [number, number, number]; dead?: boolean }
+/** A squad member's weapon and range (a staff or bow shoots; a healer only fights if armed). */
+function kitFor(f: { gear?: unknown; template: { role: "tank" | "healer" | "dps"; archetype: string } }) {
+  const rows = (f.gear ?? []) as { slot: string; item: { base_slug: string } | { base_slug: string }[] | null }[];
+  const w = rows.find((r) => r.slot === "weapon")?.item;
+  const slug = (Array.isArray(w) ? w[0] : w)?.base_slug ?? null;
+  const k = kitOf(f.template.role, f.template.archetype, slug);
+  return { armed: k.armed, ranged: k.ranged };
+}
+
 interface WireFighter { id: string; sprite: string; name: string; role: "tank" | "healer" | "dps"; level: number; max: number; x?: number; y?: number; frac?: number; dead?: boolean }
 interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
 interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number; xp?: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; gear?: { name: string; rank: number; level: number } | null }
@@ -394,7 +406,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       // Beside the light, never inside it: by the white pillar when coming up, by the golden one when coming back down.
       const at = clearOfLight(nav, fromAbove ? [floor.exit[0] + (isBossFloor(floor.n) ? 2.6 : 0), floor.exit[1] + 0.9] : [floor.start[0], floor.start[1] + 0.9], fromAbove ? -1 : 1, off);
       return makeAg("ally", {
-        id: f.id, sprite: f.template.sprite_key, role: f.template.role, name: f.template.name, level: f.level,
+        id: f.id, sprite: f.template.sprite_key, role: f.template.role, name: f.template.name, level: f.level, ...kitFor(f),
         x: at[0], y: at[1], xp: f.xp ?? 0, hp: f.hp, atk: f.atk, def: f.def, kind: "fighter", slot, speedMul: rnd(0.93, 1.07),
         magic: f.magic, maxEn: f.stamina * 5, en: f.stamina * 5, regen: 2 + f.stamina * 0.2,
         skills: (f.skills ?? []).filter((s) => s.slot >= 2 && s.name && s.kind).sort((x, y) => x.slot - y.slot).map(toFSkill),
@@ -823,7 +835,12 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             return;
           }
           if (a.target && a.target.dead) a.target = null;
-          if (!a.target) {
+          // Role: hurt fighters fall back to mid range until they are healed, then return; each role has its own reach.
+          const hpf = a.hp / Math.max(1, a.max);
+          if (hpf < RECOVER_BELOW) a.recovering = true; else if (hpf > RECOVER_ABOVE) a.recovering = false;
+          const eng = engagement(a.role, { armed: !!a.armed, ranged: !!a.ranged }, !!a.recovering);
+          if (!eng.fights) { a.target = null; }
+          if (!a.target && eng.fights) {
             // How far each fighter looks, and whether it may wander off the held ground, depends on the stance.
             let best = rule.aggro;
             for (const f of aliveF) {
@@ -839,9 +856,10 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           if (a.skills.length) cast(a, now, A, F);
           if (a.target) {
             const t = a.target, d = dist(a, t);
-            if (d > 1.35) {
+            const kite = eng.reach > MELEE_REACH && d < eng.reach * 0.5; // a shooter backs off when something gets too close
+            if (d > eng.reach || kite) {
               if (a.repath <= 0 || !a.path.length) {
-                a.path = findPath(nav, [a.x, a.y], ringPoint(t, a.angle, 1.0));
+                a.path = findPath(nav, [a.x, a.y], ringPoint(t, a.angle, eng.stand));
                 a.repath = d > 14 ? 1.4 : 0.6; // long routes are worked out less often
                 if (!a.path.length) { a.skipId = t.id; a.skipUntil = now + 4000; a.target = null; return; } // no way through: try another
               }

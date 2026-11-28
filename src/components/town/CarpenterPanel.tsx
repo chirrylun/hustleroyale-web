@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
+import { UiIcon } from "@/components/ui/UiIcon";
 import { createClient } from "@/lib/supabase/client";
 import { RANK_NAME } from "@/lib/guild-ranks";
 
@@ -110,13 +111,12 @@ export function CarpenterPanel() {
                 <li key={d.slug} className="pixel-box flex flex-col gap-1 bg-panel p-2">
                   <div className="flex h-20 items-center justify-center bg-night"><img src={`/guild/props/${d.slug}.png`} alt="" draggable={false} className="max-h-14 max-w-[70%] [image-rendering:pixelated]" /></div>
                   <p className="truncate leading-tight">{d.name}</p>
-                  <p className="text-sm text-steel">🪙 {d.price} each · you have {owned[d.slug] ?? 0}</p>
-                  <div className="mt-auto flex items-center justify-between gap-1">
-                    <button type="button" aria-label={`Fewer ${d.name}`} className="pixel-box h-9 w-9 shrink-0 bg-night text-xl" onClick={() => setQty({ ...qty, [d.slug]: Math.max(1, n(d.slug) - 1) })}>-</button>
-                    <span className="min-w-6 text-center">{n(d.slug)}</span>
-                    <button type="button" aria-label={`More ${d.name}`} className="pixel-box h-9 w-9 shrink-0 bg-night text-xl" onClick={() => setQty({ ...qty, [d.slug]: Math.min(20, n(d.slug) + 1) })}>+</button>
+                  <div className="mt-auto flex items-center justify-center gap-1">
+                    <button type="button" aria-label={`Fewer ${d.name}`} disabled={n(d.slug) <= 1} className="h-8 w-8 bg-night text-xl text-paper disabled:opacity-40" onClick={() => setQty({ ...qty, [d.slug]: Math.max(1, n(d.slug) - 1) })}>−</button>
+                    <span className="flex h-8 w-12 items-center justify-center bg-night text-xl text-paper">{n(d.slug)}</span>
+                    <button type="button" aria-label={`More ${d.name}`} disabled={n(d.slug) >= 20} className="h-8 w-8 bg-night text-xl text-paper disabled:opacity-40" onClick={() => setQty({ ...qty, [d.slug]: Math.min(20, n(d.slug) + 1) })}>+</button>
                   </div>
-                  <PixelButton className="w-full px-2 text-base" disabled={busy || poor} onClick={() => void run(() => createClient().rpc("guild_buy_decor", { p_slug: d.slug, p_qty: n(d.slug) }), `Bought ${n(d.slug)} × ${d.name}.`)}>Buy · 🪙 {total}</PixelButton>
+                  <button type="button" disabled={busy || poor} onClick={() => void run(() => createClient().rpc("guild_buy_decor", { p_slug: d.slug, p_qty: n(d.slug) }), `Bought ${n(d.slug)} × ${d.name}.`)} className="flex items-center justify-center gap-1 bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Buy {n(d.slug) > 1 ? `×${n(d.slug)}` : ""} <span>{total}</span><UiIcon name="coins" size={18} /></button>
                 </li>
               );
             })}
