@@ -22,7 +22,7 @@ import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, type Pt } from "@/lib/guild-nav";
 import { getFloorSocket } from "@/lib/socket";
 import type { Role } from "@/lib/sprites/designs";
-import { ATLAS, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
+import { ATLASES, SCALE, TILE_PX as T, TOWNS, UNIT, navLayoutOf, type TownId, type TownProp } from "@/lib/town/maps";
 
 const SPEED = 2.6; // tiles per second
 const FRAME = 3.4; // a fighter's sprite frame, in tiles
@@ -74,8 +74,9 @@ function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite
  */
 export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: GuildFighter[]; /** Show the Guild Manager's walk-through (right after training). */ tour?: boolean }) {
   const town = TOWNS[id];
+  const ATLAS = ATLASES[id];
   const router = useRouter();
-  const nav = useMemo(() => buildNav(navLayoutOf(town)), [town]);
+  const nav = useMemo(() => buildNav(navLayoutOf(town, ATLAS)), [town, ATLAS]);
   const mine = useMemo(() => {
     // Only the party leader walks around the lobby and market.
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => a.team_slot - b.team_slot);
@@ -316,8 +317,8 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
                 className="pointer-events-none absolute"
                 style={{
                   left: (p.x - rw / 2) * SCALE, top: (p.y - rh) * SCALE, width: rw * SCALE, height: rh * SCALE,
-                  backgroundImage: "url(/town/props.png)", backgroundSize: `${ATLAS.w * SCALE}px ${ATLAS.h * SCALE}px`,
-                  backgroundPosition: `${-rx * SCALE}px ${-ry * SCALE}px`, zIndex: zOf(p.y / UNIT),
+                  backgroundImage: `url(/town/props_${id}.png)`, backgroundSize: `${ATLAS.w * SCALE}px ${ATLAS.h * SCALE}px`,
+                  backgroundPosition: `${-rx * SCALE}px ${-ry * SCALE}px`, zIndex: p.flat ? 2 : zOf(p.y / UNIT),
                 }}
               />
             );
