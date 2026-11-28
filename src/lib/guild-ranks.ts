@@ -58,16 +58,12 @@ function oldProp(id: string, p: Partial<HallProp> & { cx: number; fy: number; w:
 /** The props that work: they stay in the same place whatever the rank. */
 export function fixtures(rank: number): HallProp[] {
   return [
-    rankProp(rank, "map", "map", { group: "adventure", label: "Adventure", cx: 0.1, fy: 0.55, action: "adventure", spot: [0.1, 0.6], emote: "🗺" }),
-    rankProp(rank, "board", "board", { group: "jobs", label: "Job Board", cx: 0.2, fy: 0.395, action: "jobs", spot: [0.12, 0.5], emote: "📜" }),
-    rankProp(rank, "arena", "arena", { group: "arena", label: "Arena", cx: 0.34, fy: 0.4, href: "/arena", spot: [0.34, 0.47], emote: "⚔️" }),
+    rankProp(rank, "map", "map", { group: "adventure", label: "Adventure", cx: 0.1, fy: 0.55, action: "adventure", spot: [0.18, 0.58], emote: "🗺" }),
+    rankProp(rank, "arena", "arena", { group: "arena", label: "Arena", cx: 0.1, fy: 0.77, href: "/arena", spot: [0.19, 0.78], emote: "⚔️" }),
+    rankProp(rank, "board", "board", { group: "jobs", label: "Job Board", cx: 0.34, fy: 0.395, action: "jobs", spot: [0.27, 0.48], emote: "📜" }),
     rankProp(rank, "plaque", "plaque", { group: "leaderboard", label: "Leaderboard", cx: 0.63, fy: 0.4, href: "/leaderboard", spot: [0.63, 0.47], emote: "🏆" }),
-    rankProp(rank, "market", "market", { group: "market", label: "Market", cx: 0.89, fy: 0.4, href: "/market", spot: [0.89, 0.47], emote: "🛒" }),
-    rankProp(rank, "portal", "portal", { group: "lobby", label: "Main Lobby", cx: 0.88, fy: 0.72, action: "lobby", spot: [0.88, 0.79], emote: "⬆" }),
-    // The training yard, bottom left.
-    oldProp("scarecrow", { group: "fighters", cx: 0.1, fy: 0.84, w: 72, h: 142, href: "/team", spot: [0.1, 0.9], work: "attack", foot: [0.085, 0.8, 0.115, 0.84] }),
-    oldProp("target", { group: "fighters", label: "My Fighters", cx: 0.2, fy: 0.84, w: 70, h: 123, href: "/team", spot: [0.2, 0.9], work: "attack", foot: [0.185, 0.805, 0.215, 0.84] }),
-    oldProp("rack", { group: "fighters", cx: 0.31, fy: 0.9, w: 137, h: 141, href: "/team", spot: [0.31, 0.96], emote: "🗡️" }),
+    rankProp(rank, "portal", "portal", { group: "lobby", label: "Main Lobby", cx: 0.89, fy: 0.405, action: "lobby", spot: [0.89, 0.48], emote: "⬆" }),
+    rankProp(rank, "market", "market", { group: "market", label: "Market", cx: 0.88, fy: 0.72, href: "/market", spot: [0.8, 0.74], emote: "🛒" }),
   ];
 }
 

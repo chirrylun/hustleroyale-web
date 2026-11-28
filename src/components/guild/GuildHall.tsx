@@ -31,7 +31,7 @@ const IDLE: Look = { walking: false, flip: false, working: false, beat: 0 };
 const SPEED = 2.6; // tiles per second
 const FRAME = HALL_FRAME; // a fighter's sprite frame, in tiles
 /** The quest manager stands by the job board. Footprint in fractions of the picture. */
-const SECRETARY = { id: "secretary", npc: "secretary", x: 0.2, y: 0.475, facing: "front", action: "jobs", foot: [0.185, 0.46, 0.215, 0.477] };
+const SECRETARY = { id: "secretary", npc: "secretary", x: 0.375, y: 0.445, facing: "front", action: "jobs", foot: [0.36, 0.43, 0.39, 0.447] };
 const T = TILES;
 const footTiles = (f: number[] | null | undefined) => (f ? f.map((v) => v * T) : null);
 const buildHallNav = (props: Prop[]) =>
