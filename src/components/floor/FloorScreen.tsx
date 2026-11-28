@@ -20,6 +20,8 @@ import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan }
 import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import { openPartyPanel, useSocial } from "@/lib/social";
+import { JoinBadge } from "@/components/chat/JoinBadge";
 import { BagMenu } from "@/components/floor/BagMenu";
 import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
 import { POTIONS, POTION_SLUGS, itemImage, itemName, UI_CELLS, UI_SHEET } from "@/lib/items";
@@ -171,7 +173,7 @@ interface Ag {
   /** Foes: it was hit by one of ours, so it fights back whatever the floor's temper. */
   provoked: boolean;
   /** Shared rooms: driven by the server (mobs) or by another player (their fighters); it eases toward (tx, ty). */
-  net?: boolean; tx?: number; ty?: number; swings?: number; uid?: string;
+  net?: boolean; tx?: number; ty?: number; swings?: number; uid?: string; /** The first fighter of another player: the one that carries the join-party icon. */ lead?: boolean;
 }
 
 /** What the room server sends about a mob and about another player's fighters. */
@@ -198,7 +200,7 @@ const mobName = (kind: string) => MOB_NAME[kind] ?? kind.charAt(0).toUpperCase()
 
 const POTION_LIST = POTION_SLUGS;
 
-function Unit({ a, party }: { a: Ag; party: number }) {
+function Unit({ a, party, join }: { a: Ag; party: number; join?: () => void }) {
   const [look, setLook] = useState(a.look);
   // Bosses are drawn large on purpose; everything else is scaled to a realistic size next to a fighter.
   const liveSprite = useLook(a.id, a.sprite);
@@ -214,6 +216,7 @@ function Unit({ a, party }: { a: Ag; party: number }) {
       </div>
       {/* Drawn on its own layer so a tree or another fighter in front can never cover the bar, the tag or a level-up. */}
       <div ref={(el) => { a.fx = el; }} className="pointer-events-none absolute left-0 top-0 will-change-transform" style={{ ...box, zIndex: 9000 }}>
+        {join && <JoinBadge onJoin={join} className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[300%]" />}
         {a.side === "foe" && <span ref={(el) => { a.arrowEl = el; }} aria-hidden="true" className="absolute left-1/2 top-0 hidden -translate-x-1/2 -translate-y-[170%] animate-bounce text-2xl leading-none text-gold" style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}>▼</span>}
         <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
           <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
@@ -320,6 +323,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   // Tell the server this floor has been reached (counts toward "Reach Floor N" quests).
 
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+  const { nearby } = useSocial();
+  const recruiting = useMemo(() => new Map(nearby.map((n) => [n.host, n.id])), [nearby]);
   const firstDone = useRef(false);
   const [firstJobDone, setFirstJobDone] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1092,10 +1097,10 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       if (w.dead) { f.dead = true; f.hp = 0; f.deadAt = performance.now() - 5000; }
       return f;
     };
-    const netMates = (p: WirePlayer): Ag[] => p.fighters.map((w) => {
+    const netMates = (p: WirePlayer): Ag[] => p.fighters.map((w, i) => {
       const x = w.x ?? 0, y = w.y ?? 0;
       const a = makeAg("ally", { id: w.id, sprite: w.sprite, role: w.role, name: w.name, level: w.level, x, y, hp: Math.max(1, Math.round(w.max * (w.frac ?? 1))), atk: 0, def: 0, kind: "fighter", net: true, tx: x, ty: y, uid: p.uid });
-      a.max = w.max;
+      a.max = w.max; a.lead = i === 0;
       if (w.dead) { a.dead = true; a.hp = 0; a.deadAt = -1e9; }
       return a;
     });
@@ -1143,8 +1148,9 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       a.look.act = "hurt"; a.look.n++;
       spawnText(a.x, a.y, d > 0 ? String(d) : "Blocked", "text-ember");
     };
-    const onPaid = (k: PaidKill) => {
+    const onPaid = (k: PaidKill & { mini?: boolean; party?: { n: number; loot: boolean; winner: string } }) => {
       paid(k, k.kind, k.boss);
+      if (k.party && !k.party.loot && (k.boss || k.mini)) showToast(`${mobName(k.kind)} loot went to ${k.party.winner || "a party member"}`);
       if (k.gear) showToast(`${mobName(k.kind)} dropped ${k.gear.name} (rank ${k.gear.rank}, lv ${k.gear.level})!`);
       if (k.throttled) return;
       if (k.boss) progress.current.boss = true; else progress.current.kills++;
@@ -1362,9 +1368,9 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           <p className="truncate text-sm text-steel">{!isTraining(floor.n) && floor.theme.name}</p>
         </div>
         {room && (
-          <p className="pixel-box shrink-0 bg-panel px-2 py-1 text-center text-base uppercase leading-tight text-paper" title="Share the code and a friend can join this room">
+          <button type="button" onClick={() => openPartyPanel()} className="pixel-box shrink-0 bg-panel px-2 py-1 text-center text-base uppercase leading-tight text-paper" title="Parties: start one or join one in this room. Share the code and a friend can join this room.">
             {room.n}/4 here<span className="block text-sm text-gold">Room {room.code}</span>
-          </p>
+          </button>
         )}
       </div>
       {trainOn && state === "play" && goal && <p className="z-[9400] bg-gold/90 px-3 py-1 text-center text-base text-ink">{goal}</p>}
@@ -1424,7 +1430,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             );
           })}
           <div ref={marker} className="marker pointer-events-none absolute z-[5] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold opacity-0" />
-          {ready && [...allies.current, ...mates.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} />)}
+          {ready && [...allies.current, ...mates.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} join={u.uid && u.lead && recruiting.has(u.uid) ? () => openPartyPanel(recruiting.get(u.uid!)) : undefined} />)}
         </div>
 
         {state === "play" && (

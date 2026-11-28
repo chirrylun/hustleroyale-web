@@ -1,5 +1,7 @@
 "use client";
 
+import { openPartyPanel, useSocial } from "@/lib/social";
+import { JoinBadge } from "@/components/chat/JoinBadge";
 import { LiveSprite } from "@/components/sprites/LiveSprite";
 import { Music } from "@/components/Music";
 import { ArmouryPanel } from "@/components/gear/ArmouryPanel";
@@ -50,7 +52,7 @@ type Rig = Map<string, { el: HTMLDivElement | null; set: (l: Look) => void }>;
 type Talk = "arena" | "challenge" | "boss" | "raid" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "blacksmith" | "carpenter" | "guard";
 const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", challenge: "trainer", boss: "gladiator", raid: "guard", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", blacksmith: "blacksmith", carpenter: "carpenter", guard: "guard" };
 
-function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite: string; role: Role; level: number; tag: string | null; own: boolean; rig: Rig }) {
+function Figure({ id, sprite, role, level, tag, own, rig, join }: { id: string; sprite: string; role: Role; level: number; tag: string | null; own: boolean; rig: Rig; join?: () => void }) {
   const [look, setLook] = useState<Look>({ walking: false, flip: false });
   const size = FRAME * T;
   return (
@@ -60,6 +62,7 @@ function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite
       // The feet sit at about 90% of the sprite frame, so lift the frame by that much to stand on the point.
       style={{ width: size, height: size, marginLeft: -size / 2, marginTop: -size * 0.88, visibility: "hidden" }}
     >
+      {join && <JoinBadge onJoin={join} className="absolute left-1/2 top-[-6%] -translate-x-1/2" />}
       {tag && <span className={`absolute left-1/2 top-[14%] -translate-x-1/2 whitespace-nowrap px-1 text-sm ${own ? "bg-gold text-ink" : "bg-ink/80 text-paper"}`}>{tag}</span>}
       <span className="absolute left-1/2 top-[24%] -translate-x-1/2 whitespace-nowrap bg-ink/80 px-1 text-sm text-paper">Lv {level}</span>
       <LiveSprite id={id} spriteKey={sprite} role={role} flip={look.flip} rest={look.walking ? "walk" : "idle"} />
@@ -86,6 +89,8 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
   const [rig] = useState<Rig>(() => new Map());
   const agents = useRef(new Map<string, Agent>());
   const [remote, setRemote] = useState<Remote[]>([]);
+  const { nearby } = useSocial();
+  const recruiting = useMemo(() => new Map(nearby.map((n) => [n.host, n.id])), [nearby]);
   const [talk, setTalk] = useState<Talk | null>(null);
   const [here, setHere] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
@@ -291,7 +296,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
           <p className="truncate text-sm text-steel">{hint}</p>
         </div>
         {label && <p className="text-lg text-gold">→ {label}</p>}
-        {town.online && <p className="pixel-box bg-panel px-2 py-1 text-base uppercase leading-tight text-paper">{offline ? "Offline" : here === null ? "…" : `${here} here`}</p>}
+        {town.online && <button type="button" onClick={() => openPartyPanel()} className="pixel-box bg-panel px-2 py-1 text-base uppercase leading-tight text-paper" title="Parties: start one or join one in this room">{offline ? "Offline" : here === null ? "…" : `${here} here`}</button>}
       </div>
 
       <div
@@ -341,7 +346,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
             );
           })}
           <div ref={marker} className="marker pointer-events-none absolute z-[5] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold opacity-0" />
-          {remote.map((r) => <Figure key={r.id} id={r.id} sprite={r.sprite} role={r.role} level={r.level} tag={r.lead ? r.name : null} own={false} rig={rig} />)}
+          {remote.map((r) => <Figure key={r.id} id={r.id} sprite={r.sprite} role={r.role} level={r.level} tag={r.lead ? r.name : null} own={false} rig={rig} join={r.lead && recruiting.has(r.uid) ? () => openPartyPanel(recruiting.get(r.uid)) : undefined} />)}
           {mine.map((f, i) => <Figure key={f.id} id={f.id} sprite={f.template.sprite_key} role={f.template.role} level={f.level} tag={i === 0 ? "You" : null} own rig={rig} />)}
         </div>
       </div>
