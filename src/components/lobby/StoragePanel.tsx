@@ -19,8 +19,8 @@ export function StoragePanel() {
   const [side, setSide] = useState<Side>("bag");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selecting, setSelecting] = useState(false);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [sel, setSel] = useState<string | null>(null);
+  const [num, setNum] = useState(1);
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -50,25 +50,16 @@ export function StoragePanel() {
     setBusy(false);
   };
 
-  const moveMany = async (moves: { slug: string; qty: number }[]) => {
-    if (busy || moves.length === 0) return;
-    setBusy(true); setError(null);
-    const { error: e } = await createClient().rpc("storage_move_many", { p_moves: moves });
-    if (e) setError(MESSAGES[Object.keys(MESSAGES).find((k) => e.message.includes(k)) ?? ""] ?? "That didn't work. Try again.");
-    else setPicked(new Set());
-    await load();
-    setBusy(false);
-  };
-
   const used = box?.reduce((s, i) => s + i.qty, 0) ?? 0;
   const carried = bag?.reduce((s, i) => s + i.qty, 0) ?? 0;
   const room = Math.max(0, BAG_MAX - carried);
   const list = side === "bag" ? bag : box;
-  const chosen = (list ?? []).filter((i) => picked.has(i.slug));
-  const chosenQty = chosen.reduce((t, i) => t + i.qty, 0);
-  const fits = side === "bag" ? used + chosenQty <= cap : carried + chosenQty <= BAG_MAX;
-  const toggle = (slug: string) => setPicked((p) => { const n = new Set(p); if (n.has(slug)) n.delete(slug); else n.add(slug); return n; });
-  const switchSide = (x: Side) => { setSide(x); setPicked(new Set()); };
+  const cur = list?.find((i) => i.slug === sel) ?? null;
+  // The most that can move: what you have, limited by the room on the other side.
+  const most = cur ? Math.max(0, Math.min(cur.qty, side === "bag" ? cap - used : room)) : 0;
+  const n = Math.min(Math.max(1, num), Math.max(1, most));
+  const pick = (slug: string) => { setSel(sel === slug ? null : slug); setNum(1); };
+  const switchSide = (x: Side) => { setSide(x); setSel(null); setNum(1); };
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -84,10 +75,7 @@ export function StoragePanel() {
           </button>
         ))}
       </div>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-base text-steel">{selecting ? "Tap items to pick them." : side === "bag" ? "Tap an item to store it." : "Tap an item to take it back."} Bag {carried}/{BAG_MAX}{room === 0 ? " · full" : ""}</p>
-        <button type="button" aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); }} className={`pixel-box min-h-9 shrink-0 px-3 text-base uppercase ${selecting ? "bg-gold text-ink" : "bg-panel text-paper"}`}>Select</button>
-      </div>
+      <p className="text-base text-steel">{side === "bag" ? `Tap an item, then choose how many. Bag ${carried}/${BAG_MAX}.` : `Tap an item, then choose how many. Bag ${carried}/${BAG_MAX}${room === 0 ? " · full" : ""}.`}</p>
       <div className="max-h-72 min-h-32 overflow-y-auto">
         {list === null ? <div className="h-28 animate-pulse bg-panel" aria-busy="true" />
           : list.length === 0 ? <p className="py-6 text-center text-xl text-steel">{side === "bag" ? "Your bag is empty." : "The box is empty."}</p>
@@ -96,26 +84,32 @@ export function StoragePanel() {
               {list.map((i) => (
                 <li key={i.slug} className="flex min-w-0 flex-col items-center gap-1">
                   <button
-                    type="button" disabled={busy || (!selecting && (side === "bag" ? used >= cap : room <= 0))} aria-pressed={selecting ? picked.has(i.slug) : undefined} onClick={() => (selecting ? toggle(i.slug) : move(i.slug, side === "bag" ? 1 : -1))}
-                    aria-label={`${side === "bag" ? "Store" : "Take"} one ${i.name}`}
-                    className={`relative flex aspect-square w-full items-center justify-center border-2 bg-panel enabled:hover:brightness-125 disabled:opacity-50 ${RARITY[i.rarity]?.ring ?? "border-steel"} ${picked.has(i.slug) ? "outline outline-4 outline-gold" : ""}`}
+                    type="button" aria-pressed={sel === i.slug} onClick={() => pick(i.slug)}
+                    aria-label={i.name}
+                    className={`relative flex aspect-square w-full items-center justify-center border-2 bg-panel enabled:hover:brightness-125 disabled:opacity-50 ${RARITY[i.rarity]?.ring ?? "border-steel"} ${sel === i.slug ? "outline outline-4 outline-gold" : ""}`}
                   >
                     <img src={itemImage(i.slug)} alt="" width={44} height={44} draggable={false} />
                     <span className="absolute bottom-0 right-0 bg-ink/80 px-1 text-lg leading-5 text-paper">{i.qty}</span>
                   </button>
                   <span className={`w-full truncate text-center text-sm leading-4 ${RARITY[i.rarity]?.text ?? "text-paper"}`}>{i.name}</span>
-                  {!selecting && i.qty > 1 && (
-                    <button type="button" disabled={busy} onClick={() => move(i.slug, (side === "bag" ? 1 : -1) * Math.min(i.qty, side === "bag" ? Math.max(0, cap - used) : room))} className="bg-night px-1.5 text-sm uppercase text-gold disabled:opacity-40">All</button>
-                  )}
                 </li>
               ))}
             </ul>
           )}
       </div>
-      {selecting && (
-        <button type="button" disabled={busy || chosen.length === 0 || !fits} onClick={() => moveMany(chosen.map((i) => ({ slug: i.slug, qty: (side === "bag" ? 1 : -1) * i.qty })))} className="pixel-box min-h-11 bg-leaf px-3 text-xl uppercase text-ink disabled:opacity-40">
-          {chosen.length === 0 ? "Pick some items" : !fits ? (side === "bag" ? "Not enough room in the box" : "Not enough room in your bag") : `${side === "bag" ? "Store" : "Take"} ${chosen.length} (${chosenQty} items)`}
-        </button>
+      {cur && (
+        <div className="pixel-box flex flex-wrap items-center gap-2 bg-panel p-2">
+          <p className="min-w-0 flex-1 basis-28 truncate text-xl text-paper">{cur.name}</p>
+          <div className="flex items-center gap-1">
+            <button type="button" aria-label="Fewer" disabled={busy || n <= 1} onClick={() => setNum(n - 1)} className="h-10 w-10 bg-night text-xl text-paper disabled:opacity-40">−</button>
+            <span className="min-w-8 text-center text-xl text-paper">{n}</span>
+            <button type="button" aria-label="More" disabled={busy || n >= most} onClick={() => setNum(n + 1)} className="h-10 w-10 bg-night text-xl text-paper disabled:opacity-40">+</button>
+            <button type="button" disabled={busy || n >= most} onClick={() => setNum(most)} className="h-10 bg-night px-3 text-base uppercase text-gold disabled:opacity-40">All</button>
+          </div>
+          <button type="button" disabled={busy || most < 1} onClick={() => move(cur.slug, (side === "bag" ? 1 : -1) * n).then(() => setNum(1))} className="min-h-10 w-full bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">
+            {most < 1 ? (side === "bag" ? "The box is full" : "Your bag is full") : `${side === "bag" ? "Store" : "Take"} ${n}`}
+          </button>
+        </div>
       )}
       {error && <p role="alert" className="text-xl text-ember">{error}</p>}
     </div>
