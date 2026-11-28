@@ -426,8 +426,8 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
 
 /** The name floating over each person, so everyone is clear who they are. */
 const TAG: Record<Talk, string> = {
-  arena: "Arena Master", challenge: "Challenge Master", boss: "Boss Rush Master", raid: "Floor Raid Master", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage Keeper", merchant: "Item Seller", armourer: "Armourer", blacksmith: "Blacksmith", carpenter: "Carpenter", guard: "Guild Guard",
+  arena: "Arena Master", challenge: "Challenge Master", boss: "Boss Rush Master", raid: "Floor Raid Master", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage Keeper", merchant: "Item Seller", armourer: "Armourer", blacksmith: "Blacksmith", carpenter: "Carpenter", guard: "Guard",
 };
 const TITLE: Record<Talk, string> = {
-  arena: "The Arena", challenge: "Challenge", boss: "Boss Rush", raid: "Floor Raid", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", blacksmith: "Blacksmith", carpenter: "Carpenter", guard: "Guild Guard",
+  arena: "The Arena", challenge: "Challenge", boss: "Boss Rush", raid: "Floor Raid", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", blacksmith: "Blacksmith", carpenter: "Carpenter", guard: "Guard",
 };
