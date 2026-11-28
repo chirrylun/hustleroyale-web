@@ -119,11 +119,11 @@ export function ClassChangerPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex items-center justify-between text-xl text-paper">
-        <span className="flex items-center gap-1"><UiIcon name="coins" size={24} /> {coins ?? "…"}</span>
+      <div className="flex shrink-0 items-center justify-between gap-2 text-xl text-paper">
+        <span className="pixel-box flex min-h-11 items-center gap-1 bg-panel px-3 text-gold"><UiIcon name="coins" size={24} /> {coins ?? "…"}</span>
         {stage === "class" && <Tag tone="dim">Gear comes off</Tag>}
       </div>
-      {note && <p role="alert" className={`text-lg ${note.bad ? "text-ember" : "text-leaf"}`}>{note.text}</p>}
+      {note && <p role="alert" className={`shrink-0 text-lg ${note.bad ? "text-ember" : "text-leaf"}`}>{note.text}</p>}
 
       <section aria-label="Choose a fighter" className="shrink-0">
         <p className="mb-1 text-base uppercase text-gold">1 · Fighter</p>

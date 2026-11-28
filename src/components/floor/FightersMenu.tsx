@@ -6,7 +6,6 @@ import { FighterCard } from "@/components/pack/FighterCard";
 import { ClassActions } from "@/components/guild/ClassActions";
 import { ROSTER_CAP, loadFighters, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
-import { UiIcon } from "@/components/ui/UiIcon";
 import { EquipmentTab } from "@/components/gear/EquipmentTab";
 
 type Tab = "fighters" | "equipment";
@@ -78,7 +77,8 @@ export function FightersButton({ onClick, blink = false }: { onClick: () => void
       onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
       className={`pixel-box flex h-12 w-12 short:h-10 short:w-10 items-center justify-center bg-night/90 text-2xl leading-none ${blink ? "tut-blink" : ""}`}
     >
-      <UiIcon name="crown" size={30} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/ui/fighters.png" alt="" className="h-8 w-8 object-contain [image-rendering:pixelated]" draggable={false} />
     </button>
   );
 }
