@@ -398,7 +398,6 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
           )}
           {talk === "carpenter" && (
             <>
-              <p>Want your guild to look the part? I can build you a finer hall, and sell you furniture to fill it.</p>
               <CarpenterPanel />
               <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
             </>

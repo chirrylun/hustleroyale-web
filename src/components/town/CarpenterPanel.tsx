@@ -58,57 +58,71 @@ export function CarpenterPanel() {
   const n = (slug: string) => qty[slug] ?? 1;
   const owns = Object.values(owned).reduce((a, b) => a + b, 0);
 
-  return (
-    <div className="space-y-3 text-lg">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-1.5">
-          <PixelButton variant={tab === "look" ? "primary" : "ghost"} className="text-base" onClick={() => setTab("look")}>Guild look</PixelButton>
-          <PixelButton variant={tab === "furniture" ? "primary" : "ghost"} className="text-base" onClick={() => setTab("furniture")}>Furniture</PixelButton>
-        </div>
-        <p className="text-gold">🪙 {coins ?? "..."}</p>
-      </div>
-      {note && <p role="status" className={note.bad ? "text-ember" : "text-leaf"}>{note.text}</p>}
+  const tabBtn = (t: "look" | "furniture", label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === t}
+      onClick={() => setTab(t)}
+      className={`pixel-box min-h-11 flex-1 px-3 text-lg uppercase ${tab === t ? "bg-gold text-ink" : "bg-panel text-paper"}`}
+    >{label}</button>
+  );
 
-      {tab === "look" ? (
-        <div className="space-y-2">
-          <p className="text-steel">Your guild is a <span className="text-paper">{RANK_NAME[rank]}</span>. A better hall costs coins, and you keep all your furniture.</p>
-          <div className="grid gap-2 sm:grid-cols-2">
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-2 text-lg short:text-base">
+      <div className="flex shrink-0 items-stretch gap-2">
+        <div role="tablist" className="flex flex-1 gap-1.5">{tabBtn("look", "Guild look")}{tabBtn("furniture", "Furniture")}</div>
+        <p className="pixel-box flex shrink-0 items-center bg-panel px-3 text-gold" aria-label="Your coins">🪙 {coins ?? "..."}</p>
+      </div>
+      <p role="status" className={`min-h-6 shrink-0 ${note ? (note.bad ? "text-ember" : "text-leaf") : "text-steel"}`}>
+        {note?.text ?? (tab === "look" ? `Your guild is a ${RANK_NAME[rank]}. Upgrades keep all your furniture.` : `Buy here, then tap Decorate in your guild to place it. You own ${owns} of 60.`)}
+      </p>
+
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        {tab === "look" ? (
+          <ul className="flex flex-col gap-2">
             {[1, 2, 3, 4].map((r) => {
               const row = ranks.find((x) => x.rank === r);
-              const isNow = r === rank, isNext = r === rank + 1;
+              const isNow = r === rank, isNext = r === rank + 1, done = r < rank;
               return (
-                <div key={r} className={`pixel-box bg-panel p-2 ${isNow ? "outline outline-2 outline-gold" : ""}`}>
-                  <div className="aspect-[2/1] w-full bg-night bg-cover bg-top" style={{ backgroundImage: `url(/guild/hall_r${r}.webp)` }} role="img" aria-label={RANK_NAME[r]} />
-                  <p className="mt-1 uppercase text-gold">{RANK_NAME[r]}</p>
-                  {isNow ? <p className="text-leaf">Your guild</p> : r < rank ? <p className="text-steel">Owned</p> : isNext && row ? (
-                    <PixelButton className="mt-1 w-full text-base" disabled={busy || (coins ?? 0) < row.price} onClick={() => void run(() => createClient().rpc("guild_rank_up"), `Your guild is now a ${RANK_NAME[r]}.`)}>Build · 🪙 {row.price}</PixelButton>
-                  ) : <p className="text-steel">Upgrade the one before first{row ? ` · 🪙 ${row.price}` : ""}</p>}
-                </div>
+                <li key={r} className={`pixel-box flex gap-3 bg-panel p-2 ${isNow ? "outline outline-2 outline-gold" : ""} ${!isNow && !isNext && !done ? "opacity-70" : ""}`}>
+                  <div className="aspect-square w-24 shrink-0 bg-night bg-cover bg-top sm:w-32" style={{ backgroundImage: `url(/guild/hall_r${r}.webp)` }} role="img" aria-label={`${RANK_NAME[r]} preview`} />
+                  <div className="flex min-w-0 flex-1 flex-col justify-between gap-1">
+                    <div>
+                      <p className="truncate uppercase text-gold">{r}. {RANK_NAME[r]}</p>
+                      <p className="text-steel">{isNow ? "Your guild today" : done ? "Built" : isNext ? "The next upgrade" : "Build the one before first"}</p>
+                    </div>
+                    {isNext && row ? (
+                      <PixelButton className="w-full text-base" disabled={busy || (coins ?? 0) < row.price} onClick={() => void run(() => createClient().rpc("guild_rank_up"), `Your guild is now a ${RANK_NAME[r]}.`)}>
+                        {(coins ?? 0) < row.price ? `Need 🪙 ${row.price - (coins ?? 0)} more` : `Build · 🪙 ${row.price}`}
+                      </PixelButton>
+                    ) : isNow ? <p className="text-leaf">✔ Current look</p> : !done && row ? <p className="text-steel">🪙 {row.price}</p> : null}
+                  </div>
+                </li>
               );
             })}
-          </div>
-          {!next && rank >= 4 && <p className="text-leaf">Nothing finer to build. Now decorate it!</p>}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-steel">Buy furniture here, then tap Decorate in your guild to place it. You own {owns}/60.</p>
-          <div className="grid max-h-[46dvh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
-            {decor.map((d) => (
-              <div key={d.slug} className="pixel-box flex flex-col items-center gap-1 bg-panel p-2 text-center">
-                <div className="flex h-20 items-center justify-center"><img src={`/guild/props/${d.slug}.png`} alt="" draggable={false} className="max-h-20 max-w-full [image-rendering:pixelated]" /></div>
-                <p className="leading-tight">{d.name}</p>
-                <p className="text-sm text-steel">You have {owned[d.slug] ?? 0}</p>
-                <div className="flex items-center gap-1">
-                  <button type="button" aria-label="Fewer" className="pixel-box h-7 w-7 bg-night" onClick={() => setQty({ ...qty, [d.slug]: Math.max(1, n(d.slug) - 1) })}>-</button>
-                  <span className="w-6 text-center">{n(d.slug)}</span>
-                  <button type="button" aria-label="More" className="pixel-box h-7 w-7 bg-night" onClick={() => setQty({ ...qty, [d.slug]: Math.min(20, n(d.slug) + 1) })}>+</button>
-                </div>
-                <PixelButton className="w-full text-sm" disabled={busy || (coins ?? 0) < d.price * n(d.slug)} onClick={() => void run(() => createClient().rpc("guild_buy_decor", { p_slug: d.slug, p_qty: n(d.slug) }), `Bought ${n(d.slug)} × ${d.name}.`)}>Buy · 🪙 {d.price * n(d.slug)}</PixelButton>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+          </ul>
+        ) : (
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
+            {decor.map((d) => {
+              const total = d.price * n(d.slug), poor = (coins ?? 0) < total;
+              return (
+                <li key={d.slug} className="pixel-box flex flex-col gap-1 bg-panel p-2">
+                  <div className="flex h-20 items-center justify-center bg-night"><img src={`/guild/props/${d.slug}.png`} alt="" draggable={false} className="max-h-[4.5rem] max-w-[85%] [image-rendering:pixelated]" /></div>
+                  <p className="truncate leading-tight">{d.name}</p>
+                  <p className="text-sm text-steel">🪙 {d.price} each · you have {owned[d.slug] ?? 0}</p>
+                  <div className="mt-auto flex items-center justify-between gap-1">
+                    <button type="button" aria-label={`Fewer ${d.name}`} className="pixel-box h-9 w-9 shrink-0 bg-night text-xl" onClick={() => setQty({ ...qty, [d.slug]: Math.max(1, n(d.slug) - 1) })}>-</button>
+                    <span className="min-w-6 text-center">{n(d.slug)}</span>
+                    <button type="button" aria-label={`More ${d.name}`} className="pixel-box h-9 w-9 shrink-0 bg-night text-xl" onClick={() => setQty({ ...qty, [d.slug]: Math.min(20, n(d.slug) + 1) })}>+</button>
+                  </div>
+                  <PixelButton className="w-full px-2 text-base" disabled={busy || poor} onClick={() => void run(() => createClient().rpc("guild_buy_decor", { p_slug: d.slug, p_qty: n(d.slug) }), `Bought ${n(d.slug)} × ${d.name}.`)}>Buy · 🪙 {total}</PixelButton>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
