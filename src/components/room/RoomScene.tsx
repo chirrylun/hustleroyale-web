@@ -63,7 +63,7 @@ export function RoomScene({ layout, onAction, innerRef, onPointerDown, children 
         const n = { ...n0, h: npcFrameH(n0.npc as NpcName, layout.frame * BODY_OF_FRAME) };
         const w = n.h * npcRatio(n.npc as NpcName);
         const box = { left: pct(n.x - w / 2, layout.cols), top: pct(n.y - n.h, layout.rows), width: pct(w, layout.cols), zIndex: depth(n.foot[3]) };
-        const art = <Npc name={n.npc as NpcName} facing={n.facing as Facing} className="pointer-events-none w-full" />;
+        const art = <Npc name={n.npc as NpcName} facing={n.facing as Facing} still className="pointer-events-none w-full" />;
         if (n.action) return <button key={n.id} type="button" className={cls} style={box} aria-label={n.npc.replace("_", " ")} onPointerDown={(e) => e.stopPropagation()} onClick={() => onAction(n.action!)}>{art}</button>;
         return <div key={n.id} className="pointer-events-none absolute" style={box}>{art}</div>;
       })}

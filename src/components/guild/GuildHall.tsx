@@ -257,7 +257,7 @@ export function GuildHall({
         const w = h * npcRatio(n.npc as NpcName);
         const locked = !!isLocked?.(n.action);
         const box = { left: frac(n.x - w / T / 2), top: frac(n.y - h / T), width: frac(w / T), zIndex: depth(n.y * T) };
-        const art = <Npc name={n.npc as NpcName} facing={n.facing as Facing} className="pointer-events-none w-full" />;
+        const art = <Npc name={n.npc as NpcName} facing={n.facing as Facing} still className="pointer-events-none w-full" />;
         if (edit) return <div className="pointer-events-none absolute" style={box}>{art}</div>;
         return <button type="button" className={"absolute outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" + (highlight === n.action ? " animate-pulse" : "")} style={box} aria-label="Quest manager" onClick={(e) => { stop(e); if (locked) onBlocked?.(n.action); else onAction(n.action); }}>{art}</button>;
       })()}

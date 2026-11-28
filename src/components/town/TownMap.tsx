@@ -335,7 +335,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
             const h = npcH(n.npc), w = h * npcRatio(n.npc as NpcName);
             return (
               <div key={k} className="pointer-events-none absolute" style={{ left: (n.x - w / 2) * SCALE, top: (n.y - h * NPC_FEET) * SCALE, width: w * SCALE, zIndex: zOf(n.y / UNIT) }}>
-                <Npc name={n.npc as NpcName} facing={n.facing} className="w-full" />
+                <Npc name={n.npc as NpcName} facing={n.facing} still className="w-full" />
                 <span className="absolute left-1/2 top-[-4px] -translate-x-1/2 -translate-y-full whitespace-nowrap bg-ink px-1.5 text-[clamp(10px,1.6cqw,18px)] uppercase text-paper">{TAG[n.action as Talk] ?? ""}</span>
               </div>
             );
