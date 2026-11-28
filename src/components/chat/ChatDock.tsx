@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getChatSocket } from "@/lib/socket";
-import { partyActions, releaseSocial, retainSocial, useSocial } from "@/lib/social";
+import { partyActions, releaseSocial, retainSocial, useSocial, type TappedPlayer } from "@/lib/social";
 import { PartyPanel } from "./PartyPanel";
 
 type Scope = "world" | "room" | "party" | "whisper";
@@ -15,6 +15,10 @@ const ERRORS: Record<string, string> = {
   no_room: "Enter the lobby or a floor to use Room chat.", no_such_player: "No player has that name.", offline: "They're offline right now.",
   slow: "Slow down a little.", dup: "You just said that.", self: "That's you!", no_name: "Pick a guild-master name to chat.",
   no_party: "Join a party first.", empty: "Type something first.", no_target: "Choose who to whisper to.", failed: "Couldn't send. Try again.", bad_request: "Couldn't send. Try again.",
+};
+const INVITE_ERR: Record<string, string> = {
+  not_here: "They're not in this room any more.", target_in_party: "They're already in a party.", offline: "They're offline.", slow: "You just invited them. Give them a moment.",
+  full: "Your party is full.", not_host: "Only the host can invite.", no_target: "That's you!", failed: "Couldn't send the invitation. Try again.",
 };
 const same = (a?: string, b?: string) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
@@ -48,7 +52,10 @@ export function ChatDock() {
   const [tab, setTab] = useState<Scope>("world");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [unread, setUnread] = useState<Record<Scope, number>>({ world: 0, room: 0, party: 0, whisper: 0 });
-  const [view, setView] = useState<"chat" | "party">("chat");
+  const [view, setView] = useState<"chat" | "party" | "player">("chat");
+  const [player, setPlayer] = useState<TappedPlayer | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
+  const [playerNote, setPlayerNote] = useState<{ text: string; ok: boolean } | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const social = useSocial();
@@ -87,8 +94,14 @@ export function ChatDock() {
         if (n?.open) void partyActions.join(id).then((r) => { if (r.error) setNote(null); });
       }
     };
+    const onTap = (e: Event) => {
+      const p = (e as CustomEvent<TappedPlayer>).detail;
+      if (!p || p.uid === social.uid) return;
+      setPlayer(p); setPlayerNote(null); setView("player"); setOpen(true);
+    };
     window.addEventListener("party:open", onOpen);
-    return () => window.removeEventListener("party:open", onOpen);
+    window.addEventListener("player:tap", onTap);
+    return () => { window.removeEventListener("party:open", onOpen); window.removeEventListener("player:tap", onTap); };
   });
   // A line about what happened to the party (someone joined, you were removed...) shows for a few seconds.
   const noteAt = social.note?.at;
@@ -98,6 +111,15 @@ export function ChatDock() {
     return () => { clearTimeout(show); clearTimeout(hide); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteAt]);
+  // A new invitation shows a banner for a few seconds; the invitation itself waits in the party panel.
+  const newest = social.invites[0];
+  const newestKey = newest ? `${newest.from}:${newest.t}` : null;
+  useEffect(() => {
+    if (!newest) return;
+    const show = setTimeout(() => setBanner(newest.name), 0), hide = setTimeout(() => setBanner(null), 7000);
+    return () => { clearTimeout(show); clearTimeout(hide); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newestKey]);
   useEffect(() => { if (!social.party && tab === "party") { const t = setTimeout(() => setTab("world"), 0); return () => clearTimeout(t); } }, [social.party, tab]);
 
   // Tapping away from the chat folds it. The tap still reaches the game underneath.
@@ -147,12 +169,19 @@ export function ChatDock() {
   };
 
   if (status === "off") return null;
-  const dot = unread.whisper > 0 ? "bg-ember" : unread.world + unread.room + unread.party > 0 ? "bg-gold" : "";
-  const total = unread.world + unread.room + unread.party + unread.whisper;
+  const dot = social.invites.length > 0 ? "bg-leaf" : unread.whisper > 0 ? "bg-ember" : unread.world + unread.room + unread.party > 0 ? "bg-gold" : "";
+  const total = unread.world + unread.room + unread.party + unread.whisper + social.invites.length;
   const tabs = TABS.filter((t) => t.id !== "party" || social.party);
-  const chatOpen = open && view === "chat", partyOpen = open && view === "party";
+  const chatOpen = open && view === "chat", partyOpen = open && view === "party", playerOpen = open && view === "player";
 
   return (
+    <>
+    {banner && !partyOpen && (
+      <div role="status" className="pixel-box pointer-events-auto fixed left-2 top-14 z-[9660] flex max-w-[calc(100vw-4.5rem)] items-center gap-2 bg-night/95 py-1.5 pl-2.5 pr-1.5 text-base text-paper short:top-2">
+        <span className="min-w-0 truncate"><span className="text-gold">{banner}</span> invited you to a party</span>
+        <button type="button" onClick={() => { setBanner(null); toggleParty(); }} className="pixel-btn shrink-0 bg-leaf px-2 py-0.5 text-sm uppercase text-ink">View</button>
+      </div>
+    )}
     <div ref={root} className="pointer-events-none fixed right-2 top-2 z-[9650] flex flex-col items-end gap-1 pt-[env(safe-area-inset-top)] short:top-1">
       <button
         type="button" onClick={toggle} aria-label={chatOpen ? "Close chat" : total ? `Open chat, ${total} unread` : "Open chat"} aria-expanded={chatOpen}
@@ -162,6 +191,11 @@ export function ChatDock() {
         {!chatOpen && dot && <span className={`absolute -right-1 -top-1 min-w-4 px-1 text-center text-xs leading-4 text-ink ${dot}`}>{total > 9 ? "9+" : total}</span>}
       </button>
 
+      {!social.party && social.invites.length > 0 && (
+        <button type="button" onClick={toggleParty} aria-label={`${social.invites.length} party invitation`} className="pointer-events-auto pixel-box flex h-8 items-center gap-1 bg-leaf px-2 text-base text-ink">
+          <PartyIcon />{social.invites.length} invite{social.invites.length > 1 ? "s" : ""}
+        </button>
+      )}
       {social.party && (
         <button type="button" onClick={toggleParty} aria-label={`Party, ${social.party.members.length} of 4`} aria-expanded={partyOpen}
           className={`pointer-events-auto pixel-box flex h-8 items-center gap-1 px-2 text-base ${partyOpen ? "bg-gold text-ink" : "bg-night/95 text-paper"}`}>
@@ -170,13 +204,33 @@ export function ChatDock() {
       )}
       {toast && !partyOpen && <p role="status" className="pointer-events-none pixel-box max-w-[14rem] bg-night/95 px-2 py-1 text-sm text-paper">{toast}</p>}
 
+      {playerOpen && player && (
+        <section aria-label={`${player.name}`} className="pointer-events-auto pixel-box card-reveal w-[min(calc(100vw-1rem),16rem)] space-y-2 bg-night/95 p-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate text-lg text-gold">{player.name}</p>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="px-1 text-lg leading-5 text-steel">×</button>
+          </div>
+          {player.level ? <p className="text-sm text-steel">Level {player.level}</p> : null}
+          <div className="grid grid-cols-2 gap-1.5">
+            <button type="button" onClick={() => whisperTo(player.name)} className="pixel-btn bg-panel py-1.5 text-base uppercase text-paper">Chat</button>
+            <button type="button" disabled={!!social.party && social.party.host !== social.uid} onClick={async () => {
+              setPlayerNote(null);
+              const r = await partyActions.invite(player.uid);
+              setPlayerNote(r.ok ? { text: `Invitation sent to ${player.name}.`, ok: true } : { text: INVITE_ERR[r.error ?? "failed"] ?? INVITE_ERR.failed, ok: false });
+            }} className="pixel-btn bg-gold py-1.5 text-base uppercase text-ink disabled:opacity-50">Invite to party</button>
+          </div>
+          {social.party && social.party.host !== social.uid && <p className="text-sm text-steel">Only the host can invite.</p>}
+          {playerNote && <p role="status" className={`text-sm ${playerNote.ok ? "text-leaf" : "text-ember"}`}>{playerNote.text}</p>}
+        </section>
+      )}
+
       {partyOpen && (
         <section aria-label="Party" className="pointer-events-auto pixel-box card-reveal flex max-h-[min(24rem,62dvh)] w-[min(calc(100vw-1rem),21rem)] flex-col bg-night/95 short:max-h-[78dvh]">
           <div className="flex shrink-0 items-center justify-between border-b-2 border-steel/40 px-2 py-1.5">
             <p className="text-base uppercase text-gold">{social.party ? "Your party" : "Party"}</p>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="px-1 text-lg leading-5 text-steel">×</button>
           </div>
-          <PartyPanel party={social.party} nearby={social.nearby} level={social.level} me={social.uid} focusId={focusId} />
+          <PartyPanel invites={social.invites} party={social.party} nearby={social.nearby} level={social.level} me={social.uid} focusId={focusId} />
         </section>
       )}
 
@@ -244,6 +298,7 @@ export function ChatDock() {
         </section>
       )}
     </div>
+    </>
   );
 }
 

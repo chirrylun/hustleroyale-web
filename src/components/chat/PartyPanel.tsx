@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { partyActions, type Nearby, type PartyAck, type PartyRules, type PartyView } from "@/lib/social";
+import { ARCHETYPE_LABEL } from "@/lib/guild";
+import { partyActions, type Invite, type Nearby, type PartyAck, type PartyRules, type PartyView } from "@/lib/social";
 
 const ERR: Record<string, (a: PartyAck, level: number) => string> = {
   in_party: () => "You're already in a party.", no_such: () => "That party isn't recruiting any more.", full: () => "That party is full.", closed: () => "That party isn't taking members right now.",
   wrong_password: () => "Wrong password.", bad_range: () => "Pick a level range from 1 to 99.", bad_password: () => "A locked party needs a password.", not_host: () => "Only the host can do that.",
   level_low: (a, l) => `You can't join: this party needs level ${a.min}–${a.max} and you're level ${l}.`, level_high: (a, l) => `You can't join: this party needs level ${a.min}–${a.max} and you're level ${l}.`,
-  failed: () => "No connection. Try again.",
+  failed: () => "No connection. Try again.", not_here: () => "They've left the room.", target_in_party: () => "They're already in a party.", offline: () => "They're offline.",
+  slow: () => "You just invited them. Give them a moment.", invite_gone: () => "That invitation has run out.", no_target: () => "Pick someone else.",
 };
 const say = (a: PartyAck, level: number) => (a.error ? (ERR[a.error] ?? ERR.failed)(a, level) : null);
 
@@ -27,7 +29,7 @@ function RulesForm({ initial, level, submit, busy, onSubmit }: { initial?: Party
   return (
     <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (!bad) onSubmit({ open, password: open ? undefined : pw, min: lo, max: hi }); }}>
       <div role="radiogroup" aria-label="Who can join" className="flex">
-        {([[true, "Open"], [false, "Password"]] as const).map(([v, t]) => (
+        {([[true, "Open"], [false, "Locked"]] as const).map(([v, t]) => (
           <button key={t} type="button" role="radio" aria-checked={open === v} onClick={() => setOpen(v)} className={`flex-1 py-1.5 text-base uppercase ${open === v ? "bg-gold text-ink" : "bg-panel text-paper"}`}>{t}</button>
         ))}
       </div>
@@ -35,6 +37,7 @@ function RulesForm({ initial, level, submit, busy, onSubmit }: { initial?: Party
         <input value={pw} onChange={(e) => setPw(e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 10))} maxLength={10} placeholder="Password (10 max)" aria-label="Password" autoComplete="off" autoCapitalize="off"
           className="w-full bg-ink px-2 py-1.5 text-base text-paper outline-none placeholder:text-steel focus:ring-2 focus:ring-gold" />
       )}
+      <p className="text-sm uppercase text-steel">Set the party level requirements</p>
       <div className="flex items-center gap-1.5 text-base text-paper">
         <span className="text-steel">Level</span>
         <input value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" aria-label="Lowest level" className={num} />
@@ -43,6 +46,20 @@ function RulesForm({ initial, level, submit, busy, onSubmit }: { initial?: Party
       </div>
       <button type="submit" disabled={bad || busy} className="pixel-btn w-full bg-gold py-1.5 text-base uppercase text-ink disabled:opacity-50">{submit}</button>
     </form>
+  );
+}
+
+function InviteBox({ inv, busy, onAnswer }: { inv: Invite; busy: boolean; onAnswer: (accept: boolean) => void }) {
+  const names = [...new Set(inv.classes.map((c) => ARCHETYPE_LABEL[c.archetype] ?? c.archetype))];
+  return (
+    <li className="space-y-1.5 border-2 border-gold bg-panel p-2">
+      <p className="text-base leading-5 text-paper"><span className="text-gold">{inv.name}</span> invited you to a party</p>
+      <p className="text-sm leading-4 text-steel">Level {inv.level}{names.length > 0 && <> · {names.join(", ")}</>}</p>
+      <div className="grid grid-cols-2 gap-1.5">
+        <button type="button" disabled={busy} onClick={() => onAnswer(true)} className="pixel-btn bg-leaf py-1 text-base uppercase text-ink disabled:opacity-50">Accept</button>
+        <button type="button" disabled={busy} onClick={() => onAnswer(false)} className="pixel-btn bg-panel py-1 text-base uppercase text-paper disabled:opacity-50">Decline</button>
+      </div>
+    </li>
   );
 }
 
@@ -68,7 +85,7 @@ function Row({ n, level, focus, onJoin, busy }: { n: Nearby; level: number; focu
   );
 }
 
-export function PartyPanel({ party, nearby, level, me, focusId }: { party: PartyView | null; nearby: Nearby[]; level: number; me: string | null; focusId: string | null }) {
+export function PartyPanel({ party, nearby, level, me, focusId, invites }: { party: PartyView | null; nearby: Nearby[]; level: number; me: string | null; focusId: string | null; invites: Invite[] }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -86,6 +103,12 @@ export function PartyPanel({ party, nearby, level, me, focusId }: { party: Party
   if (!party) {
     return (
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-2">
+        {invites.length > 0 && (
+          <section aria-label="Invitations">
+            <p className="mb-1 text-sm uppercase text-gold">Invitations</p>
+            <ul className="space-y-1.5">{invites.map((i) => <InviteBox key={i.from} inv={i} busy={busy} onAnswer={(ok) => run(() => (ok ? partyActions.accept(i.from) : partyActions.decline(i.from)))} />)}</ul>
+          </section>
+        )}
         <section aria-label="Parties recruiting here">
           <p className="mb-1 text-sm uppercase text-steel">Recruiting here</p>
           {rank.length === 0 ? <p className="text-base text-steel">No one here is recruiting. Start your own below.</p> : (

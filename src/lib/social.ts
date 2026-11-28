@@ -12,26 +12,29 @@ export interface PartyView {
   room: { floor: number; code: string } | null;
 }
 export interface Nearby { id: string; host: string; hostName: string; n: number; open: boolean; min: number; max: number; fits: boolean }
+/** Someone asking you to join their party: who they are, their level and the classes they bring. */
+export interface Invite { from: string; name: string; level: number; classes: { archetype: string; level: number }[]; t: number }
 export interface PartyRules { open: boolean; password?: string; min: number; max: number; recruiting?: boolean }
 export interface PartyAck { ok?: boolean; error?: string; min?: number; max?: number; party?: PartyView }
 
-interface Snapshot { uid: string | null; party: PartyView | null; nearby: Nearby[]; level: number; note: { text: string; at: number } | null }
+interface Snapshot { uid: string | null; invites: Invite[]; party: PartyView | null; nearby: Nearby[]; level: number; note: { text: string; at: number } | null }
 
-let snap: Snapshot = { uid: null, party: null, nearby: [], level: 1, note: null };
+let snap: Snapshot = { uid: null, invites: [], party: null, nearby: [], level: 1, note: null };
 let holders = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 const subs = new Set<() => void>();
 const set = (next: Partial<Snapshot>) => { snap = { ...snap, ...next }; subs.forEach((f) => f()); };
 
-const onParty = (r: { party: PartyView | null; note?: string }) => set({ party: r.party, ...(r.note ? { note: { text: r.note, at: Date.now() } } : {}) });
+const onParty = (r: { party?: PartyView | null; note?: string }) => set({ ...(r.party !== undefined ? { party: r.party } : {}), ...(r.note ? { note: { text: r.note, at: Date.now() } } : {}) });
+const onInvites = (list: Invite[]) => set({ invites: list });
 
 /** Ask the server where our party and the recruiting parties around us stand. */
 export function syncParty() {
   const sock = getChatSocket();
   if (!sock.connected) return;
-  sock.timeout(4000).emit("party:sync", {}, (err: unknown, r?: { uid: string; party: PartyView | null; nearby: Nearby[]; level: number }) => {
+  sock.timeout(4000).emit("party:sync", {}, (err: unknown, r?: { uid: string; party: PartyView | null; nearby: Nearby[]; level: number; invites: Invite[] }) => {
     if (err || !r) return;
-    set({ uid: r.uid, party: r.party, nearby: r.nearby, level: r.level });
+    set({ uid: r.uid, party: r.party, nearby: r.nearby, level: r.level, invites: r.invites ?? [] });
   });
 }
 
@@ -40,6 +43,7 @@ export function retainSocial() {
   if (holders++ > 0) return;
   const sock = getChatSocket();
   sock.on("party", onParty);
+  sock.on("invites", onInvites);
   sock.on("connect", syncParty);
   sock.connect();
   timer = setInterval(() => { if (typeof document === "undefined" || !document.hidden) syncParty(); }, 5000);
@@ -49,11 +53,12 @@ export function releaseSocial() {
   holders = 0;
   const sock = getChatSocket();
   sock.off("party", onParty);
+  sock.off("invites", onInvites);
   sock.off("connect", syncParty);
   sock.disconnect();
   if (timer) clearInterval(timer);
   timer = null;
-  snap = { uid: null, party: null, nearby: [], level: 1, note: null };
+  snap = { uid: null, invites: [], party: null, nearby: [], level: 1, note: null };
 }
 
 function call(event: string, payload: unknown = {}): Promise<PartyAck> {
@@ -74,12 +79,19 @@ export const partyActions = {
   leave: () => call("party:leave"),
   kick: (uid: string) => call("party:kick", { uid }),
   disband: () => call("party:disband"),
+  invite: (uid: string) => call("party:invite", { uid }),
+  accept: (from: string) => call("party:accept", { from }),
+  decline: (from: string) => call("party:decline", { from }),
 };
 
 const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
-const empty: Snapshot = { uid: null, party: null, nearby: [], level: 1, note: null };
+const empty: Snapshot = { uid: null, invites: [], party: null, nearby: [], level: 1, note: null };
 /** The party you are in, the parties recruiting in your room, and your own level for the rules. */
 export function useSocial(): Snapshot { return useSyncExternalStore(subscribe, () => snap, () => empty); }
 
 /** Open the party panel (the room button does this), optionally on a recruiting party (the join icon over a player's head does this). */
 export function openPartyPanel(join?: string) { window.dispatchEvent(new CustomEvent("party:open", { detail: { join } })); }
+
+/** Tapping another player on the map opens this small menu: chat with them or invite them to a party. */
+export interface TappedPlayer { uid: string; name: string; level?: number }
+export function openPlayerMenu(p: TappedPlayer) { window.dispatchEvent(new CustomEvent("player:tap", { detail: p })); }

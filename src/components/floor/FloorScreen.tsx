@@ -20,7 +20,7 @@ import { ROLE_RANK, angleDiff, formationOffset, ringPoint, separate, spawnPlan }
 import { restedFrac } from "@/lib/rest";
 import { ApiError, gameApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
-import { openPartyPanel, useSocial } from "@/lib/social";
+import { openPartyPanel, openPlayerMenu, useSocial } from "@/lib/social";
 import { JoinBadge } from "@/components/chat/JoinBadge";
 import { BagMenu } from "@/components/floor/BagMenu";
 import { FightersButton, FightersMenu } from "@/components/floor/FightersMenu";
@@ -173,7 +173,7 @@ interface Ag {
   /** Foes: it was hit by one of ours, so it fights back whatever the floor's temper. */
   provoked: boolean;
   /** Shared rooms: driven by the server (mobs) or by another player (their fighters); it eases toward (tx, ty). */
-  net?: boolean; tx?: number; ty?: number; swings?: number; uid?: string; /** The first fighter of another player: the one that carries the join-party icon. */ lead?: boolean;
+  net?: boolean; tx?: number; ty?: number; swings?: number; uid?: string; /** Their player's name (set on other players' fighters). */ pname?: string; /** The first fighter of another player: the one that carries the join-party icon. */ lead?: boolean;
 }
 
 /** What the room server sends about a mob and about another player's fighters. */
@@ -187,7 +187,7 @@ function kitFor(f: { gear?: unknown; template: { role: "tank" | "healer" | "dps"
   return { armed: k.armed, ranged: k.ranged };
 }
 
-interface WireFighter { id: string; sprite: string; name: string; role: "tank" | "healer" | "dps"; level: number; max: number; x?: number; y?: number; frac?: number; dead?: boolean }
+interface WireFighter { id: string; sprite: string; name: string; role: "tank" | "healer" | "dps"; level: number; xp?: number; max: number; x?: number; y?: number; frac?: number; dead?: boolean }
 interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
 interface PaidKill { m: number; kind: string; boss: boolean; throttled?: boolean; cleared?: boolean; awards?: { id: string; gained: number; levels_gained: number; xp?: number }[]; quests?: { slug: string; idx: number; progress: number }[]; drops?: { slug: string; qty: number }[]; gear?: { name: string; rank: number; level: number } | null }
 
@@ -200,7 +200,7 @@ const mobName = (kind: string) => MOB_NAME[kind] ?? kind.charAt(0).toUpperCase()
 
 const POTION_LIST = POTION_SLUGS;
 
-function Unit({ a, party, join }: { a: Ag; party: number; join?: () => void }) {
+function Unit({ a, party, join, mate }: { a: Ag; party: number; join?: () => void; /** One of your party members' fighters: green name, experience bar. */ mate?: boolean }) {
   const [look, setLook] = useState(a.look);
   // Bosses are drawn large on purpose; everything else is scaled to a realistic size next to a fighter.
   const liveSprite = useLook(a.id, a.sprite);
@@ -223,14 +223,14 @@ function Unit({ a, party, join }: { a: Ag; party: number; join?: () => void }) {
           {a.side === "ally" && a.maxEn > 0 && (
             <div className="absolute left-0 top-full h-1 w-full bg-ink/80"><div ref={(el) => { a.mpEl = el; }} className="h-full w-full bg-sky" /></div>
           )}
-          {a.side === "ally" && (
+          {a.side === "ally" && (!a.net || mate) && (
             <div className={`absolute left-0 h-1 w-full bg-ink/80 ${a.maxEn > 0 ? "top-[calc(100%+4px)]" : "top-full"}`}><div ref={(el) => { a.xpEl = el; }} className="h-full bg-[#ff9a1f]" style={{ width: `${Math.min(100, (a.xp / xpRequired(a.level)) * 100)}%` }} /></div>
           )}
           <span
             className={`absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-bold leading-none ${a.side === "foe" ? levelTone(a.level - party) : "text-steel"}`}
             style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}
           >
-            <span ref={(el) => { a.lvEl = el; }}>Lv {a.level}</span>{a.side === "foe" ? ` ${mobName(a.kind)}` : ""}
+            {a.net && a.lead && a.pname && <span className={mate ? "text-leaf" : "text-paper"}>{a.pname} </span>}<span ref={(el) => { a.lvEl = el; }}>Lv {a.level}</span>{a.side === "foe" ? ` ${mobName(a.kind)}` : ""}
           </span>
         </div>
       </div>
@@ -322,7 +322,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   // Tell the server this floor has been reached (counts toward "Reach Floor N" quests).
 
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
-  const { nearby } = useSocial();
+  const { nearby, party, invites } = useSocial();
+  const partyUids = useMemo(() => new Set(party?.members.map((m) => m.uid) ?? []), [party]);
   const recruiting = useMemo(() => new Map(nearby.map((n) => [n.host, n.id])), [nearby]);
   const firstDone = useRef(false);
   const [firstJobDone, setFirstJobDone] = useState(false);
@@ -1099,7 +1100,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     const netMates = (p: WirePlayer): Ag[] => p.fighters.map((w, i) => {
       const x = w.x ?? 0, y = w.y ?? 0;
       const a = makeAg("ally", { id: w.id, sprite: w.sprite, role: w.role, name: w.name, level: w.level, x, y, hp: Math.max(1, Math.round(w.max * (w.frac ?? 1))), atk: 0, def: 0, kind: "fighter", net: true, tx: x, ty: y, uid: p.uid });
-      a.max = w.max; a.lead = i === 0;
+      a.max = w.max; a.lead = i === 0; a.pname = p.name; a.xp = w.xp ?? 0;
       if (w.dead) { a.dead = true; a.hp = 0; a.deadAt = -1e9; }
       return a;
     });
@@ -1154,6 +1155,16 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       if (k.throttled) return;
       if (k.boss) progress.current.boss = true; else progress.current.kills++;
     };
+    // A room mate's fighters gained experience: move their bar and show their level.
+    const onXp = (j: { uid: string; f: [string, number, number][] }) => {
+      for (const [id, level, xp] of j.f) {
+        const a = mates.current.find((u) => u.id === id);
+        if (!a) continue;
+        a.xp = xp; a.level = level;
+        if (a.lvEl) a.lvEl.textContent = `Lv ${level}`;
+        if (a.xpEl) a.xpEl.style.width = `${Math.min(100, (xp / xpRequired(level)) * 100)}%`;
+      }
+    };
     const onMini = (j: { kind: string }) => showToast(`${mobName(j.kind)} has appeared on this floor!`);
     const onJoined = (j: { player?: WirePlayer; n: number }) => {
       if (j.player && j.player.uid !== me) { mates.current.push(...netMates(j.player)); rerender(); }
@@ -1190,7 +1201,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     const onFail = () => { if (nt.mode === "pending") nt.mode = "off"; };
     sock.on("connect", onConnect);
     sock.on("connect_error", onFail);
-    sock.on("s", onSnap); sock.on("hit", onHit); sock.on("k", onPaid); sock.on("joined", onJoined); sock.on("left", onLeft); sock.on("mini", onMini);
+    sock.on("s", onSnap); sock.on("hit", onHit); sock.on("k", onPaid); sock.on("xp", onXp); sock.on("joined", onJoined); sock.on("left", onLeft); sock.on("mini", onMini);
     if (sock.connected) onConnect(); else sock.connect();
 
     raf = requestAnimationFrame(tick);
@@ -1199,7 +1210,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
       clearTimeout(give);
       sock.emit("leave");
       sock.off("connect", onConnect); sock.off("connect_error", onFail);
-      sock.off("s", onSnap); sock.off("hit", onHit); sock.off("k", onPaid); sock.off("joined", onJoined); sock.off("left", onLeft); sock.off("mini", onMini);
+      sock.off("s", onSnap); sock.off("hit", onHit); sock.off("k", onPaid); sock.off("xp", onXp); sock.off("joined", onJoined); sock.off("left", onLeft); sock.off("mini", onMini);
       sock.disconnect();
       nt.mode = "pending"; nt.sock = null; mates.current = [];
     };
@@ -1269,6 +1280,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     if (p.x < EDGE || p.y < EDGE || p.x > c.vw - EDGE || p.y > c.vh - EDGE) return;
     const wx = (p.x / c.z + c.x) / T, wy = (p.y / c.z + c.y) / T;
     const foe = foes.current.find((f) => !f.dead && Math.hypot(f.x - wx, f.y - 0.6 - wy) < 0.9);
+    const other = !foe ? mates.current.find((m) => m.lead && m.pname && Math.hypot(m.x - wx, m.y - 0.6 - wy) < 0.9) : undefined;
+    if (other?.uid && other.pname) { openPlayerMenu({ uid: other.uid, name: other.pname, level: other.level }); return; }
     const live = allies.current.filter((a) => !a.dead);
     progress.current.gate = false; progress.current.npc = null;
     // Tapping a person in the training field walks the party over; arriving starts the conversation.
@@ -1368,7 +1381,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
         </div>
         {room && (
           <button type="button" onClick={() => openPartyPanel()} className="pixel-box shrink-0 bg-panel px-2 py-1 text-center text-base uppercase leading-tight text-paper" title="Parties: start one or join one in this room. Share the code and a friend can join this room.">
-            {room.n}/4 here<span className="block text-sm text-gold">Room {room.code}</span>
+            {room.n}/4 here{invites.length > 0 && <span aria-label="Party invitation waiting" className="ml-1 inline-block h-2.5 w-2.5 animate-pulse bg-leaf align-middle" />}<span className="block text-sm text-gold">Room {room.code}</span>
           </button>
         )}
       </div>
@@ -1429,7 +1442,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
             );
           })}
           <div ref={marker} className="marker pointer-events-none absolute z-[5] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold opacity-0" />
-          {ready && [...allies.current, ...mates.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} join={u.uid && u.lead && recruiting.has(u.uid) ? () => openPartyPanel(recruiting.get(u.uid!)) : undefined} />)}
+          {ready && [...allies.current, ...mates.current, ...foes.current].map((u) => <Unit key={u.id} a={u} party={partyLvl} mate={!!u.uid && partyUids.has(u.uid)} join={u.uid && u.lead && recruiting.has(u.uid) ? () => openPartyPanel(recruiting.get(u.uid!)) : undefined} />)}
         </div>
 
         {state === "play" && (
