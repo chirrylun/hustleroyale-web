@@ -30,10 +30,15 @@ export function GuildScreen({ username, coins, level, fighters: dbFighters, tuto
   const rank = guildRank;
   const [decor, setDecor] = useState<PlacedDecor[]>(initialDecor);
   const [editing, setEditing] = useState(false);
+  const [zoom, setZoom] = useState(0.8);
+  const drag = useRef<{ x: number; y: number; sl: number; st: number; moved: boolean } | null>(null);
+  const zoomBy = (d: number) => setZoom((z) => Math.min(1.5, Math.max(0.5, +(z + d).toFixed(2))));
   const [carry, setCarry] = useState<string | null>(null);
   const stored = useMemo(() => decor.filter((d) => d.x == null), [decor]);
   // Start centred on the hall's top, where the doors and boards are.
   useEffect(() => { const el = scroller.current; if (el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2; }, []);
+  // Zooming keeps the middle of the hall in view.
+  useEffect(() => { const el = scroller.current; if (el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2; }, [zoom]);
   const setPos = (id: string, x: number | null, y: number | null) => setDecor((all) => all.map((d) => (d.id === id ? { ...d, x, y } : d)));
   const placeCarried = (x: number, y: number) => {
     if (!carry) return;
@@ -143,8 +148,25 @@ export function GuildScreen({ username, coins, level, fighters: dbFighters, tuto
       <div className="absolute inset-0">
         <BagButton />
         {/* The hall fills the screen. It is at least as wide as the screen and a little taller, so you pan to see all of it. */}
-        <div ref={scroller} className="absolute inset-0 overflow-auto overscroll-contain [scrollbar-width:none]" style={{ containerType: "size" }}>
-          <div style={{ width: "max(100cqw, 110cqh)" }}>
+        <div
+          ref={scroller}
+          className="absolute inset-0 cursor-grab overflow-auto overscroll-contain [scrollbar-width:none] active:cursor-grabbing"
+          style={{ containerType: "size" }}
+          onWheel={(e) => zoomBy(e.deltaY > 0 ? -0.06 : 0.06)}
+          onPointerDown={(e) => { const el = scroller.current; if (el && e.pointerType === "mouse") drag.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop, moved: false }; }}
+          onPointerMove={(e) => {
+            const d = drag.current, el = scroller.current;
+            if (!d || !el) return;
+            const dx = e.clientX - d.x, dy = e.clientY - d.y;
+            if (!d.moved && Math.hypot(dx, dy) < 6) return;
+            d.moved = true;
+            el.scrollLeft = d.sl - dx; el.scrollTop = d.st - dy;
+          }}
+          onPointerUp={() => { setTimeout(() => { drag.current = null; }, 0); }}
+          onPointerLeave={() => { drag.current = null; }}
+          onClickCapture={(e) => { if (drag.current?.moved) { e.stopPropagation(); e.preventDefault(); } }}
+        >
+          <div style={{ width: `calc(max(100cqw, 110cqh) * ${zoom})`, margin: "0 auto" }}>
             <GuildHall
               fighters={fighters}
               rank={rank}
@@ -158,6 +180,10 @@ export function GuildScreen({ username, coins, level, fighters: dbFighters, tuto
           </div>
         </div>
 
+        <div className="absolute bottom-2 left-2 z-[240] flex gap-1">
+          <button type="button" aria-label="Zoom out" className="pixel-box h-9 w-9 bg-night/90 text-xl text-paper" onClick={() => zoomBy(-0.15)}>-</button>
+          <button type="button" aria-label="Zoom in" className="pixel-box h-9 w-9 bg-night/90 text-xl text-paper" onClick={() => zoomBy(0.15)}>+</button>
+        </div>
         {step >= 9 && !panel && (
           <div className="absolute bottom-2 right-2 z-[240] flex flex-col items-end gap-2">
             {editing && (

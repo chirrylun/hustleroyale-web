@@ -18,8 +18,11 @@ export function FirstTip({ tip, title, who = "manager", when = true, children }:
     });
     return () => { live = false; };
   }, [tip]);
-  if (state !== "new" || !when) return null;
-  const close = () => { setState("seen"); void createClient().rpc("tip_seen", { p_key: tip }); };
+  const showing = state === "new" && when;
+  // Counted as seen the moment it appears, so it never comes back even if the player leaves without pressing the button.
+  useEffect(() => { if (showing) void createClient().rpc("tip_seen", { p_key: tip }); }, [showing, tip]);
+  if (!showing) return null;
+  const close = () => setState("seen");
   return (
     <div className="fixed inset-0 z-[9800] flex items-end justify-center bg-ink/60 p-3 sm:items-center" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()}>
       <InfoBox portrait={<NpcPortrait name={who} still />} title={title} step={0} total={1} onNext={close} nextLabel="Got it">{children}</InfoBox>

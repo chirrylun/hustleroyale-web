@@ -59,11 +59,11 @@ function oldProp(id: string, p: Partial<HallProp> & { cx: number; fy: number; w:
 export function fixtures(rank: number): HallProp[] {
   return [
     rankProp(rank, "map", "map", { group: "adventure", label: "Adventure", cx: 0.1, fy: 0.55, action: "adventure", spot: [0.1, 0.6], emote: "🗺" }),
-    rankProp(rank, "board", "board", { group: "jobs", label: "Job Board", cx: 0.2, fy: 0.395, action: "jobs", spot: [0.2, 0.46], emote: "📜" }),
-    rankProp(rank, "plaque", "plaque", { group: "leaderboard", label: "Leaderboard", cx: 0.33, fy: 0.4, href: "/leaderboard", spot: [0.33, 0.47], emote: "🏆" }),
-    rankProp(rank, "arena", "arena", { group: "arena", label: "Arena", cx: 0.6, fy: 0.4, href: "/arena", spot: [0.6, 0.47], emote: "⚔️" }),
-    rankProp(rank, "market", "market", { group: "market", label: "Market", cx: 0.75, fy: 0.4, href: "/market", spot: [0.75, 0.47], emote: "🛒" }),
-    rankProp(rank, "portal", "portal", { group: "lobby", label: "Main Lobby", cx: 0.9, fy: 0.405, action: "lobby", spot: [0.9, 0.48], emote: "⬆" }),
+    rankProp(rank, "board", "board", { group: "jobs", label: "Job Board", cx: 0.2, fy: 0.395, action: "jobs", spot: [0.12, 0.5], emote: "📜" }),
+    rankProp(rank, "arena", "arena", { group: "arena", label: "Arena", cx: 0.34, fy: 0.4, href: "/arena", spot: [0.34, 0.47], emote: "⚔️" }),
+    rankProp(rank, "plaque", "plaque", { group: "leaderboard", label: "Leaderboard", cx: 0.63, fy: 0.4, href: "/leaderboard", spot: [0.63, 0.47], emote: "🏆" }),
+    rankProp(rank, "market", "market", { group: "market", label: "Market", cx: 0.89, fy: 0.4, href: "/market", spot: [0.89, 0.47], emote: "🛒" }),
+    rankProp(rank, "portal", "portal", { group: "lobby", label: "Main Lobby", cx: 0.88, fy: 0.72, action: "lobby", spot: [0.88, 0.79], emote: "⬆" }),
     // The training yard, bottom left.
     oldProp("scarecrow", { group: "fighters", cx: 0.1, fy: 0.84, w: 72, h: 142, href: "/team", spot: [0.1, 0.9], work: "attack", foot: [0.085, 0.8, 0.115, 0.84] }),
     oldProp("target", { group: "fighters", label: "My Fighters", cx: 0.2, fy: 0.84, w: 70, h: 123, href: "/team", spot: [0.2, 0.9], work: "attack", foot: [0.185, 0.805, 0.215, 0.84] }),
