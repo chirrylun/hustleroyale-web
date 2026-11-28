@@ -25,7 +25,7 @@ const MESSAGES: Record<string, string> = {
 const RETIRED = new Set(["paladin"]);
 const BLURB: Record<string, string> = {
   fighter_tank: "Tough brawler that taunts enemies.", shield_tank: "Soaks hits and shields the team.", debuff_tank: "Weakens enemies while holding the line.", soldier: "Heavy hitter with strong armour.",
-  pure_healer: "The strongest healing in the guild.", healer_fighter: "Fights up front and heals.", bard: "Heals and inspires with song.", healer_tank: "Holy front-liner who heals.", whitemage: "Powerful light magic.",
+  pure_healer: "The strongest healing in the guild.", healer_fighter: "Fights up front and heals.", bard: "Heals and inspires with song.", healer_tank: "Holy front-liner who heals.", whitemage: "Light magic that heals. Grows from Mage.",
   rogue: "Fast striker with dodges.", magical_dps: "Ranged mage with stuns and area spells.", ranger: "Bow hunter with steady shots.",
   ninja: "Shadow assassin.", samurai: "Blade master.", blackmage: "Dark destructive magic. Grows from Mage.", necromancer: "Raises the dead.", marksman: "Long-range precision.", sharpshooter: "Rapid-fire archer.",
   recruit_fighter: "Learns Slash. Tough front-liner in training.", recruit_acolyte: "Learns Basic Heal.", recruit_thief: "Learns Stab and Dodge.",
@@ -144,9 +144,9 @@ export function ClassChangerPanel() {
           <ul className="flex gap-2 overflow-x-auto pb-1 sm:max-h-[48dvh] sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden sm:pr-1">
             {fighters.map((f) => (
               <li key={f.id} className="shrink-0 sm:w-full">
-                <button type="button" aria-pressed={f.id === sel} onClick={() => select(f.id === sel ? null : f.id)} className={`pixel-btn flex w-24 flex-col items-center px-1 pb-1 pt-0.5 sm:w-full sm:flex-row sm:gap-2 sm:py-1 ${f.id === sel ? "bg-gold text-ink" : "bg-panel text-paper"}`}>
+                <button type="button" aria-pressed={f.id === sel} onClick={() => select(f.id === sel ? null : f.id)} className={`pixel-btn flex w-28 flex-col overflow-hidden items-center px-1 pb-1 pt-0.5 sm:w-full sm:flex-row sm:gap-2 sm:py-1 ${f.id === sel ? "bg-gold text-ink" : "bg-panel text-paper"}`}>
                   <span className="pointer-events-none -mb-2 -mt-1 block h-14 w-14 shrink-0 sm:my-0"><LiveSprite id={f.id} spriteKey={f.template.sprite_key} role={f.template.role} still /></span>
-                  <span className="min-w-0 sm:flex-1">
+                  <span className="block w-full min-w-0 overflow-hidden sm:flex-1">
                     <span className="block w-full truncate text-center text-base leading-4 sm:text-left">{f.template.name}</span>
                     <span className="block text-center text-sm leading-4 opacity-80 sm:text-left">Lv {f.level}</span>
                     <span className="block w-full truncate text-center text-sm leading-4 opacity-80 sm:text-left">{label(f.template.archetype)}</span>

@@ -149,7 +149,7 @@ export function BagMenu({ onClose, onUse }: { onClose: () => void; /** On a floo
                         <ItemArt slug={i.slug} size={36} />
                         <span className="absolute bottom-0 right-0 bg-ink/80 px-1 text-sm leading-4 text-paper">{i.qty}</span>
                       </button>
-                      <span className={`w-full text-center text-sm leading-3 ${RARITY[i.rarity]?.text ?? "text-paper"}`}>{i.name}</span>
+                      <span className={`w-full break-words text-center text-sm leading-3 ${RARITY[i.rarity]?.text ?? "text-paper"}`}>{i.name}</span>
                     </li>
                   ))}
                 </ul>
