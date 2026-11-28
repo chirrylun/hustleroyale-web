@@ -34,11 +34,12 @@ async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: s
   // RLS lets a player read only their own row, so this cannot leak anyone else's data.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username, level, coins, starter_pack_opened, tutorial_step, training_step, floor_cleared, floor_unlocked")
+    .select("username, level, coins, starter_pack_opened, tutorial_step, training_step, floor_cleared, floor_unlocked, guild_rank")
     .eq("id", user.id)
     .single();
 
   const fighters = await loadFighters(supabase, user.id);
+  const { data: decor } = await supabase.from("guild_decor").select("id, slug, x, y").eq("owner_id", user.id).order("created_at");
   const step = profile?.tutorial_step ?? 0;
   const username = profile?.username ?? "adventurer";
 
@@ -48,7 +49,7 @@ async function HomeContent({ searchParams }: { searchParams: Promise<{ enter?: s
   }
   // After the arena fights, new players go to the training field before the guild hall.
   if ((profile?.training_step ?? 100) < 100 && fighters.some((f) => f.team_slot > 0)) redirect("/training-ground");
-  return <GuildScreen username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} enterFloor={enter} enterLobby={sp.lobby === "1"} />;
+  return <GuildScreen guildRank={profile?.guild_rank ?? 1} decor={(decor ?? []).map((d) => ({ id: d.id as string, slug: d.slug as string, x: d.x == null ? null : Number(d.x), y: d.y == null ? null : Number(d.y) }))} username={username} coins={profile?.coins ?? 0} level={profile?.level ?? 1} fighters={fighters} tutorialStep={step} floorCleared={profile?.floor_cleared ?? 0} floorUnlocked={profile?.floor_unlocked ?? 1} enterFloor={enter} enterLobby={sp.lobby === "1"} />;
 }
 
 function HomeFallback() {

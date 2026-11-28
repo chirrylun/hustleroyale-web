@@ -13,6 +13,7 @@ import { MarketPanel } from "@/components/lobby/MarketPanel";
 import { AlchemistPanel } from "@/components/town/AlchemistPanel";
 import { LobbyTour } from "@/components/training/LobbyTour";
 import { ArenaStation } from "@/components/arena/ArenaStation";
+import { CarpenterPanel } from "@/components/town/CarpenterPanel";
 import { ClassChangerPanel } from "@/components/town/ClassChangerPanel";
 import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type NpcName } from "@/components/npc/Npc";
 import { PixelButton } from "@/components/pixel/PixelButton";
@@ -46,8 +47,8 @@ interface WirePlayer { uid: string; name: string; fighters: WireFighter[] }
 /** How the loop reaches a figure's element and its look state, by id. */
 type Rig = Map<string, { el: HTMLDivElement | null; set: (l: Look) => void }>;
 
-type Talk = "arena" | "challenge" | "boss" | "raid" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "blacksmith" | "guard";
-const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", challenge: "trainer", boss: "gladiator", raid: "guard", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", blacksmith: "blacksmith", guard: "guard" };
+type Talk = "arena" | "challenge" | "boss" | "raid" | "classes" | "alchemist" | "storage" | "merchant" | "armourer" | "blacksmith" | "carpenter" | "guard";
+const SPEAKER: Record<Talk, NpcName> = { arena: "gladiator", challenge: "trainer", boss: "gladiator", raid: "guard", classes: "class_changer", alchemist: "alchemist", storage: "storage_keeper", merchant: "merchant", armourer: "guard", blacksmith: "blacksmith", carpenter: "carpenter", guard: "guard" };
 
 function Figure({ id, sprite, role, level, tag, own, rig }: { id: string; sprite: string; role: Role; level: number; tag: string | null; own: boolean; rig: Rig }) {
   const [look, setLook] = useState<Look>({ walking: false, flip: false });
@@ -347,7 +348,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
 
       {tour && <LobbyTour />}
       {talk && (
-        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage" || talk === "boss"} shop={talk === "merchant" || talk === "armourer" || talk === "blacksmith" || talk === "alchemist" || talk === "classes"} onClose={close}>
+        <Speech npc={SPEAKER[talk]} title={TITLE[talk]} wide={talk === "storage" || talk === "boss"} shop={talk === "merchant" || talk === "armourer" || talk === "blacksmith" || talk === "carpenter" || talk === "alchemist" || talk === "classes"} onClose={close}>
           {talk === "arena" && (
             <>
               <p>Think your fighters are tough? Test them against other guilds.</p>
@@ -395,6 +396,13 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
               <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
             </>
           )}
+          {talk === "carpenter" && (
+            <>
+              <p>Want your guild to look the part? I can build you a finer hall, and sell you furniture to fill it.</p>
+              <CarpenterPanel />
+              <SpeechActions><PixelButton variant="ghost" onClick={close}>Done</PixelButton></SpeechActions>
+            </>
+          )}
           {talk === "guard" && (
             <>
               <p>The guild hall is just through here. Need to head back?</p>
@@ -412,8 +420,8 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
 
 /** The name floating over each person, so everyone is clear who they are. */
 const TAG: Record<Talk, string> = {
-  arena: "Arena Master", challenge: "Challenge Master", boss: "Boss Rush Master", raid: "Floor Raid Master", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage Keeper", merchant: "Item Seller", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
+  arena: "Arena Master", challenge: "Challenge Master", boss: "Boss Rush Master", raid: "Floor Raid Master", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage Keeper", merchant: "Item Seller", armourer: "Armourer", blacksmith: "Blacksmith", carpenter: "Carpenter", guard: "Guild Guard",
 };
 const TITLE: Record<Talk, string> = {
-  arena: "The Arena", challenge: "Challenge", boss: "Boss Rush", raid: "Floor Raid", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", blacksmith: "Blacksmith", guard: "Guild Guard",
+  arena: "The Arena", challenge: "Challenge", boss: "Boss Rush", raid: "Floor Raid", classes: "Class Changer", alchemist: "Alchemist", storage: "Storage", merchant: "Marketplace", armourer: "Armourer", blacksmith: "Blacksmith", carpenter: "Carpenter", guard: "Guild Guard",
 };

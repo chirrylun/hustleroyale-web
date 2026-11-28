@@ -262,6 +262,13 @@
      "x": 2310,
      "y": 1030,
      "action": "guard"
+    },
+    {
+     "npc": "carpenter",
+     "facing": "front",
+     "x": 780,
+     "y": 790,
+     "action": "carpenter"
     }
    ]
   },

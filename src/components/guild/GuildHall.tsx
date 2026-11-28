@@ -2,27 +2,14 @@
 
 import { LiveSprite } from "@/components/sprites/LiveSprite";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { HealthTag } from "./HealthTag";
 import type { GuildFighter } from "@/lib/guild";
 import { buildNav, findPath, nearestWalkable, randomWalkable, type Pt } from "@/lib/guild-nav";
 import { Npc, npcRatio, npcFrameH, BODY_OF_FRAME, type Facing, type NpcName } from "@/components/npc/Npc";
-import layout from "./layout.json";
+import { FLOOR, HALL_FRAME, STAGE, TILES, hallProps, pct as frac, propSrc, type HallProp, type PlacedDecor } from "@/lib/guild-ranks";
 
-interface Prop {
-  id: string;
-  group: string;
-  /** The name shown under the prop (none: no tag). */
-  label?: string;
-  x: number; y: number; w: number; h: number;
-  foot: number[] | null;
-  wall: boolean;
-  href?: string;
-  action?: string;
-  spot?: number[];
-  emote?: string;
-  work?: string;
-}
+type Prop = HallProp;
 
 /** What the browser draws for one fighter. Position lives outside React (see `Agent`) so walking costs no re-renders. */
 interface Look { walking: boolean; flip: boolean; emote?: string; working: boolean; beat: number }
@@ -42,16 +29,15 @@ interface Agent {
 
 const IDLE: Look = { walking: false, flip: false, working: false, beat: 0 };
 const SPEED = 2.6; // tiles per second
-const FRAME = layout.frame; // a fighter's sprite frame, in tiles
-const props = layout.props as Prop[];
-const spots = props.filter((p) => p.spot);
-interface RoomNpc { id: string; npc: string; x: number; y: number; h: number; facing: string; action?: string; foot: number[] }
-const npcList = (layout as unknown as { npcs: RoomNpc[] }).npcs;
-// NPCs are solid too, so fighters walk around them.
-const nav = buildNav({ ...layout, props: [...layout.props, ...npcList.map((n) => ({ foot: n.foot }))] });
+const FRAME = HALL_FRAME; // a fighter's sprite frame, in tiles
+/** The quest manager stands by the job board. Footprint in fractions of the picture. */
+const SECRETARY = { id: "secretary", npc: "secretary", x: 0.265, y: 0.475, facing: "front", action: "jobs", foot: [0.25, 0.46, 0.28, 0.477] };
+const T = TILES;
+const footTiles = (f: number[] | null | undefined) => (f ? f.map((v) => v * T) : null);
+const buildHallNav = (props: Prop[]) =>
+  buildNav({ cols: T, rows: T, floor: { x0: FLOOR.x0 * T, x1: FLOOR.x1 * T, y0: FLOOR.y0 * T, y1: FLOOR.y1 * T }, props: [...props.map((p) => ({ foot: footTiles(p.foot) })), { foot: footTiles(SECRETARY.foot) }] });
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
-const pct = (v: number, of: number) => `${(v / of) * 100}%`;
 /** Things in front hide things behind: stack by how far down the floor a thing stands. */
 const depth = (bottom: number) => 10 + Math.round(bottom * 10);
 
@@ -61,9 +47,13 @@ const depth = (bottom: number) => 10 + Math.round(bottom * 10);
  * the floor to send it somewhere.
  */
 export function GuildHall({
-  fighters, onAction, highlight, isLocked, onBlocked,
+  fighters, onAction, highlight, isLocked, onBlocked, rank = 1, decor = [], edit,
 }: {
   fighters: GuildFighter[];
+  rank?: number;
+  decor?: PlacedDecor[];
+  /** Decorating: tapping the floor puts the carried piece down; tapping a piece picks it up. */
+  edit?: { carrying: boolean; onPlace: (x: number, y: number) => void; onPick: (id: string) => void };
   onAction: (a: string) => void;
   highlight?: string;
   /** Props whose group is locked don't open; `onBlocked` is called instead (e.g. to explain why). */
@@ -75,6 +65,11 @@ export function GuildHall({
   const hall = useRef<HTMLDivElement>(null);
   const agents = useRef(new Map<string, Agent>());
   const els = useRef(new Map<string, HTMLElement>());
+  const props = useMemo(() => hallProps(rank, decor), [rank, decor]);
+  const spots = useMemo(() => props.filter((p) => p.spot), [props]);
+  const navRef = useRef(buildHallNav(props));
+  const spotsRef = useRef(spots);
+  useMemo(() => { navRef.current = buildHallNav(props); spotsRef.current = spots; }, [props, spots]);
 
   const patch = (id: string, l: Partial<Look>) =>
     setLooks((all) => {
@@ -88,8 +83,8 @@ export function GuildHall({
     const map = agents.current;
     if (map.has(id)) return map.get(id)!;
     const taken = [...map.values()];
-    let at = randomWalkable(nav, Math.random);
-    for (let n = 0; n < 10 && taken.some((t) => Math.hypot(t.x - at[0], t.y - at[1]) < 2); n++) at = randomWalkable(nav, Math.random);
+    let at = randomWalkable(navRef.current, Math.random);
+    for (let n = 0; n < 10 && taken.some((t) => Math.hypot(t.x - at[0], t.y - at[1]) < 2); n++) at = randomWalkable(navRef.current, Math.random);
     const a: Agent = { x: at[0], y: at[1], path: [], held: false, visit: null, nextAt: 0, dwellUntil: 0, beatAt: 0 };
     map.set(id, a);
     return a;
@@ -105,15 +100,15 @@ export function GuildHall({
     const map = agents.current;
     // Somewhere a fighter can stand at a prop without crowding someone who is already there.
     const pickVisit = (self: string): Prop | null => {
-      const free = spots.filter((p) => {
-        const s = nearestWalkable(nav, p.spot![0], p.spot![1]);
+      const free = spotsRef.current.filter((p) => {
+        const s = nearestWalkable(navRef.current, p.spot![0] * T, p.spot![1] * T);
         return ![...map.entries()].some(([id, a]) => id !== self && (Math.hypot(a.x - s[0], a.y - s[1]) < 1.3 || (a.visit === p && a.path.length)));
       });
       return free.length ? free[Math.floor(Math.random() * free.length)] : null;
     };
 
     const go = (id: string, a: Agent, to: Pt) => {
-      a.path = findPath(nav, [a.x, a.y], to);
+      a.path = findPath(navRef.current, [a.x, a.y], to);
       if (a.path.length) patch(id, { walking: true, emote: undefined, working: false });
     };
 
@@ -145,7 +140,7 @@ export function GuildHall({
               a.nextAt = a.dwellUntil;
               a.beatAt = t + 400;
               // Face the prop it came to use.
-              patch(id, { walking: false, flip: v.x + v.w / 2 < a.x, emote: v.work ? undefined : v.emote, working: !!v.work });
+              patch(id, { walking: false, flip: v.cx * T < a.x, emote: v.work ? undefined : v.emote, working: !!v.work });
             } else {
               a.nextAt = t + rnd(1500, 4500);
               patch(id, { walking: false });
@@ -153,8 +148,8 @@ export function GuildHall({
           }
           const el = els.current.get(id);
           if (el) {
-            el.style.left = pct(a.x, layout.cols);
-            el.style.top = pct(a.y, layout.rows);
+            el.style.left = frac(a.x / T);
+            el.style.top = frac(a.y / T);
             el.style.zIndex = String(depth(a.y));
           }
         } else if (a.visit && a.dwellUntil && t < a.dwellUntil) {
@@ -171,17 +166,17 @@ export function GuildHall({
           const roll = Math.random();
           if (roll < 0.55) {
             const v = pickVisit(id);
-            if (v) { a.visit = v; go(id, a, [v.spot![0], v.spot![1]]); }
+            if (v) { a.visit = v; go(id, a, [v.spot![0] * T, v.spot![1] * T]); }
           } else if (roll < 0.85) {
-            go(id, a, randomWalkable(nav, Math.random, [a.x, a.y], 7));
+            go(id, a, randomWalkable(navRef.current, Math.random, [a.x, a.y], 7));
           }
           if (!a.path.length) { a.visit = null; a.nextAt = t + rnd(2000, 5000); }
         }
         // Keep the DOM in step even when standing still the first frame.
         const el = els.current.get(id);
         if (el && !el.style.left) {
-          el.style.left = pct(a.x, layout.cols);
-          el.style.top = pct(a.y, layout.rows);
+          el.style.left = frac(a.x / T);
+          el.style.top = frac(a.y / T);
           el.style.zIndex = String(depth(a.y));
         }
       }
@@ -192,36 +187,42 @@ export function GuildHall({
     // The loop reads everything through refs, so it starts once.
   }, []);
 
-  const onFloor = (e: PointerEvent<HTMLDivElement>) => {
-    if (!selected || !hall.current) return;
+  /** Where on the hall a tap landed, in tiles. */
+  const spotOf = (e: { clientX: number; clientY: number }) => {
+    const r = hall.current!.getBoundingClientRect();
+    return [((e.clientX - r.left) / r.width) * T, ((e.clientY - r.top) / r.height) * T] as Pt;
+  };
+  const onFloor = (e: MouseEvent<HTMLDivElement>) => {
+    if (!hall.current) return;
+    const [x, y] = spotOf(e);
+    if (edit) { if (edit.carrying) edit.onPlace(x / T, y / T); return; }
+    if (!selected) return;
     const a = agents.current.get(selected);
     if (!a) return;
-    const r = hall.current.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * layout.cols;
-    const y = ((e.clientY - r.top) / r.height) * layout.rows;
-    if (y < layout.floor.y0 - 0.6) return; // that's the wall
+    if (y < FLOOR.y0 * T - 0.6) return; // that's the wall
     a.held = true;
     a.visit = null;
     a.dwellUntil = 0;
-    a.path = findPath(nav, [a.x, a.y], nearestWalkable(nav, x, y));
+    a.path = findPath(navRef.current, [a.x, a.y], nearestWalkable(navRef.current, x, y));
     if (a.path.length) patch(selected, { walking: true, emote: undefined, working: false });
     else a.held = false;
   };
 
-  const sorted = useMemo(() => [...props].sort((p, q) => depthOf(p) - depthOf(q)), []);
-  const frameW = (FRAME / layout.cols) * 100;
+  const sorted = useMemo(() => [...props].sort((p, q) => depthOf(p) - depthOf(q)), [props]);
+  const frameW = (FRAME / T) * 100;
+  const stop = (e: MouseEvent) => e.stopPropagation();
 
   return (
     <div
       ref={hall}
-      onPointerDown={onFloor}
-      className="relative isolate w-full select-none overflow-hidden"
-      style={{ aspectRatio: `${layout.cols} / ${layout.rows}`, backgroundImage: "url(/guild/hall.png)", backgroundSize: "100% 100%", containerType: "inline-size" }}
+      onClick={onFloor}
+      className="relative isolate select-none overflow-hidden"
+      style={{ width: "100%", aspectRatio: "1 / 1", backgroundImage: `url(/guild/hall_r${rank}.webp)`, backgroundSize: "100% 100%", containerType: "inline-size", cursor: edit?.carrying ? "copy" : undefined }}
     >
       {sorted.map((p) => {
-        const box = { left: pct(p.x, layout.cols), top: pct(p.y, layout.rows), width: pct(p.w, layout.cols), height: pct(p.h, layout.rows), zIndex: depthOf(p) };
+        const box = { left: frac(p.cx - p.w / STAGE / 2), top: frac(p.fy - p.h / STAGE), width: frac(p.w / STAGE), height: frac(p.h / STAGE), zIndex: depthOf(p) };
         // eslint-disable-next-line @next/next/no-img-element
-        const art = <img src={`/guild/props/${p.id}.png`} alt="" draggable={false} className="pointer-events-none h-full w-full" />;
+        const art = <img src={propSrc(p, rank)} alt="" draggable={false} className="pointer-events-none h-full w-full" />;
         const hot = highlight === p.group;
         const tag = !p.label ? null : (
           <span className="pointer-events-none absolute -bottom-1 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap bg-ink px-1.5 text-[clamp(10px,1.6cqw,18px)] uppercase text-paper">
@@ -230,6 +231,10 @@ export function GuildHall({
         );
         const cls = "group absolute outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" + (hot ? " animate-pulse outline outline-4 outline-gold" : "");
         const locked = !!isLocked?.(p.group);
+        if (edit) {
+          if (p.id.startsWith("d:")) return <button key={p.id} type="button" className="absolute outline-dashed outline-2 outline-gold/70 hover:outline-gold" style={box} aria-label={`Pick up ${p.art}`} onClick={(e) => { stop(e); edit.onPick(p.id.slice(2)); }}>{art}</button>;
+          return <div key={p.id} className="pointer-events-none absolute" style={box}>{art}</div>;
+        }
         if (p.href) {
           return (
             <Link
@@ -238,25 +243,24 @@ export function GuildHall({
               className={cls}
               style={box}
               aria-label={p.group}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { if (locked) { e.preventDefault(); onBlocked?.(p.group); } }}
+              onClick={(e) => { stop(e); if (locked) { e.preventDefault(); onBlocked?.(p.group); } }}
             >{art}{tag}</Link>
           );
         }
-        if (p.action) return <button key={p.id} type="button" className={cls} style={box} aria-label={p.group} onPointerDown={(e) => e.stopPropagation()} onClick={() => (locked ? onBlocked?.(p.group) : onAction(p.action!))}>{art}{tag}</button>;
+        if (p.action) return <button key={p.id} type="button" className={cls} style={box} aria-label={p.group} onClick={(e) => { stop(e); if (locked) onBlocked?.(p.group); else onAction(p.action!); }}>{art}{tag}</button>;
         return <div key={p.id} className="pointer-events-none absolute" style={box}>{art}</div>;
       })}
 
-      {npcList.map((n0) => {
-        const n = { ...n0, h: npcFrameH(n0.npc as NpcName, FRAME * BODY_OF_FRAME) };
-        const w = n.h * npcRatio(n.npc as NpcName);
-        const locked = !!isLocked?.(n.action ?? "");
-        const box = { left: pct(n.x - w / 2, layout.cols), top: pct(n.y - n.h, layout.rows), width: pct(w, layout.cols), zIndex: depth(n.foot[3]) };
+      {(() => {
+        const n = SECRETARY;
+        const h = npcFrameH(n.npc as NpcName, FRAME * BODY_OF_FRAME);
+        const w = h * npcRatio(n.npc as NpcName);
+        const locked = !!isLocked?.(n.action);
+        const box = { left: frac(n.x - w / T / 2), top: frac(n.y - h / T), width: frac(w / T), zIndex: depth(n.y * T) };
         const art = <Npc name={n.npc as NpcName} facing={n.facing as Facing} className="pointer-events-none w-full" />;
-        const hot = highlight === n.action;
-        if (n.action) return <button key={n.id} type="button" className={"absolute outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" + (hot ? " animate-pulse" : "")} style={box} aria-label="Quest manager" onPointerDown={(e) => e.stopPropagation()} onClick={() => (locked ? onBlocked?.(n.action!) : onAction(n.action!))}>{art}</button>;
-        return <div key={n.id} className="pointer-events-none absolute" style={box}>{art}</div>;
-      })}
+        if (edit) return <div className="pointer-events-none absolute" style={box}>{art}</div>;
+        return <button type="button" className={"absolute outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold" + (highlight === n.action ? " animate-pulse" : "")} style={box} aria-label="Quest manager" onClick={(e) => { stop(e); if (locked) onBlocked?.(n.action); else onAction(n.action); }}>{art}</button>;
+      })()}
 
       {fighters.map((f) => {
         const look = looks[f.id] ?? IDLE;
@@ -271,14 +275,14 @@ export function GuildHall({
               if (!el) return;
               els.current.set(f.id, el);
               const a = ensureAgent(f.id);
-              el.style.left = pct(a.x, layout.cols);
-              el.style.top = pct(a.y, layout.rows);
+              el.style.left = frac(a.x / T);
+              el.style.top = frac(a.y / T);
               el.style.zIndex = String(depth(a.y));
               el.style.visibility = "visible"; // hidden until placed, so it never flashes in a corner
             }}
-            onPointerDown={(e) => { e.stopPropagation(); setSelected(sel ? null : f.id); }}
+            onClick={(e) => { if (edit) return; stop(e); setSelected(sel ? null : f.id); }}
             className="absolute -translate-x-1/2 -translate-y-[90%] cursor-pointer"
-            style={{ width: `${frameW}%`, visibility: "hidden" }}
+            style={{ width: `${frameW}%`, visibility: "hidden", pointerEvents: edit ? "none" : undefined }}
           >
             <span className="pointer-events-none absolute bottom-[8%] left-1/2 h-[7%] w-[34%] -translate-x-1/2 rounded-full bg-ink/40" />
             {sel && <span className="absolute bottom-[6%] left-1/2 h-[11%] w-[44%] -translate-x-1/2 rounded-full border-2 border-gold bg-gold/20" />}
@@ -303,7 +307,5 @@ export function GuildHall({
 
 /** Stacking key of a prop: its bottom edge, so a fighter standing below it is drawn in front. Floor decor sits under everyone. */
 function depthOf(p: Prop): number {
-  if (p.wall) return 1;
-  if (!p.foot) return 2;
-  return depth(p.foot[3]);
+  return depth(p.fy * T);
 }

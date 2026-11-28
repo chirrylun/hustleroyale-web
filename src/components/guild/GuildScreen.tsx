@@ -4,7 +4,7 @@ import { BagButton } from "@/components/floor/BagButton";
 import { Music } from "@/components/Music";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
@@ -14,7 +14,7 @@ import { GuildHall } from "./GuildHall";
 import { clearExpedition, readLastHealth } from "@/lib/world/expedition";
 import { gameApi } from "@/lib/api";
 import { itemImage, itemName } from "@/lib/items";
-import hallLayout from "./layout.json";
+import type { PlacedDecor } from "@/lib/guild-ranks";
 import { InfoBox } from "./InfoBox";
 import { JobBoard } from "./JobBoard";
 import { PartyPanel } from "./PartyPanel";
@@ -24,8 +24,29 @@ const OPEN_DURING_FIRST_JOB = ["jobs", "adventure"];
 const FIRST_JOB_NOTICE = "Complete your first quest on the job board first.";
 
 /** Tutorial job: kill a bat on Floor 1 (steps 6-8 of the tutorial); afterwards the board is "empty" until more jobs land. */
-export function GuildScreen({ username, coins, level, fighters: dbFighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0 }: { username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number; enterLobby?: boolean }) {
+export function GuildScreen({ username, coins, level, fighters: dbFighters, tutorialStep, floorCleared = 0, floorUnlocked = 1, enterFloor = 0, guildRank = 1, decor: initialDecor = [] }: { guildRank?: number; decor?: PlacedDecor[]; username: string; coins: number; level: number; fighters: GuildFighter[]; tutorialStep: number; floorCleared?: number; floorUnlocked?: number; enterFloor?: number; enterLobby?: boolean }) {
   const router = useRouter();
+  const scroller = useRef<HTMLDivElement>(null);
+  const rank = guildRank;
+  const [decor, setDecor] = useState<PlacedDecor[]>(initialDecor);
+  const [editing, setEditing] = useState(false);
+  const [carry, setCarry] = useState<string | null>(null);
+  const stored = useMemo(() => decor.filter((d) => d.x == null), [decor]);
+  // Start centred on the hall's top, where the doors and boards are.
+  useEffect(() => { const el = scroller.current; if (el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2; }, []);
+  const setPos = (id: string, x: number | null, y: number | null) => setDecor((all) => all.map((d) => (d.id === id ? { ...d, x, y } : d)));
+  const placeCarried = (x: number, y: number) => {
+    if (!carry) return;
+    const id = carry, px = Math.min(0.96, Math.max(0.04, x)), py = Math.min(0.97, Math.max(0.4, y));
+    setPos(id, px, py);
+    setCarry(null);
+    void createClient().rpc("guild_place", { p_id: id, p_x: px, p_y: py }).then(({ error }) => { if (error) { setPos(id, null, null); setNotice("That didn't fit there."); } });
+  };
+  const pickUp = (id: string) => {
+    setPos(id, null, null);
+    setCarry(id);
+    void createClient().rpc("guild_unplace", { p_id: id });
+  };
   const [step, setStep] = useState(tutorialStep);
   const [panel, setPanel] = useState<"jobs" | "adventure" | "party" | null>(enterFloor >= 1 && enterFloor <= floorUnlocked && tutorialStep >= 6 ? "party" : null);
   const [floorSel, setFloorSel] = useState(enterFloor >= 1 ? enterFloor : 1);
@@ -108,26 +129,59 @@ export function GuildScreen({ username, coins, level, fighters: dbFighters, tuto
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 p-3 sm:p-6 short:gap-1 short:p-1.5">
+    <main className="relative h-dvh w-full overflow-hidden bg-night">
       <Music track="guild" />
-      <header className="flex flex-wrap items-center justify-between gap-2 text-xl short:text-base">
-        <h1 className="text-2xl uppercase text-gold short:text-lg">{username}&apos;s Guild</h1>
-        <p className="flex gap-4 text-paper">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-[250] flex flex-wrap items-start justify-between gap-2 p-2 text-xl short:text-base">
+        <h1 className="pointer-events-auto bg-ink/80 px-2 py-0.5 text-xl uppercase text-gold short:text-base">{username}&apos;s Guild</h1>
+        <p className="pointer-events-auto flex gap-3 bg-ink/80 px-2 py-0.5 text-paper">
           <span>🪙 {coins}</span>
           <span>Lv {level}</span>
           <Link href="/team" className="text-steel underline">Roster {fighters.length}/{ROSTER_CAP}</Link>
         </p>
       </header>
 
-      <div className="pixel-box relative overflow-hidden bg-night short:mx-auto short:w-full short:max-w-[var(--hall-w)]" style={{ ["--hall-w" as string]: `calc((100dvh - 2.75rem) * ${hallLayout.cols / hallLayout.rows})` }}>
+      <div className="absolute inset-0">
         <BagButton />
-        <GuildHall
-          fighters={fighters}
-          onAction={onAction}
-          highlight={step === 6 ? "jobs" : step === 8 && !panel ? (jobDone ? "jobs" : "adventure") : undefined}
-          isLocked={(group) => firstJobOpen && !OPEN_DURING_FIRST_JOB.includes(group)}
-          onBlocked={() => { setPanel(null); setNotice(FIRST_JOB_NOTICE); }}
-        />
+        {/* The hall fills the screen. It is at least as wide as the screen and a little taller, so you pan to see all of it. */}
+        <div ref={scroller} className="absolute inset-0 overflow-auto overscroll-contain [scrollbar-width:none]" style={{ containerType: "size" }}>
+          <div style={{ width: "max(100cqw, 110cqh)" }}>
+            <GuildHall
+              fighters={fighters}
+              rank={rank}
+              decor={decor}
+              edit={editing ? { carrying: !!carry, onPlace: placeCarried, onPick: pickUp } : undefined}
+              onAction={onAction}
+              highlight={step === 6 ? "jobs" : step === 8 && !panel ? (jobDone ? "jobs" : "adventure") : undefined}
+              isLocked={(group) => firstJobOpen && !OPEN_DURING_FIRST_JOB.includes(group)}
+              onBlocked={() => { setPanel(null); setNotice(FIRST_JOB_NOTICE); }}
+            />
+          </div>
+        </div>
+
+        {step >= 9 && !panel && (
+          <div className="absolute bottom-2 right-2 z-[240] flex flex-col items-end gap-2">
+            {editing && (
+              <div className="pixel-box max-w-[min(92vw,34rem)] bg-night/95 p-2 text-base text-paper">
+                {stored.length ? (
+                  <>
+                    <p className="mb-1 text-steel">{carry ? "Tap the floor to put it down." : "Pick a piece, then tap the floor. Tap a placed piece to pick it up."}</p>
+                    <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+                      {stored.map((d) => (
+                        <button key={d.id} type="button" onClick={() => setCarry(carry === d.id ? null : d.id)} className={`pixel-box flex h-14 w-14 items-center justify-center bg-panel p-1 ${carry === d.id ? "outline outline-2 outline-gold" : ""}`} aria-label={d.slug} aria-pressed={carry === d.id}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={`/guild/props/${d.slug}.png`} alt="" draggable={false} className="max-h-full max-w-full [image-rendering:pixelated]" />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-steel">Nothing in storage. Buy furniture from the Carpenter in the market. Tap a placed piece to pick it up.</p>
+                )}
+              </div>
+            )}
+            <PixelButton variant={editing ? "primary" : "ghost"} className="text-base" onClick={() => { setEditing(!editing); setCarry(null); }}>{editing ? "Done" : "Decorate"}</PixelButton>
+          </div>
+        )}
 
         {step === 6 && !panel && (
           <div className="fixed inset-x-0 bottom-3 z-[200] short:bottom-1.5 flex items-end justify-center gap-2 px-3 sm:gap-4">
