@@ -216,7 +216,7 @@ function Unit({ a, party, join }: { a: Ag; party: number; join?: () => void }) {
       </div>
       {/* Drawn on its own layer so a tree or another fighter in front can never cover the bar, the tag or a level-up. */}
       <div ref={(el) => { a.fx = el; }} className="pointer-events-none absolute left-0 top-0 will-change-transform" style={{ ...box, zIndex: 9000 }}>
-        {join && <JoinBadge onJoin={join} className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[300%]" />}
+        {join && <JoinBadge onJoin={join} className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[240%]" />}
         {a.side === "foe" && <span ref={(el) => { a.arrowEl = el; }} aria-hidden="true" className="absolute left-1/2 top-0 hidden -translate-x-1/2 -translate-y-[170%] animate-bounce text-2xl leading-none text-gold" style={{ textShadow: "0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000" }}>▼</span>}
         <div className="absolute left-1/2 top-0 h-1.5 w-[max(50%,26px)] -translate-x-1/2 -translate-y-1 bg-ink/80" ref={(el) => { a.bar = el; }}>
           <div ref={(el) => { a.hpEl = el; }} className={a.side === "ally" ? "h-full w-full bg-leaf" : "h-full w-full bg-ember"} />
@@ -277,7 +277,6 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   const [tStep, setTStep] = useState(training?.step ?? 0);
   const [tKills, setTKills] = useState(training?.kills ?? 0);
   const [talkNpc, setTalkNpc] = useState<TrainingNpc | null>(null);
-  const reloadOnClose = useRef(false);
   const nav = useMemo(() => buildNav(floor.nav), [floor]);
   const squad = useMemo(() => {
     const team = fighters.filter((f) => f.team_slot > 0).sort((a, b) => (a.team_slot ?? 0) - (b.team_slot ?? 0));
@@ -1467,8 +1466,8 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
           <TrainingTalk
             npc={talkNpc} step={tStep} kills={tKills} lowest={lowest} total={squad.length} potionSet={slots.some(Boolean)} ready={allies.current.filter((a) => a.level >= 5).length} recruits={recruits} armored={armored}
             onStep={(r: Reward) => { setTStep(r.step); if (r.xp > 0) void syncXp(); }}
-            onClassChanged={() => { reloadOnClose.current = true; }}
-            onClose={() => { setTalkNpc(null); if (reloadOnClose.current) window.location.reload(); }}
+            onClassChanged={() => { /* the new look is already on every sprite through the look store: no reload */ }}
+            onClose={() => setTalkNpc(null)}
           />
         )}
         {fightersOpen && <FightersMenu onClose={() => setFightersOpen(false)} guide={trainOn && tStep === 6 && !armored} onWorn={setArmored} />}

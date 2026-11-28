@@ -40,7 +40,7 @@ export function TrainingTalk({ npc, step, kills, lowest, total, ready, recruits,
 
   // Like the job board: what a claim paid, shown under the list.
   const claimed = got && (got.coins || got.xp || got.items.length > 0 || got.armor.length > 0)
-    ? `${[got.coins ? `+${got.coins} coins` : "", got.xp ? `+${got.xp} XP` : ""].filter(Boolean).join(", ")}${got.items.length > 0 ? ` · ${got.items.map((i) => `${i.qty} × ${itemName(i.slug)}`).join(", ")}` : ""}${got.armor.length > 0 ? " · Recruit armour for every fighter (already worn)" : ""}`
+    ? `${[got.coins ? `+${got.coins} coins` : "", got.xp ? `+${got.xp} XP` : ""].filter(Boolean).join(", ")}${got.items.length > 0 ? ` · ${got.items.map((i) => `${i.qty} × ${itemName(i.slug)}`).join(", ")}` : ""}${got.armor.length > 0 ? " · Recruit armour for every fighter" : ""}`
     : null;
 
   const close = () => onClose();
