@@ -15,6 +15,8 @@ const GROUND_HEIGHT = 84;
 /** Must match UNIT_RADIUS on the server: a fighter is drawn exactly as wide as it collides. */
 const UNIT_RADIUS = 1.2;
 const REGULAR_WARNING_MS = 10_000;
+/** The hall is drawn at this many arena units wide for one screen; a bigger hall is bigger than the screen and the camera follows the fight. */
+const SCREEN_W = 48;
 
 const toLeft = (x: number, w: number) => (x / w) * 100;
 const toTop = (y: number, h: number) => GROUND_TOP + (y / h) * GROUND_HEIGHT;
@@ -89,12 +91,23 @@ export function Arena({
 }) {
   const { arena } = view;
   const root = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const [stopped, setStopped] = useState(false);
   const [marker, setMarker] = useState<{ x: number; y: number; n: number } | null>(null);
   const ordered = view.metas
     .map((m) => ({ meta: m, live: view.units[m.id] }))
     .filter((e): e is { meta: UnitMeta; live: LiveUnit } => !!e.live && !(e.meta.summon && !e.live.alive && e.live.fx.kind !== "dead"))
     .sort((a, b) => a.live.y - b.live.y);
+
+  // Camera: the hall is `zoom` screens wide. Fighters keep their on-screen size; the view centres on the fighters still standing.
+  const zoom = Math.max(1, arena.w / SCREEN_W);
+  const alive = ordered.filter((e) => e.live.alive && !e.meta.summon);
+  const xs = alive.map((e) => toLeft(e.live.x, arena.w) / 100);
+  const ys = alive.map((e) => toTop(e.live.y, arena.h) / 100);
+  const mid = (a: number[]) => (a.length ? (Math.min(...a) + Math.max(...a)) / 2 : 0.5);
+  const win = 1 / zoom;
+  const camX = Math.min(1 - win, Math.max(0, mid(xs) - win / 2));
+  const camY = Math.min(1 - win, Math.max(0, mid(ys) - win / 2));
 
   const finale = !!view.end && phase === "fighting";
   const result = phase === "ended" ? view.end?.result : undefined;
@@ -134,8 +147,8 @@ export function Arena({
   }, [marker]);
 
   const ground = (e: PointerEvent<HTMLDivElement>) => {
-    if (!canMove || !root.current) return;
-    const rect = root.current.getBoundingClientRect();
+    if (!canMove || !stage.current) return;
+    const rect = stage.current.getBoundingClientRect();
     const fx = (e.clientX - rect.left) / rect.width;
     const fy = ((e.clientY - rect.top) / rect.height) * 100;
     const x = Math.min(arena.w, Math.max(0, fx * arena.w));
@@ -159,6 +172,11 @@ export function Arena({
       aria-label="The arena"
       onPointerDown={ground}
     >
+      <div
+        ref={stage}
+        className="absolute left-0 top-0 transition-transform duration-500 ease-out will-change-transform"
+        style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%`, transform: `translate(${-camX * 100}%, ${-camY * 100}%)` }}
+      >
       <div
         className={clsx("absolute inset-0 [container-type:size] transition-transform ease-out", finale ? "duration-[1400ms]" : "duration-300")}
         style={
@@ -287,6 +305,7 @@ export function Arena({
             {t.text}
           </span>
         ))}
+      </div>
       </div>
 
       {finale && <div className="pointer-events-none absolute inset-0 z-[45] bg-ink/25" aria-hidden="true" />}
