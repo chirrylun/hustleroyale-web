@@ -4,7 +4,7 @@ import { BagButton } from "@/components/floor/BagButton";
 import { Music } from "@/components/Music";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PixelButton } from "@/components/pixel/PixelButton";
 import { ROSTER_CAP, type GuildFighter } from "@/lib/guild";
 import { createClient } from "@/lib/supabase/client";
@@ -33,6 +33,12 @@ export function GuildScreen({ username, coins, level, fighters: dbFighters, tuto
   const drag = useRef<{ x: number; y: number; sl: number; st: number; moved: boolean } | null>(null);
   const [carry, setCarry] = useState<string | null>(null);
   const stored = useMemo(() => decor.filter((d) => d.x == null), [decor]);
+  // Furniture bought at the Carpenter lands in the database, not in this page's props: read it fresh on arrival and whenever Decorate opens.
+  const refreshDecor = useCallback(async () => {
+    const { data } = await createClient().from("guild_decor").select("id, slug, x, y").order("created_at");
+    if (data) setDecor(data as PlacedDecor[]);
+  }, []);
+  useEffect(() => { const t = setTimeout(() => void refreshDecor(), 0); return () => clearTimeout(t); }, [refreshDecor]);
   // Start centred on the hall's top, where the doors and boards are.
   useEffect(() => { const el = scroller.current; if (el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2; }, []);
   const setPos = (id: string, x: number | null, y: number | null) => setDecor((all) => all.map((d) => (d.id === id ? { ...d, x, y } : d)));
@@ -192,11 +198,11 @@ export function GuildScreen({ username, coins, level, fighters: dbFighters, tuto
                     </div>
                   </>
                 ) : (
-                  <p className="text-steel">Nothing in storage. Buy furniture from the Carpenter in the market. Tap a placed piece to pick it up.</p>
+                  <p className="text-steel">No furniture to place. Buy some from the Carpenter in the market, or tap a placed piece to pick it up.</p>
                 )}
               </div>
             )}
-            <PixelButton variant={editing ? "primary" : "ghost"} className="text-base" onClick={() => { setEditing(!editing); setCarry(null); }}>{editing ? "Done" : "Decorate"}</PixelButton>
+            <PixelButton variant={editing ? "primary" : "ghost"} className="text-base" onClick={() => { if (!editing) void refreshDecor(); setEditing(!editing); setCarry(null); }}>{editing ? "Done" : "Decorate"}</PixelButton>
           </div>
         )}
 
