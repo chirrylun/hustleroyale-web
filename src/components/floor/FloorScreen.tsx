@@ -1319,7 +1319,6 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     <div className="relative flex h-dvh w-full flex-col bg-ink">
       {state === "play" && <Music track={floorTrack(floor.n, isBossFloor(floor.n))} />}
       <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper">
-        {!isTraining(floor.n) && <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>}
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-lg uppercase text-gold">{isTraining(floor.n) ? "Training Ground" : <>Floor {floor.n}{isBossFloor(floor.n) && " · Boss"}</>}</p>
           <p className="truncate text-sm text-steel">{!isTraining(floor.n) && floor.theme.name}</p>

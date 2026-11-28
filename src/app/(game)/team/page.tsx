@@ -11,7 +11,7 @@ import { ClassActions } from "@/components/guild/ClassActions";
 
 export default function TeamPage() {
   return (
-    <PageShell title="My Fighters">
+    <PageShell title="My Fighters" back>
       <Suspense fallback={<div className="h-64 animate-pulse bg-panel" aria-busy="true" />}>
         <Fighters />
       </Suspense>

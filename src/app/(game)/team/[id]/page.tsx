@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export default function FighterPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <PageShell title="Fighter skills">
+    <PageShell title="Fighter skills" back>
       <Suspense fallback={<div className="h-64 animate-pulse bg-panel" aria-busy="true" />}>
         <Content params={params} />
       </Suspense>

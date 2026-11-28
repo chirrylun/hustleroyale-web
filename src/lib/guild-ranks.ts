@@ -14,7 +14,7 @@ export const RANK_NAME = ["", "Humble Lodge", "Craftsman's Hall", "Grand Hall", 
 export const FLOOR = { x0: 0.06, x1: 0.94, y0: 0.4, y1: 0.95 };
 /** How big the rank props are drawn compared to their files, and the old furniture compared to its files. */
 const K = 0.9;
-export const DECOR_K = 1.5;
+export const DECOR_K = 1.25;
 /** A fighter's sprite frame, in tiles. */
 export const HALL_FRAME = 3.9;
 

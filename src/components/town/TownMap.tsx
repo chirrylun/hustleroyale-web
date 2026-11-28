@@ -286,7 +286,6 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
       <BagButton />
       <Music track={id === "market" ? "market" : "lobby"} />
       <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper short:gap-2 short:py-1">
-        <Link href="/home" className="pixel-box bg-panel px-3 py-1 text-lg uppercase">← Guild</Link>
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-lg uppercase text-gold">{town.title}</p>
           <p className="truncate text-sm text-steel">{hint}</p>

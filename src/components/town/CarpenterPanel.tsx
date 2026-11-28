@@ -108,7 +108,7 @@ export function CarpenterPanel() {
               const total = d.price * n(d.slug), poor = (coins ?? 0) < total;
               return (
                 <li key={d.slug} className="pixel-box flex flex-col gap-1 bg-panel p-2">
-                  <div className="flex h-20 items-center justify-center bg-night"><img src={`/guild/props/${d.slug}.png`} alt="" draggable={false} className="max-h-[4.5rem] max-w-[85%] [image-rendering:pixelated]" /></div>
+                  <div className="flex h-20 items-center justify-center bg-night"><img src={`/guild/props/${d.slug}.png`} alt="" draggable={false} className="max-h-14 max-w-[70%] [image-rendering:pixelated]" /></div>
                   <p className="truncate leading-tight">{d.name}</p>
                   <p className="text-sm text-steel">🪙 {d.price} each · you have {owned[d.slug] ?? 0}</p>
                   <div className="mt-auto flex items-center justify-between gap-1">

@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { UiIcon } from "@/components/ui/UiIcon";
@@ -16,6 +17,11 @@ interface Job { slug: string; title: string; done: boolean; objs: Obj[]; coins: 
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 type Tab = "items" | "journal";
+const PLACES: { dest: string; label: string; path: string }[] = [
+  { dest: "guild", label: "Guild hall", path: "/home" }, { dest: "lobby", label: "Main Lobby", path: "/lobby" },
+  { dest: "market", label: "Marketplace", path: "/market" }, { dest: "arena", label: "Arena", path: "/arena" },
+];
+const TELE_MESSAGES: Record<string, string> = { not_yet: "Finish the training field first.", floor_locked: "You haven't unlocked that floor yet.", "none left": "You have no Teleport Stones left." };
 
 function ItemArt({ slug, size }: { slug: string; size: number }) {
   return <img src={itemImage(slug)} alt="" width={size} height={size} draggable={false} />;
@@ -32,6 +38,9 @@ export function BagMenu({ onClose, onUse }: { onClose: () => void; /** On a floo
   const [items, setItems] = useState<Item[] | null>(null);
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [error, setError] = useState(false);
+  const [tele, setTele] = useState(false);
+  const [unlocked, setUnlocked] = useState(1);
+  const here = usePathname();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -50,7 +59,7 @@ export function BagMenu({ onClose, onUse }: { onClose: () => void; /** On a floo
         sb.from("quest_objectives").select("quest_slug, idx, kind, target_kind, target_boss, item_slug, qty"),
         sb.from("player_quests").select("quest_slug, status"),
         sb.from("player_quest_progress").select("quest_slug, idx, progress"),
-        sb.from("profiles").select("floor_reached").single(),
+        sb.from("profiles").select("floor_reached, floor_unlocked").single(),
       ]);
       if (!live) return;
       if (tpl.error || inv.error || q.error || o.error || pq.error || pp.error || !prof.data) return setError(true);
@@ -63,6 +72,7 @@ export function BagMenu({ onClose, onUse }: { onClose: () => void; /** On a floo
       const status = new Map((pq.data ?? []).map((r) => [r.quest_slug as string, r.status as string]));
       const prog = new Map((pp.data ?? []).map((r) => [`${r.quest_slug}:${r.idx}`, r.progress as number]));
       const reached = prof.data.floor_reached as number;
+      setUnlocked((prof.data.floor_unlocked as number) ?? 1);
       setJobs(
         (q.data ?? []).filter((x) => status.has(x.slug)).map((x) => {
           const done = status.get(x.slug) === "done";
@@ -81,7 +91,15 @@ export function BagMenu({ onClose, onUse }: { onClose: () => void; /** On a floo
   }, [rev]);
 
   const total = items?.reduce((s, i) => s + i.qty, 0) ?? 0;
-  const closeAsk = () => { setAsk(null); setNote(null); };
+  const closeAsk = () => { setAsk(null); setNote(null); setTele(false); };
+  // The Teleport Stone: carries you to a place you pick; the server takes the stone and checks the destination.
+  const travel = async (dest: string) => {
+    if (busy) return;
+    setBusy(true); setNote(null);
+    const { data, error: e } = await createClient().rpc("use_teleport_stone", { p_dest: dest });
+    if (e || typeof data !== "string") { setNote(TELE_MESSAGES[Object.keys(TELE_MESSAGES).find((k) => e?.message.includes(k)) ?? ""] ?? "The stone fizzles. Try again."); setBusy(false); return; }
+    window.location.assign(data); // a full load, so a floor's room is left cleanly
+  };
   const confirm = async () => {
     if (!sel || !ask || busy) return;
     setBusy(true); setNote(null);
@@ -180,8 +198,26 @@ export function BagMenu({ onClose, onUse }: { onClose: () => void; /** On a floo
               </div>
             </div>
             {sel.blurb && <p className="text-lg text-paper/90">{sel.blurb}</p>}
-            {!ask ? (
+            {tele ? (
+              <div className="flex flex-col gap-2 border-t-2 border-steel pt-2">
+                <p className="text-xl text-paper">Where to?</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {PLACES.map((pl) => (
+                    <button key={pl.dest} type="button" disabled={busy || here === pl.path} onClick={() => travel(pl.dest)} className="bg-panel px-2 py-1 text-lg uppercase text-paper disabled:opacity-40">{pl.label}{here === pl.path && <span className="block text-sm normal-case text-steel">You are here</span>}</button>
+                  ))}
+                </div>
+                <p className="text-base uppercase text-steel">Floors</p>
+                <div className="grid max-h-32 grid-cols-6 gap-1 overflow-y-auto pr-1 short:grid-cols-10">
+                  {Array.from({ length: Math.min(unlocked, 40) }, (_, k) => k + 1).map((n) => (
+                    <button key={n} type="button" disabled={busy || here === `/floor/${n}`} onClick={() => travel(`floor:${n}`)} className="bg-panel py-1 text-lg text-gold disabled:opacity-40">{n}</button>
+                  ))}
+                </div>
+                {note && <p role="alert" className="text-lg text-ember">{note}</p>}
+                <button type="button" disabled={busy} onClick={closeAsk} className="bg-panel px-3 py-1 text-xl uppercase text-paper">Cancel</button>
+              </div>
+            ) : !ask ? (
               <div className="flex flex-wrap gap-2">
+                {sel.slug === "teleport_stone" && <button type="button" onClick={() => setTele(true)} className="flex-1 bg-leaf px-3 py-1 text-xl uppercase text-ink">Teleport</button>}
                 {USABLE.includes(sel.slug) && (
                   <button type="button" disabled={!onUse} onClick={() => setAsk({ kind: "use", n: 1 })} className="flex-1 bg-leaf px-3 py-1 text-xl uppercase text-ink disabled:opacity-40">Use</button>
                 )}
