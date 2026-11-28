@@ -40,6 +40,7 @@ export const CLASSES: Record<Role, { id: string; blurb: string }[]> = {
     { id: "pure_healer", blurb: "The strongest healing in the guild." },
     { id: "healer_fighter", blurb: "Fights in the front line and heals. Grows into a Paladin." },
     { id: "bard", blurb: "Heals and inspires the team with song." },
+    { id: "magical_dps", blurb: "Mage: ranged spells and area damage. Grows into a Black Mage. Becomes a Damage fighter." },
   ],
   dps: [
     { id: "rogue", blurb: "Fast striker with dodges and finishing blows." },

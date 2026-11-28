@@ -27,7 +27,7 @@ const BLURB: Record<string, string> = {
   fighter_tank: "Tough brawler that taunts enemies.", shield_tank: "Soaks hits and shields the team.", debuff_tank: "Weakens enemies while holding the line.", soldier: "Heavy hitter with strong armour.",
   pure_healer: "The strongest healing in the guild.", healer_fighter: "Fights up front and heals.", bard: "Heals and inspires with song.", healer_tank: "Holy front-liner who heals.", whitemage: "Powerful light magic.",
   rogue: "Fast striker with dodges.", magical_dps: "Ranged mage with stuns and area spells.", ranger: "Bow hunter with steady shots.",
-  ninja: "Shadow assassin.", samurai: "Blade master.", blackmage: "Dark destructive magic.", necromancer: "Raises the dead.", marksman: "Long-range precision.", sharpshooter: "Rapid-fire archer.",
+  ninja: "Shadow assassin.", samurai: "Blade master.", blackmage: "Dark destructive magic. Grows from Mage.", necromancer: "Raises the dead.", marksman: "Long-range precision.", sharpshooter: "Rapid-fire archer.",
   recruit_fighter: "Learns Slash. Tough front-liner in training.", recruit_acolyte: "Learns Basic Heal.", recruit_thief: "Learns Stab and Dodge.",
 };
 const label = (a: string | null) => (a ? ARCHETYPE_LABEL[a] ?? a : "");
