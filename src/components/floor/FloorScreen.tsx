@@ -9,7 +9,7 @@ import { FighterSprite } from "@/components/sprites/FighterSprite";
 import { FX_COLS, FX_ROWS, mobScale } from "@/lib/sprites/designs";
 import { artOf, type FxArt } from "@/lib/skill-art";
 import { playSkill, skillSoundUrl, warmSounds } from "@/lib/sfx";
-import { xpRequired, type GuildFighter } from "@/lib/guild";
+import { loadFighters, xpRequired, type GuildFighter } from "@/lib/guild";
 import type { EquippedSkill } from "@/lib/starter-pack";
 import { findPath, buildNav, clearLine, nearestRoomy, nearestWalkable, roomy, walkable, standable, type Pt } from "@/lib/guild-nav";
 import type { Stance } from "@/lib/battle";
@@ -247,12 +247,26 @@ export function FloorScreen({ floorNo, seed = 0, fighters, tutorialStep, players
   const floor = useMemo(() => generateFloor(floorNo, seed), [floorNo, seed]);
   const [run, setRun] = useState(0); // bump to retry
   const [revived, setRevived] = useState(false);
-  // After a defeat the party starts again at a quarter of its health.
-  const squadIn = useMemo(() => (revived ? fighters.map((f) => ({ ...f, hp_frac: 0.25, hp_at: undefined })) : fighters), [revived, fighters]);
-  return <FloorMap key={run} floor={floor} seed={seed} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} roomCode={roomCode} training={training} retry={() => { setRevived(true); setRun((r) => r + 1); }} />;
+  // After a defeat the party starts again at a quarter of its health, with the levels and experience the database now holds (a wipe costs some).
+  const [fresh, setFresh] = useState<GuildFighter[] | null>(null);
+  const base = fresh ?? fighters;
+  const squadIn = useMemo(() => (revived ? base.map((f) => ({ ...f, hp_frac: 0.25, hp_at: undefined })) : base), [revived, base]);
+  const comeBack = async () => {
+    try {
+      const sb = createClient();
+      const { data: { user } } = await sb.auth.getUser();
+      if (user) {
+        const all = await loadFighters(sb, user.id);
+        const same = fighters.map((f) => all.find((a) => a.id === f.id)).filter((f): f is GuildFighter => !!f);
+        if (same.length === fighters.length) setFresh(same);
+      }
+    } catch { /* keep the fighters we had */ }
+    setRevived(true); setRun((r) => r + 1);
+  };
+  return <FloorMap key={run} floor={floor} seed={seed} fighters={squadIn} tutorialStep={tutorialStep} players={players} floorUnlocked={floorUnlocked} fromAbove={arriveFromAbove} roomCode={roomCode} training={training} retry={comeBack} />;
 }
 
-function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked, fromAbove, roomCode, training, retry }: { training?: { step: number; kills: number }; roomCode?: string; seed: number; floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void }) {
+function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked, fromAbove, roomCode, training, retry }: { training?: { step: number; kills: number }; roomCode?: string; seed: number; floor: Floor; fighters: GuildFighter[]; tutorialStep: number; players: number; floorUnlocked: number; fromAbove: boolean; retry: () => void | Promise<void> }) {
   const router = useRouter();
   const [askBack, setAskBack] = useState(false);
   const [askNext, setAskNext] = useState(false);
@@ -390,12 +404,18 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
     window.addEventListener("pagehide", flush);
     return () => { clearInterval(t); window.removeEventListener("pagehide", flush); flush(); };
   }, [sig]);
+  const [wipe, setWipe] = useState<{ skipped: string | null; pct?: number; fighters: { id: string; lost: number; level: number; dropped: boolean }[] } | null>(null);
+  const wipeDone = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     if (state !== "lost") return;
     clearExpedition();
-    // After a defeat the party limps home at a quarter of its health, so "Try again" is not an instant loss.
-    gameApi("/floor/hp", { ids: allies.current.map((a) => a.id), fracs: allies.current.map(() => 0.25) }, { keepalive: true }).catch(() => { /* ignore */ });
-  }, [state]);
+    const ids = allies.current.map((a) => a.id);
+    // The whole party went down: the server takes some experience from each fighter (at most one level), then they limp home at a quarter of their health.
+    wipeDone.current = (async () => {
+      try { setWipe(await gameApi("/floor/wipe", { floor: floor.n, ids })); } catch { /* no penalty report: the dialog just doesn't list one */ }
+      await gameApi("/floor/hp", { ids, fracs: ids.map(() => 0.25) }, { keepalive: true }).catch(() => { /* ignore */ });
+    })();
+  }, [state, floor.n]);
 
   // Build the two sides once.
   useEffect(() => {
@@ -1336,7 +1356,7 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
   return (
     <div className="relative flex h-dvh w-full flex-col bg-ink">
       {state === "play" && <Music track={floorTrack(floor.n, isBossFloor(floor.n))} />}
-      <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper">
+      <div className="z-[9500] flex items-center gap-3 bg-night/90 py-2 pl-3 pr-14 text-paper">
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-lg uppercase text-gold">{isTraining(floor.n) ? "Training Ground" : <>Floor {floor.n}{isBossFloor(floor.n) && " · Boss"}</>}</p>
           <p className="truncate text-sm text-steel">{!isTraining(floor.n) && floor.theme.name}</p>
@@ -1530,13 +1550,24 @@ function FloorMap({ floor, seed, fighters, tutorialStep, players, floorUnlocked,
                     <p>It happens to everyone. Next time you can:</p>
                     <p>• Ask other players in the chat for help.</p>
                     <p>• Use a Revive Potion to bring a fallen fighter back.</p>
-                    <p>• Or wake up back at your guild, with some experience lost.</p>
-                    <p className="text-steel">Revives and the guild wake-up are coming soon.</p>
+                    <p>• Every fighter loses some experience when the whole party goes down, and a fighter can drop at most one level. Floor 1 and the training field are safe.</p>
+                    <p className="text-steel">Revive potions are coming soon.</p>
                   </FirstTip>
                   <h2 className="mb-2 text-3xl uppercase text-ember">Party down</h2>
-                  <p className="mb-4 text-xl text-paper">Your fighters were beaten. Rest up and try again.</p>
+                  <p className="mb-3 text-xl text-paper">Your fighters were beaten. Rest up and try again.</p>
+                  {wipe && wipe.fighters.length > 0 && (
+                    <ul className="mb-3 space-y-1 bg-ink/60 p-2 text-left text-lg" aria-label="Experience lost">
+                      {wipe.fighters.map((w) => (
+                        <li key={w.id} className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate text-paper">{allies.current.find((a) => a.id === w.id)?.name ?? "Fighter"}</span>
+                          <span className="shrink-0 text-ember">{w.dropped ? `−${w.lost} XP · Lv ${w.level}` : w.lost > 0 ? `−${w.lost} XP` : "no XP lost"}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {wipe?.skipped === "safe" && <p className="mb-3 text-lg text-leaf">No experience is lost on this floor.</p>}
                   <div className="flex flex-col gap-2">
-                    <PixelButton className="w-full" onClick={retry}>Try again</PixelButton>
+                    <PixelButton className="w-full" onClick={() => { void wipeDone.current.then(retry); }}>Try again</PixelButton>
                     <Link href="/home"><PixelButton variant="ghost" className="w-full">Back to the guild</PixelButton></Link>
                   </div>
                 </>

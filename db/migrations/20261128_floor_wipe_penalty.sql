@@ -1,0 +1,4 @@
+-- Applied via the Supabase migration "floor_wipe_xp_penalty": profiles.last_wipe_at and srv_floor_wipe(user, floor, ids) (service role only).
+-- Per fighter: 20% of the level's XP bar on floor 2, +1% per floor up to 40%. Floor 1 and the training field are safe. A fighter whose bar runs out
+-- drops at most one level (stats rescaled, one skill point and pending level-up taken back), never below a class-rank level (5, 20, 35, 50).
+-- Repeat reports within 30 seconds are ignored.

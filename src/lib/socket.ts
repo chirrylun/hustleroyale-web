@@ -38,3 +38,21 @@ export function getFloorSocket(): Socket {
   }
   return floorSocket;
 }
+
+let chatSocket: Socket | null = null;
+
+/** Connection to the chat namespace (`/chat`): world, room and whisper messages. Same token handling as the other sockets. */
+export function getChatSocket(): Socket {
+  if (!chatSocket) {
+    const supabase = createClient();
+    chatSocket = io(`${process.env.NEXT_PUBLIC_GAME_SERVER_URL}/chat`, {
+      autoConnect: false,
+      transports: ["websocket", "polling"],
+      reconnectionDelayMax: 5000,
+      auth: (cb) => {
+        supabase.auth.getSession().then(({ data }) => cb({ token: data.session?.access_token }));
+      },
+    });
+  }
+  return chatSocket;
+}

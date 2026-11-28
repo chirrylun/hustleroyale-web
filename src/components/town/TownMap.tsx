@@ -285,7 +285,7 @@ export function TownMap({ id, fighters, tour = false }: { id: TownId; fighters: 
     <div className="relative flex h-dvh w-full flex-col bg-ink">
       <BagButton />
       <Music track={id === "market" ? "market" : "lobby"} />
-      <div className="z-[9500] flex items-center gap-3 bg-night/90 px-3 py-2 text-paper short:gap-2 short:py-1">
+      <div className="z-[9500] flex items-center gap-3 bg-night/90 py-2 pl-3 pr-14 text-paper short:gap-2 short:py-1">
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-lg uppercase text-gold">{town.title}</p>
           <p className="truncate text-sm text-steel">{hint}</p>
