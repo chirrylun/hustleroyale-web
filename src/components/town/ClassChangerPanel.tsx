@@ -137,42 +137,45 @@ export function ClassChangerPanel() {
       </div>
       {note && <p role="alert" className={`shrink-0 text-lg ${note.bad ? "text-ember" : "text-leaf"}`}>{note.text}</p>}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 sm:flex-row sm:gap-3">
-      <section aria-label="Choose a fighter" className="min-w-0 shrink-0 sm:w-52">
-        <p className="mb-1 text-base uppercase text-gold">1 · Pick a fighter</p>
-        {fighters === null ? <div className="h-24 animate-pulse bg-panel" aria-busy="true" /> : fighters.length === 0 ? <p className="text-lg text-steel">No fighters yet.</p> : (
-          <ul className="flex gap-2 overflow-x-auto pb-1 sm:max-h-[48dvh] sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden sm:pr-1">
-            {fighters.map((f) => (
-              <li key={f.id} className="shrink-0 sm:w-full">
-                <button type="button" aria-pressed={f.id === sel} onClick={() => select(f.id === sel ? null : f.id)} className={`pixel-btn flex w-28 flex-col overflow-hidden items-center px-1 pb-1 pt-0.5 sm:w-full sm:flex-row sm:gap-2 sm:py-1 ${f.id === sel ? "bg-gold text-ink" : "bg-panel text-paper"}`}>
-                  <span className="pointer-events-none -mb-2 -mt-1 block h-14 w-14 shrink-0 sm:my-0"><LiveSprite id={f.id} spriteKey={f.template.sprite_key} role={f.template.role} still /></span>
-                  <span className="block w-full min-w-0 overflow-hidden sm:flex-1">
-                    <span className="block w-full truncate text-center text-base leading-4 sm:text-left">{f.template.name}</span>
-                    <span className="block text-center text-sm leading-4 opacity-80 sm:text-left">Lv {f.level}</span>
-                    <span className="block w-full truncate text-center text-sm leading-4 opacity-80 sm:text-left">{label(f.template.archetype)}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section aria-label="Choose a class" className="flex min-h-0 min-w-0 flex-1 flex-col gap-1">
-        <p className="text-base uppercase text-gold">2 · Pick a class</p>
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1 sm:max-h-[48dvh]">
-          {!cur ? <p className="text-lg text-steel">Pick a fighter first.</p>
-            : stage !== "novice" && info === null ? <div className="h-24 animate-pulse bg-panel" aria-busy="true" />
-            : tree.length === 0 ? <p className="text-lg text-steel">No classes to take.</p>
-            : <ul className="space-y-2">{tree.map((n) => row(n))}</ul>}
-        </div>
-      </section>
-
-      </div>
+      {!cur ? (
+        <section aria-label="Choose a fighter" className="min-h-0 flex-1">
+          <p className="mb-1.5 text-base uppercase text-gold">Who changes class?</p>
+          {fighters === null ? <div className="h-24 animate-pulse bg-panel" aria-busy="true" /> : fighters.length === 0 ? <p className="text-lg text-steel">No fighters yet.</p> : (
+            <ul className="grid max-h-[55dvh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+              {fighters.map((f) => (
+                <li key={f.id} className="min-w-0">
+                  <button type="button" onClick={() => select(f.id)} className="pixel-btn flex w-full min-w-0 flex-col items-center overflow-hidden bg-panel px-1.5 pb-1.5 pt-0.5 text-paper">
+                    <span className="pointer-events-none -mb-2 -mt-1 block h-16 w-16"><LiveSprite id={f.id} spriteKey={f.template.sprite_key} role={f.template.role} still /></span>
+                    <span className="block w-full truncate text-center text-lg leading-5">{f.template.name}</span>
+                    <span className="block w-full truncate text-center text-base leading-4 text-steel">Lv {f.level} · {label(f.template.archetype)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <section aria-label="Choose a class" className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+          <div className="pixel-box flex shrink-0 items-center gap-2 bg-panel p-1.5">
+            <span className="pointer-events-none block h-12 w-12 shrink-0"><LiveSprite id={cur.id} spriteKey={cur.template.sprite_key} role={cur.template.role} still /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-lg leading-5 text-gold">{cur.template.name}</span>
+              <span className="block truncate text-base leading-4 text-steel">Lv {cur.level} · {label(cur.template.archetype)}</span>
+            </span>
+            <PixelButton variant="ghost" className="shrink-0 px-2 py-0 text-base" disabled={busy} onClick={() => select(null)}>Change</PixelButton>
+          </div>
+          <p className="shrink-0 text-base uppercase text-gold">Pick a class</p>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1 sm:max-h-[48dvh]">
+            {stage !== "novice" && info === null ? <div className="h-24 animate-pulse bg-panel" aria-busy="true" />
+              : tree.length === 0 ? <p className="text-lg text-steel">No classes to take.</p>
+              : <ul className="space-y-2">{tree.map((n) => row(n))}</ul>}
+          </div>
+        </section>
+      )}
 
       {cur && (
         <section aria-label="Confirm" className="pixel-box sticky bottom-0 shrink-0 space-y-1.5 bg-night p-2">
-          {!picked ? <p className="text-lg text-steel">3 · Pick a class to continue.</p> : !confirming ? (
+          {!picked ? <p className="text-lg text-steel">Tap a class to continue.</p> : !confirming ? (
             <PixelButton className="w-full" disabled={busy || !canAfford} onClick={() => setConfirming(true)}>
               {canAfford ? `Become ${label(picked.archetype)} · ${cost ? `${cost} coins` : "Free"}` : `Need ${cost - (coins ?? 0)} more coins`}
             </PixelButton>
